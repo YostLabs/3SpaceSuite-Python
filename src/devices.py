@@ -76,9 +76,7 @@ class ThreespaceDevice:
     def open(self):
         if self.is_open: return
         self.com.open()
-        print("Creating sensor object")
-        self.__api = ThreespaceSensor(self.com)
-        print("Sensor object made")
+        self.__api = ThreespaceSensor(self.com, verbose=True)
         if self.__api.in_bootloader: 
             return
         self.streaming_manager = ThreespaceStreamingManager(self.__api)
