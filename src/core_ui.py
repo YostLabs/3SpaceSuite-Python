@@ -6,8 +6,6 @@ import dearpygui.dearpygui as dpg
 
 class FontManager:
 
-    FONT_FOLDER = None
-
     DEFAULT_FONT = None
     DEFAULT_FONT_LARGE = None
 

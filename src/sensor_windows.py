@@ -23,7 +23,10 @@ from yostlabs.math import vector
 import pathlib
 
 from resource_manager import *
-from gl_renderer import GL_Object
+
+from gl_renderer import GL_Renderer
+from gl_orientation_window import GlOrientationViewer, gl_sensor_to_gl_quat, gl_space_to_sensor_quat
+from gl_texture_renderer import TextureRenderer
 
 class SensorBanner(SelectableButton):
 
@@ -179,15 +182,29 @@ class SensorConnectionWindow(StagedView):
     def __init__(self, device: ThreespaceDevice, connected_callback: Callable):
         self.texture_width = 400
         self.texture_height = 400
-        self.sensor_obj = GL_Object(obj=obj_lib.MiniSensorObj, width=self.texture_width, height=self.texture_height,z=Z_DIST)
-        self.sensor_obj.set_background_color(105 / 255, 105 / 255, 105 / 255, 0)
+
         with dpg.texture_registry() as self.texture_registry:
             self.texture = dpg.add_raw_texture(width=self.texture_width, height=self.texture_height, default_value=[],  format=dpg.mvFormat_Float_rgba)
-        
-        self.sensor_obj.set_rotation_quat(quaternion.angles_to_quaternion([45, -45], "YX"))
-        self.sensor_obj.render()
-        dpg.set_value(self.texture, self.sensor_obj.get_texture().flatten())
 
+        #render the object
+        self.sensor_obj = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+                                                    self.texture_width, self.texture_height,
+                                                    background_color=(0, 0, 0, 0), tl_arrows=False, model_arrows=False)
+        self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)
+        self.sensor_obj.set_distance(50)
+        self.sensor_obj.set_orientation_quat(gl_sensor_to_gl_quat(quaternion.angles_to_quaternion([45, -45], "YX")))
+        with self.sensor_texture:
+            self.sensor_obj.render()
+
+        #Put the image into the DPG texture
+        texture = np.flip(self.sensor_texture.get_texture_pixels(), 0)
+        dpg.set_value(self.texture, texture.flatten())
+
+        #Clean up the GL texture resources since only draws once
+        self.sensor_obj.delete()
+        self.sensor_texture.destroy()
+
+        #Setup the UI
         button_width = 300
 
         with dpg.stage(label="Connection Stage") as self._stage_id:
@@ -198,7 +215,7 @@ class SensorConnectionWindow(StagedView):
                     dpg.add_table_column()
                     with dpg.table_row():
                         dpg.add_table_cell()
-                        image = dpg.add_image(self.texture)
+                        dpg.add_image(self.texture)
                 dpg.add_child_window(border=False, height=-150) #Weird way of doing spacing
                 with dpg.table(header_row=False, borders_innerV=True):
                     dpg.add_table_column()
@@ -242,7 +259,6 @@ class SensorConnectionWindow(StagedView):
         dpg_ext.center_window(popup)
 
     def delete(self):
-        self.sensor_obj.delete()
         dpg.delete_item(self.texture_registry)
         return super().delete()
 
@@ -390,6 +406,8 @@ class SensorOrientationWindow(StagedView):
     SENSOR_OBJ_GL = None
     SENSOR_BASE_TEXTURE = None
 
+    SENSOR_TEXTURE_RENDERER = None
+
     LOGO_TEXTURE = None
     LOGO_HEIGHT = 0
     LOGO_WIDTH = 0
@@ -405,13 +423,17 @@ class SensorOrientationWindow(StagedView):
         self.quat = [0, 0, 0, 1]
 
         self.hide_sensor = False
+        
+        self.orientation_viewer = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+                                                      SensorOrientationWindow.TEXTURE_WIDTH, SensorOrientationWindow.TEXTURE_HEIGHT)
 
-        if SensorOrientationWindow.SENSOR_OBJ_GL is None:
-            SensorOrientationWindow.SENSOR_OBJ_GL = GL_Object(obj=obj_lib.MiniSensorObj, width=SensorOrientationWindow.TEXTURE_WIDTH, height=SensorOrientationWindow.TEXTURE_HEIGHT, z=Z_DIST)
-            SensorOrientationWindow.SENSOR_OBJ_GL.set_background_color(105 / 255, 105 / 255, 105 / 255, 255)
-            SensorOrientationWindow.SENSOR_OBJ_GL.set_rotation_quat([0, 0, 0, 1])
-            SensorOrientationWindow.SENSOR_OBJ_GL.render()
-            SensorOrientationWindow.SENSOR_BASE_TEXTURE = SensorOrientationWindow.SENSOR_OBJ_GL.get_texture().flatten()
+        if SensorOrientationWindow.SENSOR_TEXTURE_RENDERER is None:
+            SensorOrientationWindow.SENSOR_TEXTURE_RENDERER = TextureRenderer(SensorOrientationWindow.TEXTURE_WIDTH, SensorOrientationWindow.TEXTURE_HEIGHT)
+            self.orientation_viewer.set_orientation_quat([0, 0, 0, 1])
+            with SensorOrientationWindow.SENSOR_TEXTURE_RENDERER:
+                self.orientation_viewer.render()
+            SensorOrientationWindow.SENSOR_BASE_TEXTURE = SensorOrientationWindow.SENSOR_TEXTURE_RENDERER.get_texture_pixels()
+            SensorOrientationWindow.SENSOR_BASE_TEXTURE = np.flip(SensorOrientationWindow.SENSOR_BASE_TEXTURE, 0).flatten()
 
             with dpg.texture_registry():
                 logo_width, logo_height, channels, data = dpg.load_image((IMAGE_FOLDER / "logo.png").as_posix())
@@ -518,12 +540,15 @@ class SensorOrientationWindow(StagedView):
 
     def update_image(self):
         rect = dpg.get_item_rect_size(self.image)
-        SensorOrientationWindow.SENSOR_OBJ_GL.set_view_perspective(*rect)
-        SensorOrientationWindow.SENSOR_OBJ_GL.set_rotation_quat(self.quat)
-        SensorOrientationWindow.SENSOR_OBJ_GL.hide_obj(self.hide_sensor)
-        SensorOrientationWindow.SENSOR_OBJ_GL.render()
-        texture = SensorOrientationWindow.SENSOR_OBJ_GL.get_texture()
-        dpg.set_value(self.texture, texture.flatten())
+
+        self.orientation_viewer.set_perspective(*rect)
+        self.orientation_viewer.set_model_visible(not self.hide_sensor)
+        self.orientation_viewer.set_orientation_quat(gl_sensor_to_gl_quat(self.quat))
+        with SensorOrientationWindow.SENSOR_TEXTURE_RENDERER:
+            self.orientation_viewer.render()
+        pixels = SensorOrientationWindow.SENSOR_TEXTURE_RENDERER.get_texture_pixels()
+        pixels = np.flip(pixels, 0)
+        dpg.set_value(self.texture, pixels.flatten())
 
     def __on_hide_sensor(self, sender, app_data, user_data):
         self.hide_sensor = not app_data
@@ -601,6 +626,7 @@ class SensorOrientationWindow(StagedView):
         dpg.delete_item(self.texture_registry)
         self.grid.clear()
         self.grid2.clear()
+        self.orientation_viewer.delete()
         return super().delete()
 
 
@@ -1504,8 +1530,10 @@ class GradientDescentCalibrationWizard:
 
         self.texture_width = 400
         self.texture_height = 400
-        self.sensor_obj = GL_Object(obj=obj_lib.MiniSensorObj, width=self.texture_width, height=self.texture_height, z=Z_DIST)
-        self.sensor_obj.set_background_color(105 / 255, 105 / 255, 105 / 255, 255)
+        self.sensor_obj = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+                                                    self.texture_width, self.texture_height, tl_arrows=False)
+        self.sensor_obj.set_distance(Z_DIST)
+        self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)
         with dpg.texture_registry() as self.gradient_registry:
             self.texture = dpg.add_raw_texture(width=self.texture_width, height=self.texture_height, default_value=[],  format=dpg.mvFormat_Float_rgba)
 
@@ -1537,6 +1565,10 @@ class GradientDescentCalibrationWizard:
         with dpg.item_handler_registry(label="Gradient Descent Visible Handler") as self.visible_handler:
             dpg.add_item_visible_handler(callback=dpg_ext.center_window_handler_callback, user_data=self.modal)
         dpg.bind_item_handler_registry(self.modal, self.visible_handler)
+
+        #Control variables
+        # self.__cached_accel_odrs: dict[int, int] = {}
+        # self.__cached_mag_odrs: dict[int, int] = {}
     
     def get_result(self):
         return self.result
@@ -1554,7 +1586,8 @@ class GradientDescentCalibrationWizard:
 
     def __on_config_start_button(self):
         self.wizard_stage = None
-        #Change modal to the gradient descent image
+
+        #Gather Selected Components
         selected_accels = []
         selected_mags = []
         for box in self.accel_checkboxes:
@@ -1569,6 +1602,10 @@ class GradientDescentCalibrationWizard:
             self.__on_config_cancel_button()
             return
 
+        #Configure the selected components ODRs/streaming so that the data can be quickly obtained
+        #self.device
+
+        #Switch the window style to the gradient descent gathering
         dpg.configure_item(self.modal, label="Gradient Descent")
         dpg.delete_item(self.modal, children_only=True)
         dpg.push_container_stack(self.modal)
@@ -1614,7 +1651,6 @@ class GradientDescentCalibrationWizard:
         
         #Negating just this orientation to make the animation go the direction I want
         self.orientations[16] = [-v for v in self.orientations[16]]
-
         self.transition_time = 0.5
 
         self.accel_samples = { k : [] for k in selected_accels }
@@ -1628,7 +1664,7 @@ class GradientDescentCalibrationWizard:
         dpg.disable_item(self.back_button)
         dpg.disable_item(self.next_button)
 
-        start_quat = self.sensor_obj.quat
+        start_quat = gl_space_to_sensor_quat(self.sensor_obj.orientation)
         start_time = time.time()
         elapsed_time = time.time() - start_time
         while elapsed_time < self.transition_time:
@@ -1644,15 +1680,17 @@ class GradientDescentCalibrationWizard:
         self.animating = False
 
     def render_quat(self, quat: list[float]):
-        self.sensor_obj.set_rotation_quat(quat)
-        self.sensor_obj.render()
-        dpg.set_value(self.texture, self.sensor_obj.get_texture().flatten())
+        self.sensor_obj.set_orientation_quat(gl_sensor_to_gl_quat(quat))
+        with self.sensor_texture:
+            self.sensor_obj.render()
+        texture = np.flip(self.sensor_texture.get_texture_pixels(), 0)
+        dpg.set_value(self.texture, texture.flatten())
 
     def __gather_sample(self):
         accel_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.accel_samples }
         mag_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.mag_samples }
-        
-        for i in range(GradientDescentCalibrationWizard.READINGS_PER_SAMPLE): #Gather them
+
+        for _ in range(GradientDescentCalibrationWizard.READINGS_PER_SAMPLE): #Gather them
             start_time = time.time()
             try:
                 for accel in self.accel_samples:
@@ -1663,7 +1701,7 @@ class GradientDescentCalibrationWizard:
                 self.device.report_error(e)
                 self.__on_config_cancel_button()
             while time.time() - start_time < GradientDescentCalibrationWizard.SAMPLE_INTERVAL: pass #Giving sensor time to update readings
-        
+
         #Average it and append
         for accel in accel_totals:
             self.accel_samples[accel].append(accel_totals[accel] / GradientDescentCalibrationWizard.READINGS_PER_SAMPLE)
@@ -1709,8 +1747,8 @@ class GradientDescentCalibrationWizard:
         for accel in self.accel_samples:
             #Gotta thread it to allow UI to continue updating
             params = []
-            thread = threading.Thread(target=gradient_descent_thread, args=(gradient, self.accel_samples[accel], 
-                                        np.array([0, 1, 0], dtype=np.float64), params), 
+            thread = threading.Thread(target=gradient_descent_thread, args=(gradient, self.accel_samples[accel],
+                                        np.array([0, 1, 0], dtype=np.float64), params),
                                         kwargs = {"verbose": True}, daemon=True)
             thread.start()
             while thread.is_alive():
@@ -1723,10 +1761,12 @@ class GradientDescentCalibrationWizard:
 
     def __on_next_button(self):
         self.__gather_sample()
+
         self.current_step += 1
         if self.current_step > len(self.orientations):
             self.__finalize_calculation()
             return
+
         dpg.set_value(self.cur_step_text, f"{self.current_step:2}")
         self.animate_transition(self.orientations[self.current_step-1])
 
@@ -1742,6 +1782,7 @@ class GradientDescentCalibrationWizard:
 
     def delete(self):
         self.sensor_obj.delete()
+        self.sensor_texture.destroy()
         dpg.delete_item(self.gradient_registry)
         dpg.delete_item(self.keyboard_handler)
         dpg.delete_item(self.visible_handler)
