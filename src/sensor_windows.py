@@ -1501,6 +1501,7 @@ class CalibrationResult:
     mags: dict[int, Calibration] = field(default_factory=dict)
 
 class GradientDescentCalibrationWizard:
+    MIN_ODR = 500               #If any component has an ODR less then this value when starting calibration, it will be set to this
 
     READINGS_PER_SAMPLE = 100   #Number of readings to take before each sample
     SAMPLE_INTERVAL = 0.001     #In seconds, the time in between each reading
@@ -1537,8 +1538,6 @@ class GradientDescentCalibrationWizard:
         with dpg.texture_registry() as self.gradient_registry:
             self.texture = dpg.add_raw_texture(width=self.texture_width, height=self.texture_height, default_value=[],  format=dpg.mvFormat_Float_rgba)
 
-        self.wizard_stage = GradientDescentCalibrationWizard.CONFIGURING
-        self.animating = False
         self.accel_checkboxes = []
         self.mag_checkboxes = []
         self.cur_step_text = None
@@ -1567,8 +1566,12 @@ class GradientDescentCalibrationWizard:
         dpg.bind_item_handler_registry(self.modal, self.visible_handler)
 
         #Control variables
-        # self.__cached_accel_odrs: dict[int, int] = {}
-        # self.__cached_mag_odrs: dict[int, int] = {}
+        self.wizard_stage = GradientDescentCalibrationWizard.CONFIGURING
+        self.animating = False        
+        self.__cached_accels: dict[int, int] = {}
+        self.__cached_mags: dict[int, int] = {}
+        self.__cached_axis_order: str = None
+        self.gathering = False 
     
     def get_result(self):
         return self.result
@@ -1603,7 +1606,56 @@ class GradientDescentCalibrationWizard:
             return
 
         #Configure the selected components ODRs/streaming so that the data can be quickly obtained
-        #self.device
+        self.__cached_accels = {}
+        self.__cached_mags = {}
+
+        try:
+            self.__cached_accels = self.device.get_accel_odrs(*selected_accels)
+            self.__cached_mags = self.device.get_mag_odrs(*selected_mags)
+            self.__cached_axis_order = self.device.get_axis_order()
+        except Exception as e:
+            self.device.report_error(e)
+            self.__on_config_cancel_button()
+            return 
+
+        #Now update the odrs for any components that need it
+        try:
+            new_accel_odrs = { k: 500 for k in self.__cached_accels if self.__cached_accels[k] < GradientDescentCalibrationWizard.MIN_ODR }
+            if len(new_accel_odrs) > 0:
+                self.device.set_accel_odrs(new_accel_odrs)
+            new_mag_odrs = {k: 500 for k in self.__cached_mags if self.__cached_mags[k] < GradientDescentCalibrationWizard.MIN_ODR }
+            if len(new_mag_odrs) > 0:
+                self.device.set_mag_odrs(new_mag_odrs)
+            
+            #Change the axis order to be the required XYZ (The math would have to change without this, would rather just do this atleast for now since it is easier)
+            self.device.set_axis_order("xyz")
+        except Exception as e:
+            self.device.report_error(e)
+            self.__on_config_cancel_button()
+            return
+        
+        #Now configure the streaming
+        err = False
+        for accel in self.__cached_accels:
+            if not self.device.register_streaming_command(self, StreamableCommands.GetRawAccelVec, param=accel, immediate_update=False):
+                err = True
+                break
+        for mag in self.__cached_mags:
+            if not self.device.register_streaming_command(self, StreamableCommands.GetRawMagVec, param=mag, immediate_update=False):
+                err = True
+                break
+        
+        if err:
+            self.device.unregister_all_streaming_commands_from_owner(self, immediate_update=True)
+            Logger.log_error(f"Failed to register required commands for calibration of {self.device.name}")
+            self.__on_config_cancel_button()
+            return
+
+        #Can only get samples at the slowest speed of required components
+        min_hz = max(min(*self.__cached_accels.values(), *self.__cached_mags.values()), 500)
+
+        self.device.register_streaming_callback(self.__on_sample_received, min_hz)
+        self.device.update_streaming_settings()
 
         #Switch the window style to the gradient descent gathering
         dpg.configure_item(self.modal, label="Gradient Descent")
@@ -1686,27 +1738,38 @@ class GradientDescentCalibrationWizard:
         texture = np.flip(self.sensor_texture.get_texture_pixels(), 0)
         dpg.set_value(self.texture, texture.flatten())
 
-    def __gather_sample(self):
-        accel_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.accel_samples }
-        mag_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.mag_samples }
+    def __on_sample_received(self, status: ThreespaceStreamingStatus):
+        if not self.gathering: return
+        if status == ThreespaceStreamingStatus.Data:
+            for accel in self.accel_samples:
+                self.accel_totals[accel] += np.array(self.device.get_streaming_value(StreamableCommands.GetRawAccelVec, accel), dtype=np.float64)
+            for mag in self.mag_samples:
+                self.mag_totals[mag] += np.array(self.device.get_streaming_value(StreamableCommands.GetRawMagVec, mag), dtype=np.float64)
+            self.num_readings += 1
+        elif status == ThreespaceStreamingStatus.DataEnd:
+            pass
+        elif status == ThreespaceStreamingStatus.Reset:
+            self.device.unregister_all_streaming_commands_from_owner(self)
+            self.__on_config_cancel_button()
 
-        for _ in range(GradientDescentCalibrationWizard.READINGS_PER_SAMPLE): #Gather them
-            start_time = time.time()
-            try:
-                for accel in self.accel_samples:
-                    accel_totals[accel] += np.array(self.device.get_raw_accel(accel), dtype=np.float64)
-                for mag in self.mag_samples:
-                    mag_totals[mag] += np.array(self.device.get_raw_mag(mag), dtype=np.float64)
-            except Exception as e:
-                self.device.report_error(e)
-                self.__on_config_cancel_button()
-            while time.time() - start_time < GradientDescentCalibrationWizard.SAMPLE_INTERVAL: pass #Giving sensor time to update readings
+    def __gather_sample(self):
+        self.accel_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.accel_samples }
+        self.mag_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.mag_samples }
+
+        self.device.update() #To remove any old readings
+        self.num_readings = 0
+        
+        #Wait for getting atleast READINGS_PER_SAMPLE readings
+        self.gathering = True
+        while self.num_readings < GradientDescentCalibrationWizard.READINGS_PER_SAMPLE: #Could potentially read a bit more then num_readings, just depends on timing
+            self.device.update() #Update the streaming until got all the readings
+        self.gathering = False
 
         #Average it and append
-        for accel in accel_totals:
-            self.accel_samples[accel].append(accel_totals[accel] / GradientDescentCalibrationWizard.READINGS_PER_SAMPLE)
-        for mag in mag_totals:
-            self.mag_samples[mag].append(mag_totals[mag] / GradientDescentCalibrationWizard.READINGS_PER_SAMPLE)
+        for accel in self.accel_totals:
+            self.accel_samples[accel].append(self.accel_totals[accel] / self.num_readings)
+        for mag in self.mag_totals:
+            self.mag_samples[mag].append(self.mag_totals[mag] / self.num_readings)
     
     def __set_loading_window(self):
         #Setup loading window
@@ -1771,7 +1834,7 @@ class GradientDescentCalibrationWizard:
         self.animate_transition(self.orientations[self.current_step-1])
 
     def __on_back_button(self):
-        if self.current_step == 0: return
+        if self.current_step <= 1: return
         self.current_step -= 1
         dpg.set_value(self.cur_step_text, f"{self.current_step:2}")
         for samples in self.accel_samples.values():
@@ -1783,6 +1846,26 @@ class GradientDescentCalibrationWizard:
     def delete(self):
         self.sensor_obj.delete()
         self.sensor_texture.destroy()
+
+        try:
+            #Stop streaming
+            self.device.unregister_streaming_callback(self.__on_sample_received)
+            self.device.unregister_all_streaming_commands_from_owner(self)
+
+            #Restore ODRs that were below the minimum
+            restored_accel_odrs = { k : v for k, v in self.__cached_accels.items() if v < GradientDescentCalibrationWizard.MIN_ODR }
+            if len(restored_accel_odrs) > 0:
+                self.device.set_accel_odrs(restored_accel_odrs)
+            restored_mag_odrs = { k : v for k, v in self.__cached_mags.items() if v < GradientDescentCalibrationWizard.MIN_ODR }                
+            if len(restored_mag_odrs) > 0:
+                self.device.set_mag_odrs(restored_mag_odrs)
+
+            #Restore axis order
+            if self.__cached_axis_order is not None:
+                self.device.set_axis_order(self.__cached_axis_order)
+        except Exception as e:
+            self.device.report_error(e)
+
         dpg.delete_item(self.gradient_registry)
         dpg.delete_item(self.keyboard_handler)
         dpg.delete_item(self.visible_handler)

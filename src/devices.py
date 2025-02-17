@@ -141,6 +141,9 @@ class ThreespaceDevice:
     
     def unregister_streaming_command(self, owner: object, command: StreamableCommands|ThreespaceStreamingOption, param=None, immediate_update=True):
         return self.streaming_manager.unregister_command(owner, command, param=param, immediate_update=immediate_update)
+    
+    def unregister_all_streaming_commands_from_owner(self, owner: object, immediate_update: bool = True):
+        return self.streaming_manager.unregister_all_commands_from_owner(owner, immediate_update=immediate_update)
 
     def update_streaming_settings(self):
         return self.streaming_manager.apply_updated_settings()
@@ -271,7 +274,35 @@ class ThreespaceDevice:
         components = self.__api.get_settings("valid_components")
         components = components.split(',')
         return components
-        
+    
+    def get_odrs(self, type: str, *ids):
+        prefix = f"odr_{type}"
+        result = self.__api.get_settings(';'.join(f"{prefix}{v}" for v in ids), format="Dict")
+        return {int(k.removeprefix(prefix)) : int(v) for k, v in result.items()}
+
+    def get_accel_odrs(self, *ids):
+        return self.get_odrs("accel", *ids)
+
+    def get_mag_odrs(self, *ids):
+        return self.get_odrs("mag", *ids)    
+    
+    def set_odrs(self, type: str, odrs: dict[int, int]):
+        prefix = f"odr_{type}"
+        odrs = {f"{prefix}{k}" : v for k, v in odrs.items()}
+        self.__api.set_settings(**odrs)
+
+    def set_accel_odrs(self, odrs: dict[int, int]):
+        self.set_odrs("accel", odrs)
+    
+    def set_mag_odrs(self, odrs: dict[int, int]):
+        self.set_odrs("mag", odrs)
+
+    def get_axis_order(self) -> str:
+        return self.__api.get_settings("axis_order")
+
+    def set_axis_order(self, order: str):
+        return self.__api.set_settings(axis_order=order)
+
     def get_gyro_calibration(self, id: int):
         return self.__get_calibration(f"gyro{id}")
 

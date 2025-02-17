@@ -197,6 +197,13 @@ class ThreespaceManager:
 
     def cleanup(self):
         for group in self.devices.values():
+            #First try and clean up each window. This allows windows to change back modified state.
+            #This includes things like streaming settings, odr settings & axis settings (calibration), ...
+            try:
+                group.main_window.delete()
+            except: pass
+
+            #Just in case the above failed to properly clean everything up
             try:
                 if group.device.is_api_streaming():
                         group.device.force_reset_streaming()
