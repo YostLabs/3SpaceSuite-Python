@@ -21,7 +21,7 @@ GL_Renderer.init()
 obj_lib.init()
 FontManager.init()
 dpg.bind_font(FontManager.DEFAULT_FONT)
-GL_Renderer.set_font((FONT_FOLDER / "comic.ttf").as_posix(), 48)
+GL_Renderer.set_font((FONT_FOLDER / "FiraCode-Regular.ttf").as_posix(), 48)
 
 #Create Window Structures and connections
 with dpg.window(label="Main Window") as primary_window:
