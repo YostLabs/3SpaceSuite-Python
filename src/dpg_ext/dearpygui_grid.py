@@ -1,6 +1,9 @@
 #https://github.com/Atlamillias/dearpygui-grid
-#Modified with some bug fixes and included here
+#Modified with some bug fixes (clear function) and included here
 #MIT License
+#The github License file is empty which is why there is no accompanying License file
+#but the PYPI page for it specifies MIT License in the metadata
+#https://pypi.org/project/dearpygui-grid/
 
 import sys
 import numbers

@@ -1,6 +1,6 @@
 import dearpygui.dearpygui as dpg
 import dpg_ext.extension_functions as dpg_ext
-from dpg_ext.log_window import LogWindow
+from dpg_ext.log_window import MultilineText
 from dpg_ext.selectable_button import SelectableButton
 from dpg_ext.filtered_dropdown import FilteredDropdown
 from dpg_ext.staged_view import StagedView
@@ -270,10 +270,13 @@ class SensorTerminalWindow(StagedView):
     context with block
     """
 
+    MAX_COMMAND_HISTORY = 50
+
     def __init__(self, threespace_device: ThreespaceDevice):
         self.device = threespace_device
+
         with dpg.stage(label="Sensor Terminal Stage") as self._stage_id:
-            self.terminal = LogWindow(flush_count=2000)
+            self.terminal = MultilineText(max_messages=2000)
             self.terminal.submit(dpg.top_container_stack())
             
             with dpg.item_handler_registry(label="Terminal Visible Handler") as self.terminal_handler:
@@ -281,7 +284,9 @@ class SensorTerminalWindow(StagedView):
 
             with dpg.group(horizontal=True):
                 dpg.add_text("Command:")
-                self.command_input = dpg.add_input_text(width=-50, on_enter=True, callback=self.__on_send_enter_command)
+                with dpg.group() as self.command_input_group:
+                    #Please modify where this is recreated as well (setCommandInputValue)
+                    self.command_input = dpg.add_input_text(width=-50, on_enter=True, callback=self.__on_send_enter_command)
                 dpg.add_button(label="Send", callback=self.__on_send_command)
             dpg.add_separator()
             with dpg.group(horizontal=True):
@@ -299,6 +304,13 @@ class SensorTerminalWindow(StagedView):
             self.line = ""
             
             self.streaming_paused = False
+
+        #Setup command history functionality
+        self.command_history = []
+        self.cur_command_index = 0
+        with dpg.handler_registry() as self.key_handler:
+            dpg.add_key_press_handler(dpg.mvKey_Up, callback=self.__key_handler)
+            dpg.add_key_press_handler(dpg.mvKey_Down, callback=self.__key_handler)
 
     def notify_opened(self):
         self.streaming_paused = False
@@ -322,6 +334,34 @@ class SensorTerminalWindow(StagedView):
         except Exception as e: 
             self.device.report_error(e)
 
+    def __key_handler(self, sender, app_data, user_data):
+        focused = dpg.is_item_focused(self.command_input) and dpg.is_item_active(self.command_input)
+        if not focused: return
+
+        if app_data == dpg.mvKey_Up:
+            new_command_index = self.cur_command_index + 1
+        elif app_data == dpg.mvKey_Down:
+            new_command_index = self.cur_command_index - 1
+        else:
+            return
+        
+        if new_command_index < 1 or new_command_index > len(self.command_history):
+            return
+        
+        self.cur_command_index = new_command_index
+        self.__set_command_input_value(self.command_history[-self.cur_command_index])
+
+    def __set_command_input_value(self, value: str):
+        #You can't set the value while the input text is active/focused... so work around is to delete it and recreate it, then set focus
+        #This does mean the text will be all selected, and there is no way around this
+        #https://github.com/hoffstadt/DearPyGui/issues/1442
+        focused = dpg.is_item_focused(self.command_input) and dpg.is_item_active(self.command_input)
+        dpg.delete_item(self.command_input)
+        self.command_input = dpg.add_input_text(width=-50, on_enter=True, callback=self.__on_send_enter_command,
+                           default_value=value, parent=self.command_input_group)
+        if focused:
+            dpg.focus_item(self.command_input)
+
     #The reason this is seperated is so focus can be returned
     #to the text box if it was triggered that way
     def __on_send_enter_command(self, sender, app_data):
@@ -332,6 +372,14 @@ class SensorTerminalWindow(StagedView):
         with dpg_lock():
             ascii_command = dpg.get_value(self.command_input)
             dpg.set_value(self.command_input, "")
+            self.cur_command_index = 0
+
+            self.terminal.add_message(ascii_command)
+            if len(self.command_history) == 0 or self.command_history[-1] != ascii_command: #Add new commands to the command history
+                self.command_history.append(ascii_command)
+                if len(self.command_history) > SensorTerminalWindow.MAX_COMMAND_HISTORY:
+                    del self.command_history[0]
+
     
         if not self.streaming_paused:
             try:
@@ -361,8 +409,11 @@ class SensorTerminalWindow(StagedView):
         if len(lines) <= 1: #When a newline is present, will be atleast 2
             return
         self.line = lines[-1] #The last value in the split did not have a newline after it, or is empty as the last char was a newline
-        for i in range(len(lines)-1):
-            self.terminal.log_info(lines[i])
+        num_full_lines = len(lines) - 1
+        if num_full_lines > 0:
+            for i in range(num_full_lines):
+                self.terminal.add_message(lines[i], immediate_draw=False) #For speed purposes at very fast streaming
+            self.terminal.update()
 
     def __on_terminal_visible(self, sender, app_data):
         """
@@ -394,6 +445,8 @@ class SensorTerminalWindow(StagedView):
 
     def delete(self):
         dpg.delete_item(self.terminal_handler)
+        dpg.delete_item(self.key_handler)
+        del self.command_history
         self.terminal.destroy()
         super().delete()
 
@@ -1974,7 +2027,7 @@ class BootloaderTerminalWindow(StagedView):
     def __init__(self, threespace_device: ThreespaceDevice):
         self.device = threespace_device
         with dpg.stage(label="Sensor Terminal Stage") as self._stage_id:
-            self.terminal = LogWindow(flush_count=50)
+            self.terminal = MultilineText(max_messages=50)
             self.terminal.submit(dpg.top_container_stack())
             
             with dpg.item_handler_registry(label="Terminal Visible Handler") as self.terminal_handler:
@@ -2004,6 +2057,7 @@ class BootloaderTerminalWindow(StagedView):
     def __on_send_command(self, sender, app_data):
         with dpg_lock():
             command: str = dpg.get_value(self.command_input)
+            self.terminal.add_message(command)
             dpg.set_value(self.command_input, "")
 
         try:
@@ -2024,7 +2078,7 @@ class BootloaderTerminalWindow(StagedView):
         #Because binary data with no terminator, use a time based timeout to determine when the full response is received to put on one line
         if self.last_data_retrieve_time is not None:
             if time.time() - self.last_data_retrieve_time > self.data_timeout:
-                self.terminal.log_info(str(self.data))
+                self.terminal.add_message(str(self.data))
                 self.data = None
                 self.last_data_retrieve_time = None
 
