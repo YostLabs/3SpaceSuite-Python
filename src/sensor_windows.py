@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from core_ui import FontManager, DpgWizard
-import theme_lib, obj_lib
+import theme_lib, obj_lib, texture_lib
 
 import math
 import numpy as np
@@ -23,6 +23,7 @@ from yostlabs.math import vector
 import pathlib
 
 from resource_manager import *
+from macro_manager import MacroManager, MacroConfigurationWindow, TerminalMacro
 
 from gl_renderer import GL_Renderer
 from gl_orientation_window import GlOrientationViewer, gl_sensor_to_gl_quat, gl_space_to_sensor_quat
@@ -31,7 +32,7 @@ from gl_texture_renderer import TextureRenderer
 class SensorBanner(SelectableButton):
 
     def __init__(self, device: ThreespaceDevice, text = None, selected = False, on_select = None):
-        super().__init__(text=text, selected=selected, on_select=on_select)
+        super().__init__(text=text, selected=selected, on_select=on_select, height=50)
         dpg.configure_item(self.button, label=device.name)
 
         self.device = device
@@ -51,7 +52,7 @@ class SensorMasterWindow(StagedView):
     DISCONNECT_THEME = None
     INVISIBLE_THEME = None
 
-    def __init__(self, threespace_device: ThreespaceDevice, sensor_banner: SensorBanner):
+    def __init__(self, threespace_device: ThreespaceDevice, sensor_banner: SensorBanner, macro_manager: MacroManager):
         if SensorMasterWindow.DISCONNECT_THEME is None:
             with dpg.theme(label="SensorDisconnectTheme") as SensorMasterWindow.DISCONNECT_THEME:
                 with dpg.theme_component(dpg.mvTabButton):
@@ -71,6 +72,7 @@ class SensorMasterWindow(StagedView):
         #On connection, the actual window will be loaded
         self.staged_view_dict = None
 
+        self.macro_manager = macro_manager
         self.device = threespace_device
         self.deleted = False
 
@@ -83,7 +85,7 @@ class SensorMasterWindow(StagedView):
                 orientation_window.submit(dpg.top_container_stack())
                 self.staged_view_dict[dpg.top_container_stack()] = orientation_window
             with dpg.tab(label="Terminal"):
-                self.terminal_window = SensorTerminalWindow(self.device)
+                self.terminal_window = SensorTerminalWindow(self.device, self.macro_manager)
                 self.terminal_window.submit(dpg.top_container_stack())     
                 self.staged_view_dict[dpg.top_container_stack()] = self.terminal_window                          
             with dpg.tab(label="Data Charts"):
@@ -272,8 +274,9 @@ class SensorTerminalWindow(StagedView):
 
     MAX_COMMAND_HISTORY = 50
 
-    def __init__(self, threespace_device: ThreespaceDevice):
+    def __init__(self, threespace_device: ThreespaceDevice, macro_manager: MacroManager):
         self.device = threespace_device
+        self.macro_manager = macro_manager
 
         with dpg.stage(label="Sensor Terminal Stage") as self._stage_id:
             self.terminal = MultilineText(max_messages=2000)
@@ -288,6 +291,14 @@ class SensorTerminalWindow(StagedView):
                     #Please modify where this is recreated as well (setCommandInputValue)
                     self.command_input = dpg.add_input_text(width=-50, on_enter=True, callback=self.__on_send_enter_command)
                 dpg.add_button(label="Send", callback=self.__on_send_command)
+            dpg.add_separator()
+            with dpg.group(horizontal=True):
+                with dpg.group():
+                    dpg.add_text("Macros:")
+                with dpg.child_window(resizable_y=False, height=43, width=-33, horizontal_scrollbar=True, border=False):
+                    with dpg.group(horizontal=True) as self.macro_container:
+                        pass
+                dpg.add_image_button(texture_lib.setting_icon_texture.texture, label="Macro CFG Button", width=16, height=16, callback=self.__open_macro_window)
             dpg.add_separator()
             with dpg.group(horizontal=True):
                 dpg.add_text("Device Name:")
@@ -312,6 +323,11 @@ class SensorTerminalWindow(StagedView):
             dpg.add_key_press_handler(dpg.mvKey_Up, callback=self.__key_handler)
             dpg.add_key_press_handler(dpg.mvKey_Down, callback=self.__key_handler)
 
+        #Setup macros
+        self.__load_macros()
+        self.macro_manager.on_modified.subscribe(self.__on_macros_modified)
+        self.macro_config_window = None
+
     def notify_opened(self):
         self.streaming_paused = False
 
@@ -321,6 +337,26 @@ class SensorTerminalWindow(StagedView):
             self.streaming_paused = False
         except Exception as e: 
             self.device.report_error(e)
+
+    def __open_macro_window(self):
+        self.macro_config_window = MacroConfigurationWindow(self.macro_manager)
+
+    def __on_macros_modified(self):
+        self.macro_config_window = None
+        self.__load_macros()
+
+    def __load_macros(self):
+        dpg.delete_item(self.macro_container, children_only=True)
+        dpg.push_container_stack(self.macro_container)
+        for macro in self.macro_manager.macros:
+            dpg.add_button(label=macro.name, callback=self.__execute_macro, user_data=macro)
+        dpg.pop_container_stack()
+
+    def __execute_macro(self, sender, app_data, user_data):
+        macro: TerminalMacro = user_data
+        if len(macro.text) == 0: return
+        self.send_command(macro.text)
+
 
     def __on_device_name_changed(self, sender, app_data, user_data):
         self.device.name = app_data
@@ -370,31 +406,40 @@ class SensorTerminalWindow(StagedView):
 
     def __on_send_command(self, sender, app_data):
         with dpg_lock():
+            #Get the command
             ascii_command = dpg.get_value(self.command_input)
+
+            #Reset History/Input
             dpg.set_value(self.command_input, "")
             self.cur_command_index = 0
 
-            self.terminal.add_message(ascii_command)
+            #Update History
             if len(self.command_history) == 0 or self.command_history[-1] != ascii_command: #Add new commands to the command history
                 self.command_history.append(ascii_command)
                 if len(self.command_history) > SensorTerminalWindow.MAX_COMMAND_HISTORY:
                     del self.command_history[0]
+            
+            #Actually attempt to send it
+            self.send_command(ascii_command)
 
-    
+    def send_command(self, command: str):
+        #Attempt to pause streaming if it hasn't been paused yet
         if not self.streaming_paused:
             try:
                 self.streaming_paused = False
                 self.streaming_paused = self.device.pause_streaming(self)
                 if not self.streaming_paused:
+                    self.terminal.add_message(f"{self.device.name} can not send commands via terminal while data streaming is locked.")
                     Logger.log_warning(f"{self.device.name} can not send commands via terminal while data streaming is locked.")
                     return
             except Exception as e:
                 self.device.report_error(e)
         
+        self.terminal.add_message(command)
         try:
-            success = self.device.send_ascii_command(ascii_command)
+            success = self.device.send_ascii_command(command)
             if not success:
-                Logger.log_warning(f"Failed to send command {ascii_command} to {self.device.name} via terminal.")
+                Logger.log_warning(f"Failed to send command {command} to {self.device.name} via terminal.")
         except Exception as e:
             self.device.report_error(e)
 
@@ -405,7 +450,7 @@ class SensorTerminalWindow(StagedView):
 
         if len(data) > 0:
             self.line += str(data)
-        lines = self.line.split('\n')
+        lines = self.line.split('\r\n')
         if len(lines) <= 1: #When a newline is present, will be atleast 2
             return
         self.line = lines[-1] #The last value in the split did not have a newline after it, or is empty as the last char was a newline
@@ -426,7 +471,6 @@ class SensorTerminalWindow(StagedView):
         #as orientation, changing settings while shutting down
         MainLoopEventQueue.queue_event(self.__read_terminal)
 
-             
     def submit(self, parent=None):
         """
         Puts the SensorWindow in the parent component,
@@ -448,6 +492,7 @@ class SensorTerminalWindow(StagedView):
         dpg.delete_item(self.key_handler)
         del self.command_history
         self.terminal.destroy()
+        self.macro_manager.on_modified.unsubscribe(self.__on_macros_modified)
         super().delete()
 
 import dpg_ext.dearpygui_grid as dpg_grid
@@ -460,10 +505,6 @@ class SensorOrientationWindow(StagedView):
     SENSOR_BASE_TEXTURE = None
 
     SENSOR_TEXTURE_RENDERER = None
-
-    LOGO_TEXTURE = None
-    LOGO_HEIGHT = 0
-    LOGO_WIDTH = 0
 
     TEXTURE_WIDTH = 800
     TEXTURE_HEIGHT = 800
@@ -488,12 +529,6 @@ class SensorOrientationWindow(StagedView):
             SensorOrientationWindow.SENSOR_BASE_TEXTURE = SensorOrientationWindow.SENSOR_TEXTURE_RENDERER.get_texture_pixels()
             SensorOrientationWindow.SENSOR_BASE_TEXTURE = np.flip(SensorOrientationWindow.SENSOR_BASE_TEXTURE, 0).flatten()
 
-            with dpg.texture_registry():
-                logo_width, logo_height, channels, data = dpg.load_image((IMAGE_FOLDER / "logo.png").as_posix())
-                SensorOrientationWindow.LOGO_TEXTURE = dpg.add_static_texture(width=logo_width, height=logo_height, default_value=data)
-                SensorOrientationWindow.LOGO_WIDTH = logo_width
-                SensorOrientationWindow.LOGO_HEIGHT = logo_height
-
         with dpg.texture_registry() as self.texture_registry:
             self.texture = dpg.add_raw_texture(width=SensorOrientationWindow.TEXTURE_WIDTH, height=SensorOrientationWindow.TEXTURE_HEIGHT, default_value=SensorOrientationWindow.SENSOR_BASE_TEXTURE,  format=dpg.mvFormat_Float_rgba)
 
@@ -505,7 +540,7 @@ class SensorOrientationWindow(StagedView):
                 self.grid.offsets = 8, 8, 8, 8 #Compensating for title bar and scrollbar
                 self.image = dpg.add_image(self.texture)
                 with dpg.child_window(border=False) as control_window:
-                    logo_image = dpg.add_image(SensorOrientationWindow.LOGO_TEXTURE)
+                    logo_image = dpg.add_image(texture_lib.logo_texture.texture)
                     with dpg.child_window(label="Components") as components_enabled_window:
                         dpg.add_text("Components")
                         self.accel_enabled = dpg.add_checkbox(label="Accelerometer", 
@@ -557,7 +592,7 @@ class SensorOrientationWindow(StagedView):
                 self.grid2.offsets = 8, 0, 0, 0
                 self.grid2.spacing = 3, 3, 3, 3
                 self.grid2.push(logo_image, 0, 0)
-                self.grid2.rows[0].configure(size=command_window_width * SensorOrientationWindow.LOGO_HEIGHT / SensorOrientationWindow.LOGO_WIDTH)
+                self.grid2.rows[0].configure(size=command_window_width * texture_lib.logo_texture.height / texture_lib.logo_texture.width)
                 self.grid2.push(components_enabled_window, 0, 1)
                 self.grid2.rows[1].configure(size=140)
                 self.grid2.push(program_window, 0, 2)

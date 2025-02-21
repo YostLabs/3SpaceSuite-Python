@@ -44,17 +44,21 @@ class BannerMenu(StagedView):
     and also manages the single selection aspect of the buttons
     """
 
-    def __init__(self, height=-2):
+    def __init__(self, height=-2, container=None):
         self.banners: list[SelectableButton] = []
+        
         with dpg.stage(label="BannerMenuStage") as self._stage_id:
-            self.window = dpg.add_child_window(height=height, autosize_x=True, label="Banner Menu")
+            if container is None:
+                    self.container = dpg.add_child_window(height=height, autosize_x=True, label="Banner Menu")
+            else:
+                self.container = container
 
-        self.active_banner = None
+        self.active_banner: SelectableButton = None
 
     def add_banner(self, banner: SelectableButton):
         self.banners.append(banner)
         banner.add_selected_callback(self.on_banner_selected)
-        banner.submit(self.window)
+        banner.submit(self.container)
 
     def remove_banner(self, banner: SelectableButton, auto_select=True):
         """
@@ -64,9 +68,29 @@ class BannerMenu(StagedView):
         """
         self.banners.remove(banner)
         banner.delete()
+        #In order for it to actually appear deleted, since the banner is staged and submitted instead of being standalone, must redraw
+        self.__redraw_banners()
+
         if auto_select and banner == self.active_banner and len(self.banners) > 0:
             self.set_banner(self.banners[0])
     
+    def get_banner_index(self, banner: SelectableButton):
+        for i, b in enumerate(self.banners):
+            if b is banner:
+                return i
+        return None
+    
+    def get_active_index(self):
+        if self.active_banner is None: return None
+        return self.get_banner_index(self.active_banner)
+    
+    def set_banner_index(self, banner: SelectableButton, index: int):
+        if banner not in self.banners: return
+        if index < 0 or index >= len(self.banners): return
+        self.banners.remove(banner)
+        self.banners.insert(index, banner)
+        self.__redraw_banners()
+
     def set_banner(self, banner: SelectableButton):
         self.on_banner_selected(banner)
         if banner is not None:
@@ -77,6 +101,11 @@ class BannerMenu(StagedView):
             if banner is not selected_banner:
                 banner.set_unselected()
         self.active_banner = selected_banner
+
+    def __redraw_banners(self):
+        dpg.delete_item(self.container, children_only=True)
+        for banner in self.banners:
+            banner.submit(self.container)
 
 class DynamicViewport(StagedView):
     """

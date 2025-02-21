@@ -3,6 +3,7 @@ from logger_windows import LoggerBanner, DataLogWindow, LoggerMasterWindow
 
 from device_managers import DeviceManager
 from settings_manager import SettingsManager
+from macro_manager import MacroManager
 
 from default_window import DefaultWindow
 
@@ -36,7 +37,7 @@ class LoggerManager:
 
         self.banner_menu = banner_menu
         self.window_viewport = window_viewport
-        self.banner = LoggerBanner(text="Data", on_select=self.__load_window)
+        self.banner = LoggerBanner(text="Data", on_select=self.__load_window, height=50)
         self.banner_menu.add_banner(self.banner)
 
         self.data_logger = DataLogger()

@@ -8,7 +8,7 @@ class SelectableButton(StagedView):
     caller is the SelectableButton
     """
 
-    def __init__(self, text = None, selected = False, on_select = None):
+    def __init__(self, text = None, selected = False, on_select = None, height: int = 0, **kwargs):
         with dpg.theme(label="SelectableButtonSelectedTheme") as self.selected_theme:
             with dpg.theme_component(dpg.mvButton) as self.selected_component:
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (0, 119, 200, 153))
@@ -21,7 +21,7 @@ class SelectableButton(StagedView):
                 self.text_color_unselected = None# dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255, 255))
 
         with dpg.stage(label=text or "SelectableButton") as self._stage_id:
-            self.button = dpg.add_button(label=text, width=-1, height=50, callback=self.set_selected)
+            self.button = dpg.add_button(label=text, width=-1, height=height, callback=self.set_selected, **kwargs)
         dpg.bind_item_theme(self.button, self.unselected_theme)
         self.selected = selected
         self.on_select_callbacks = []
@@ -77,10 +77,12 @@ class SelectableButton(StagedView):
             dpg.set_value(self.text_color_selected, color)
             dpg.set_value(self.text_color_unselected, color)
 
+    def set_text(self, text: str):
+        dpg.configure_item(self.button, label=text)
+
     def delete(self):
         for child in dpg.get_item_children(self._stage_id, 1):
             dpg.delete_item(child)
         dpg.delete_item(self.selected_theme)
         dpg.delete_item(self.unselected_theme)
         super().delete()
-        # dpg.delete_item(self.button)

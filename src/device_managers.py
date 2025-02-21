@@ -14,6 +14,7 @@ from devices import ThreespaceDevice
 from typing import NamedTuple
 from sensor_windows import SensorBanner, SensorMasterWindow
 from core_ui import BannerMenu, DynamicViewport
+from macro_manager import MacroManager
 
 from yostlabs.tss3.api import ThreespaceSensor, ThreespaceSerialComClass, ThreespaceComClass
 from yostlabs.tss3.api import ThreespaceSensor, ThreespaceSerialComClass, ThreespaceComClass
@@ -59,6 +60,7 @@ class DeviceManager:
 
 import dearpygui.dearpygui as dpg
 ThreespaceGroup = NamedTuple("ThreespaceGroup", [("device", ThreespaceDevice), ("banner", SensorBanner), ("main_window", SensorMasterWindow)])
+from macro_manager import MacroConfigurationWindow
 class ThreespaceManager:
 
     
@@ -70,6 +72,7 @@ class ThreespaceManager:
         self.window_viewport = window_viewport
 
         self.settings_manager = settings_manager
+        self.macro_manager = MacroManager(settings_manager)
 
         self.periodic_update_rate = 0.5
         self.last_update_time = time.time()
@@ -141,7 +144,7 @@ class ThreespaceManager:
         device.on_disconnect.subscribe(self.__on_sensor_disconnect)
         with dpg_lock():
             banner = SensorBanner(device)
-            group = ThreespaceGroup(device, banner, SensorMasterWindow(device, banner))
+            group = ThreespaceGroup(device, banner, SensorMasterWindow(device, banner, self.macro_manager))
         self.devices[com] = group
         self.banner_menu.add_banner(group.banner)
         group.banner.add_selected_callback(lambda _: self.load_sensor_window(com))        

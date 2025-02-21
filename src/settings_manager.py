@@ -14,17 +14,17 @@ class SettingsManager:
     def post_init(self):
         pass
 
-    def save(self, fname: str, dictionary):
+    def save(self, fname: str, obj, **kwargs):
         location = self.settings_folder / fname
         with location.open('w') as fp:
-            json.dump(dictionary, fp)
+            json.dump(obj, fp, **kwargs)
 
-    def load(self, fname: str):
+    def load(self, fname: str, **kwargs):
         location = self.settings_folder / fname
         if not location.exists():
             return None
         with location.open('r') as fp:
-            return json.load(fp)
+            return json.load(fp, **kwargs)
 
     def cleanup(self):
         pass

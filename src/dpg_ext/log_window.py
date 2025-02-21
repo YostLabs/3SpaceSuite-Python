@@ -194,20 +194,34 @@ class MultilineText:
             dpg.add_item_resize_handler(callback=self.__on_resize)
         dpg.bind_item_handler_registry(self.text, self.resize_handler)
         
+    def __modify_message(self, message: str):
+        lines = message.split('\n')
+        modified_lines = []
+        for line in lines:
+            try:
+                dpg.get_text_size(line)
+            except: #Contains invalid characters, treat as binary
+                line = str(line.encode())
+            #Hyphens are often negative signs, which is real awkward to break on
+            modified_lines.append(textwrap.fill(line, width=self.wrap_chars, break_long_words=True, break_on_hyphens=False, drop_whitespace=False))
+        message = '\n'.join(modified_lines)
+        return message
+    
     def add_message(self, message: str, immediate_draw=True):
         if len(self.messages) == self.max_messages:
             del self.modified_messages[0]
             del self.messages[0]
         self.messages.append(message)
-        #Hyphens are often negative signs, which is real awkward to break on
-        message = textwrap.fill(message, width=self.wrap_chars, break_long_words=True, break_on_hyphens=False)
-        self.modified_messages.append(message)
+        self.modified_messages.append(self.__modify_message(message))
         if immediate_draw:
             self.update()
     
     def update(self, ignore_scroll=False):
         msg = '\n'.join(self.modified_messages)
-        dpg.set_item_height(self.text, dpg.get_text_size(msg)[1] + (2 * MultilineText.FRAME_PADDING))
+        height = dpg.get_text_size(msg)[1] + (2 * MultilineText.FRAME_PADDING)
+        if len(msg) > 0 and msg[-1] == '\n':
+            height += dpg.get_text_size(' ')[1] #Newlines aren't considered to add height, even though they do. This causes weird scrolling artifacts if not handled. 
+        dpg.set_item_height(self.text, height)
         dpg.set_value(self.text, msg)
         if self.auto_scroll_enabled and not ignore_scroll:
             dpg.set_y_scroll(self.child_window, -1)
@@ -228,7 +242,7 @@ class MultilineText:
         new_width = dpg.get_item_rect_size(self.text)[0] - (2 * MultilineText.FRAME_PADDING)
         self.wrap_chars = int(new_width / dpg.get_text_size("O")[0])
         for i, message in enumerate(self.messages):
-            self.modified_messages[i] = textwrap.fill(message, width=self.wrap_chars, break_long_words=True, break_on_hyphens=False)
+            self.modified_messages[i] = self.__modify_message(message)
 
         self.update(ignore_scroll=True)
 
