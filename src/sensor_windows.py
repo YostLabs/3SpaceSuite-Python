@@ -340,6 +340,8 @@ class SensorTerminalWindow(StagedView):
 
     def __open_macro_window(self):
         self.macro_config_window = MacroConfigurationWindow(self.macro_manager)
+        dpg.render_dearpygui_frame() #Must be called before center window so the size information is known
+        dpg_ext.center_window(self.macro_config_window.modal)
 
     def __on_macros_modified(self):
         self.macro_config_window = None
