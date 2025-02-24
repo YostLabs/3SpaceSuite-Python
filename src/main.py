@@ -15,6 +15,11 @@ dpg.create_viewport(title="YL 3-Space Suite", large_icon=(IMAGE_FOLDER / "icon.i
 theme_lib.init()
 texture_lib.init()
 
+from third_party.file_dialog.fdialog import FileDialog
+image_root = RESOURCE_FOLDER / "images" / "fdialog"
+print(f"{image_root=}")
+FileDialog.set_image_root(image_root.as_posix() + "/")
+
 from utility import Logger, MainLoopEventQueue
 Logger.init()
 from core_ui import FontManager

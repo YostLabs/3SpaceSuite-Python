@@ -9,6 +9,7 @@ from dpg_ext.selectable_button import SelectableButton
 from dpg_ext.dynamic_button import DynamicButton
 from dpg_ext.filtered_dropdown import FilteredDropdown
 from dpg_ext.log_window import LogWindow
+from third_party.file_dialog.fdialog import FileDialog
 
 from core_ui import FontManager
 import theme_lib
@@ -225,18 +226,27 @@ class DataLogWindow(StagedView):
         self.log_settings.binary_mode = app_data == "Binary"
 
     def __on_select_button(self, sender, app_data, user_data):
-        def on_folder_select(s, a, u):
-            path = a['current_path']
+        def on_close():
+            nonlocal firmware_selector
+            firmware_selector.destroy()
+
+        def on_folder_select(selections):
+            on_close()
+            if len(selections) == 0:
+                return
+            print(f"{selections=}")
+            path = selections[0][1]
             self.log_settings.output_directory = pathlib.Path(path)
-            dpg.set_value(self.input_directory_text, self.log_settings.output_directory.as_posix())
-            dpg.delete_item(file_dialog)
-        default_path = pathlib.Path(__file__).parent
+            dpg.set_value(self.input_directory_text, self.log_settings.output_directory.as_posix())            
+        
+        default_path = APPLICATION_FOLDER
         if self.log_settings.output_directory.exists():
             default_path = self.log_settings.output_directory.parent
-        file_dialog = dpg.add_file_dialog(modal=True, height=375, width=600, default_path=default_path,  
-                                          directory_selector=True, callback=on_folder_select, show=True,
-                                          cancel_callback=lambda: dpg.delete_item(file_dialog),
-                                          file_count=1, label="Output Folder Selector")
+        firmware_selector = FileDialog(title="Output Folder Selector", width=900, height=550, min_size=(700,400), dirs_only=True, 
+                                            multi_selection=False, modal=True, on_select=on_folder_select, on_cancel=on_close,
+                                            default_path=default_path.as_posix(), filter_list=[""], file_filter="", no_resize=False)
+        
+        firmware_selector.show_file_dialog()
 
     def __on_data_option_selected(self, sender, app_data, user_data):
         if self.log_options_window is not None:
@@ -267,7 +277,7 @@ class DataLogWindow(StagedView):
         if len(groups) == 0:
             Logger.log_warning("No available log devices connected.")
             return
-        path = pathlib.Path(__file__).parent / "log_data"
+
         self.data_logger.set_duration(self.log_settings.duration)
         self.data_logger.set_log_groups(groups)
         self.data_logger.set_output_folder(self.log_settings.output_directory)

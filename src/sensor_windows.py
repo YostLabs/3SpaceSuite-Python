@@ -497,9 +497,8 @@ class SensorTerminalWindow(StagedView):
         self.macro_manager.on_modified.unsubscribe(self.__on_macros_modified)
         super().delete()
 
-import dpg_ext.dearpygui_grid as dpg_grid
+import third_party.dearpygui_grid as dpg_grid
 
-from utility import WatchdogTimer
 from dpg_ext.dynamic_button import DynamicButton
 class SensorOrientationWindow(StagedView):
 
@@ -1189,16 +1188,14 @@ class TableMatrix:
     def set_color(self, row: int, col: int, color: list[int]):
         dpg.configure_item(self.text_matrix[row][col], color=color)        
 
+from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
 class SensorSettingsWindow(StagedView):
 
     def __init__(self, device: ThreespaceDevice):
         with dpg.stage(label="Sensor Settings Stage") as self._stage_id:
-            with dpg.file_dialog(width=700, height=400, file_count=1, directory_selector=False, 
-                                 callback=self.__on_firmware_file_selected, show=False, modal=True,
-                                 default_path=APPLICATION_FOLDER.as_posix()) as self.firmware_selector:
-                dpg.add_file_extension(".xml", custom_text="[Firmware]", color=(0, 255, 0))
+            self.firmware_selector: FileDialog = None
 
             try:
                 serial_number = device.get_serial_number()
@@ -1218,7 +1215,7 @@ class SensorSettingsWindow(StagedView):
                     dpg.add_text("Firmware Version:")
                     self.version_firmware_text = dpg.add_text()     
                     dpg.add_spacer(width=50)
-                    dpg.add_button(label="Upload Firmware", callback=lambda: dpg.show_item(self.firmware_selector))          
+                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)          
                 with dpg.group(horizontal=True):
                     dpg.add_button(label="Restore Factory Settings", 
                                    callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restore factory settings?", 
@@ -1311,16 +1308,28 @@ class SensorSettingsWindow(StagedView):
         if success:
             self.reload_settings()
 
-    def __on_firmware_file_selected(self, sender, app_data, user_data):
-        selections: dict[str,str] = app_data["selections"]
-        if len(selections) == 0: return
-        file_name = list(selections.keys())[0]
-        file_path = list(selections.values())[0]
+    def __on_firmware_file_selected(self, fileinfos):
+        self.close_firmware_selector()
+        if len(fileinfos) == 0: return
+        info = fileinfos[0]
+        file_name, file_path = info
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
+    def open_firmware_selector(self):
+        self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
+                                            modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
+                                            default_path=APPLICATION_FOLDER.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
+        self.firmware_selector.show_file_dialog()
+
+    def close_firmware_selector(self):
+        if self.firmware_selector is None:
+            return
+        self.firmware_selector.destroy()
+        self.firmware_selector = None
+
     def delete(self):
-        dpg.delete_item(self.firmware_selector)
+        self.close_firmware_selector()
         super().delete()
 
 class SensorCalibrationWindow(StagedView):
@@ -1964,12 +1973,8 @@ class GradientDescentCalibrationWizard:
 class BootloaderSettingsWindow(StagedView):
 
     def __init__(self, device: ThreespaceDevice):
+        self.firmware_selector: FileDialog = None
         with dpg.stage(label="Sensor Settings Stage") as self._stage_id:
-            with dpg.file_dialog(width=700, height=400, file_count=1, directory_selector=False, 
-                                 callback=self.__on_firmware_file_selected, show=False, modal=True,
-                                 default_path=APPLICATION_FOLDER.as_posix()) as self.firmware_selector:
-                dpg.add_file_extension(".xml", custom_text="[Firmware]", color=(0, 255, 0))
-
             try:
                 serial_number = device.get_serial_number()
                 firmware_valid = device.is_firmware_valid()
@@ -1994,7 +1999,7 @@ class BootloaderSettingsWindow(StagedView):
                 with dpg.group(horizontal=True):
                     dpg.add_text("Firmware:")
                     dpg.add_text(firmware_valid, color=valid_color)
-                    dpg.add_button(label="Upload Firmware", callback=lambda: dpg.show_item(self.firmware_selector))               
+                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)               
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
@@ -2041,16 +2046,28 @@ class BootloaderSettingsWindow(StagedView):
 
         dpg.delete_item(popup_window)
 
-    def __on_firmware_file_selected(self, sender, app_data, user_data):
-        selections: dict[str,str] = app_data["selections"]
-        if len(selections) == 0: return
-        file_name = list(selections.keys())[0]
-        file_path = list(selections.values())[0]
+    def __on_firmware_file_selected(self, fileinfos):
+        self.close_firmware_selector()
+        if len(fileinfos) == 0: return
+        info = fileinfos[0]
+        file_name, file_path = info
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
+    def open_firmware_selector(self):
+        self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
+                                            modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
+                                            default_path=APPLICATION_FOLDER.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
+        self.firmware_selector.show_file_dialog()
+
+    def close_firmware_selector(self):
+        if self.firmware_selector is None:
+            return
+        self.firmware_selector.destroy()
+        self.firmware_selector = None
+
     def delete(self):
-        dpg.delete_item(self.firmware_selector)
+        self.close_firmware_selector()
         super().delete()
 
 class BootloaderTerminalWindow(StagedView):

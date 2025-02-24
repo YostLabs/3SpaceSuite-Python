@@ -30,8 +30,7 @@ class MenuBar:
             dpg.add_menu_item(label="Fonts", callback=dpg.show_font_manager)
 
         with dpg.menu(label="Tools"):
-            dpg.add_menu_item(label="Discover Ports", callback=self.__discover_ports)
-            
+            #dpg.add_menu_item(label="Discover Ports", callback=self.__discover_ports)
             dpg.add_menu_item(label="Metrics", callback=dpg.show_metrics)
             dpg.add_menu_item(label="Registry", callback=dpg.show_item_registry)
 
