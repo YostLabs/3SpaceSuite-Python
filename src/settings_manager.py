@@ -7,7 +7,7 @@ import json
 class SettingsManager:
 
     def __init__(self):
-        self.settings_folder = APPLICATION_FOLDER / "settings"
+        self.settings_folder = PLATFORM_FOLDERS_ROAMING.user_config_path / "settings"
         if not self.settings_folder.exists():
             self.settings_folder.mkdir(parents=True, exist_ok=True)
 

@@ -45,6 +45,8 @@ class LogSettings:
     MODE_BINARY = 0
     MODE_ASCII = 1
 
+    DEFAULT_OUTPUT_DIRECTORY = PLATFORM_FOLDERS.user_documents_path / "TSS_Suite" / "log_data"
+
     def __init__(self):
         with dpg.value_registry() as self.__registry:
             self._value_header_status = dpg.add_bool_value(default_value=False)
@@ -59,7 +61,7 @@ class LogSettings:
             self._value_log_hz = dpg.add_float_value(default_value=200)
             self._value_log_duration = dpg.add_float_value(default_value=0) #0 is forever
         
-        self.output_directory = APPLICATION_FOLDER / "log_data"
+        self.output_directory = LogSettings.DEFAULT_OUTPUT_DIRECTORY
 
         self.slot_configuration: dict[str,list[ThreespaceStreamingOption]] = {
             "general": []
@@ -239,7 +241,7 @@ class DataLogWindow(StagedView):
             self.log_settings.output_directory = pathlib.Path(path)
             dpg.set_value(self.input_directory_text, self.log_settings.output_directory.as_posix())            
         
-        default_path = APPLICATION_FOLDER
+        default_path = PLATFORM_FOLDERS.user_documents_path or APPLICATION_FOLDER
         if self.log_settings.output_directory.exists():
             default_path = self.log_settings.output_directory.parent
         firmware_selector = FileDialog(title="Output Folder Selector", width=900, height=550, min_size=(700,400), dirs_only=True, 

@@ -10,7 +10,7 @@ import time
 dpg.create_context()
 dpg.create_viewport()
 
-dpg.create_viewport(title="YL 3-Space Suite", large_icon=(IMAGE_FOLDER / "icon.ico").as_posix(), height=815)
+dpg.create_viewport(title=APPNAME, large_icon=(IMAGE_FOLDER / "icon.ico").as_posix(), height=815)
 
 theme_lib.init()
 texture_lib.init()

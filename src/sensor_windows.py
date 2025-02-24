@@ -1188,15 +1188,19 @@ class TableMatrix:
     def set_color(self, row: int, col: int, color: list[int]):
         dpg.configure_item(self.text_matrix[row][col], color=color)        
 
+#Temporarily being done like this just to preserve the folder
+#This should be changed to a setting at some point but doing
+#this for now
+LAST_FIRMWARE_FOLDER = None
+
 from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
 class SensorSettingsWindow(StagedView):
 
     def __init__(self, device: ThreespaceDevice):
+        self.firmware_selector: FileDialog = None
         with dpg.stage(label="Sensor Settings Stage") as self._stage_id:
-            self.firmware_selector: FileDialog = None
-
             try:
                 serial_number = device.get_serial_number()
                 hardware_version = device.get_hardware_version()
@@ -1247,7 +1251,7 @@ class SensorSettingsWindow(StagedView):
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
-                     
+        
         self.device = device
         self.reload_settings()
 
@@ -1309,17 +1313,22 @@ class SensorSettingsWindow(StagedView):
             self.reload_settings()
 
     def __on_firmware_file_selected(self, fileinfos):
+        global LAST_FIRMWARE_FOLDER
         self.close_firmware_selector()
         if len(fileinfos) == 0: return
         info = fileinfos[0]
         file_name, file_path = info
+        LAST_FIRMWARE_FOLDER = pathlib.Path(file_path).parent
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
+        location = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
+        if LAST_FIRMWARE_FOLDER is not None:
+            location = LAST_FIRMWARE_FOLDER
         self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
                                             modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
-                                            default_path=APPLICATION_FOLDER.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
+                                            default_path=location.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
         self.firmware_selector.show_file_dialog()
 
     def close_firmware_selector(self):
@@ -2047,17 +2056,22 @@ class BootloaderSettingsWindow(StagedView):
         dpg.delete_item(popup_window)
 
     def __on_firmware_file_selected(self, fileinfos):
+        global LAST_FIRMWARE_FOLDER
         self.close_firmware_selector()
         if len(fileinfos) == 0: return
         info = fileinfos[0]
         file_name, file_path = info
+        LAST_FIRMWARE_FOLDER = pathlib.Path(file_path).parent
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
+        location = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
+        if LAST_FIRMWARE_FOLDER is not None:
+            location = LAST_FIRMWARE_FOLDER
         self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
                                             modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
-                                            default_path=APPLICATION_FOLDER.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
+                                            default_path=location.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
         self.firmware_selector.show_file_dialog()
 
     def close_firmware_selector(self):

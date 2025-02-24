@@ -15,9 +15,9 @@ cmd_properties.append(f"--splash=resources/images/logo.jpg")
 cmd_properties.append(f"--noconfirm")
 
 if not debug:
-    cmd_properties.append(f"--name=3.0-Space Suite")
+    cmd_properties.append(f"--name=TSS-3 Suite")
     cmd_properties.append(f"--noconsole")
 else:
-    cmd_properties.append(f"--name=3.0-Space Suite DEV")
+    cmd_properties.append(f"--name=TSS-3 Suite DEV")
 
 PyInstaller.__main__.run(cmd_properties)

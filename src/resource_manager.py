@@ -1,5 +1,13 @@
+from platformdirs import PlatformDirs
 import pathlib
 import sys
+
+APPNAME = "TSS-3 Suite"
+INTERNAL_APPNAME = "TSSv3_Suite"
+APP_AUTHOR = "YostLabs"
+
+PLATFORM_FOLDERS = PlatformDirs(INTERNAL_APPNAME, APP_AUTHOR, ensure_exists=True)
+PLATFORM_FOLDERS_ROAMING = PlatformDirs(INTERNAL_APPNAME, APP_AUTHOR, roaming=True, ensure_exists=True)
 
 APPLICATION_FOLDER = pathlib.Path(__file__).parent.parent
 
