@@ -31,6 +31,7 @@ class FileDialog:
         modal:                  A sort of popup effect (can cause problems when the file dialog is activated by a modal window).
         show_hidden_files:      Shows to the directory listing hidden files including folders.
         user_style:             Different graphical styles for file_dialog.
+        display_item_type:      If true, includes the item type column
     Returns:
         None
     """
@@ -49,7 +50,8 @@ class FileDialog:
         default_path=os.getcwd(),
         filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
         file_filter=".*",
-        callback=None,
+        on_select=None,
+        on_cancel=None,
         show_dir_size=False,
         allow_drag=True,
         multi_selection=True,
@@ -57,7 +59,8 @@ class FileDialog:
         no_resize=True,
         modal=True,
         show_hidden_files=False,
-        user_style=0
+        user_style=0,
+        display_type=False
     ):
         global chdir
 
@@ -73,7 +76,8 @@ class FileDialog:
         self.default_path = default_path
         self.filter_list = filter_list
         self.file_filter = file_filter
-        self.callback = callback
+        self.on_select = on_select
+        self.on_cancel = on_cancel
         self.show_dir_size = show_dir_size
         self.allow_drag = allow_drag
         self.multi_selection = multi_selection
@@ -82,6 +86,7 @@ class FileDialog:
         self.modal = modal
         self.show_hidden_files = show_hidden_files
         self.user_style = user_style
+        self.display_type = display_type
 
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
@@ -94,14 +99,13 @@ class FileDialog:
         self.fileinfo_to_row: dict[str,int] = {}
         self.row_to_fileinfo: dict[int,str] = {}
 
-
         # file dialog theme
 
-        with dpg.theme() as selec_alignt:
+        with dpg.theme() as self.selec_alignt:
             with dpg.theme_component(dpg.mvThemeCat_Core):
                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=0, y=.5)
 
-        with dpg.theme() as size_alignt:
+        with dpg.theme() as self.size_alignt:
             with dpg.theme_component(dpg.mvThemeCat_Core):
                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
 
@@ -179,7 +183,7 @@ class FileDialog:
 
 
         # high-level
-        with dpg.texture_registry():
+        with dpg.texture_registry() as self.texture_registry:
             dpg.add_static_texture(width=self.ico_document[0], height=self.ico_document[1], default_value=self.ico_document[2], tag="ico_document")
             dpg.add_static_texture(width=self.ico_home[0], height=self.ico_home[1], default_value=self.ico_home[2], tag="ico_home")
             dpg.add_static_texture(width=self.ico_add_folder[0], height=self.ico_add_folder[1], default_value=self.ico_add_folder[2], tag="ico_add_folder")
@@ -337,11 +341,24 @@ class FileDialog:
 
         def return_items():
             dpg.hide_item(self.tag)
-            if callback is None:
+            selected = self.selected_files.copy()
+            if len(selected) == 0 and self.dirs_only: #Special case for directory selector, return the current directory
+                cur_dir = os.getcwd()
+                dir_name = cur_dir.split(os.sep)[-1]
+                selected.append((dir_name, cur_dir))
+            reset_dir(default_path=self.default_path)
+            if self.on_select is None:
                 pass
             else:
-                self.callback(self.selected_files)
+                self.on_select(selected)
+        
+        def on_cancel():
+            dpg.hide_item(self.tag)
             reset_dir(default_path=self.default_path)
+            if self.on_cancel is None:
+                pass
+            else:
+                self.on_cancel()
 
         def open_drive(sender, app_data, user_data):
             chdir(user_data)
@@ -380,9 +397,9 @@ class FileDialog:
                         return     
                                    
                     if dpg.get_value(sender) is True:
-                        self.selected_files.append(user_data[1])
+                        self.selected_files.append(user_data)
                     else:
-                        self.selected_files.remove(user_data[1])
+                        self.selected_files.remove(user_data)
 
                     self.last_selection = user_data
                     return
@@ -395,7 +412,7 @@ class FileDialog:
 
                 #Ensure the row is selected, don't allow unselecting a singular row. Clicking like this is always selecting
                 select_all(cur_row)
-                self.selected_files.append(user_data[1])
+                self.selected_files.append(user_data)
             else:
                 unselect_all(cur_row) #This item isn't selectable, so don't select it
 
@@ -407,6 +424,7 @@ class FileDialog:
                         # print(f"Content:{dpg.get_item_label(sender)}, files: {user_data}")
                         chdir(user_data[1])
                         dpg.set_value("ex_search", "")
+                        self.last_click_time = 0 #To prevent accidentally triple clicking
                     elif os.path.isfile(user_data[1]): #On double click file, finish selecting
                         return_items()
                         return user_data[1]
@@ -467,6 +485,8 @@ class FileDialog:
 
             creation_time = os.path.getctime(item)
             creation_time = time.ctime(creation_time)
+            creation_time = time.strptime(creation_time)
+            creation_time = time.strftime("%b %d %I:%M:%S %p %Y", creation_time)
 
             item_type = "Dir"
 
@@ -491,15 +511,17 @@ class FileDialog:
 
                     cell_name = dpg.add_selectable(label=file_name, **kwargs_cell)
                 cell_time = dpg.add_selectable(label=creation_time, **kwargs_cell)
-                cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
+                if self.display_type:
+                    cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
                 cell_size = dpg.add_selectable(label=str(item_size), **kwargs_cell)
 
                 if self.allow_drag is True:
                     drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                dpg.bind_item_theme(cell_name, selec_alignt)
-                dpg.bind_item_theme(cell_time, selec_alignt)
-                dpg.bind_item_theme(cell_type, selec_alignt)
-                dpg.bind_item_theme(cell_size, size_alignt)
+                dpg.bind_item_theme(cell_name, self.selec_alignt)
+                dpg.bind_item_theme(cell_time, self.selec_alignt)
+                if self.display_type:
+                    dpg.bind_item_theme(cell_type, self.selec_alignt)
+                dpg.bind_item_theme(cell_size, self.size_alignt)
                 if self.allow_drag is True:
                     if file_name.endswith((".png", ".jpg")):
                         dpg.add_image(self.img_big_picture, parent=drag_payload)
@@ -517,6 +539,8 @@ class FileDialog:
 
                 creation_time = os.path.getctime(item)
                 creation_time = time.ctime(creation_time)
+                creation_time = time.strptime(creation_time)
+                creation_time = time.strftime("%b %d %I:%M:%S %p %Y", creation_time)
 
                 item_type = "File"
 
@@ -587,15 +611,17 @@ class FileDialog:
 
                         cell_name = dpg.add_selectable(label=file_name, **kwargs_cell)
                     cell_time = dpg.add_selectable(label=creation_time, **kwargs_cell)
-                    cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
+                    if self.display_type:
+                        cell_type = dpg.add_selectable(label=item_type, **kwargs_cell)
                     cell_size = dpg.add_selectable(label=str(item_size), **kwargs_cell)
 
                     if self.allow_drag is True:
                         drag_payload = dpg.add_drag_payload(parent=cell_name, payload_type=self.PAYLOAD_TYPE)
-                    dpg.bind_item_theme(cell_name, selec_alignt)
-                    dpg.bind_item_theme(cell_time, selec_alignt)
-                    dpg.bind_item_theme(cell_type, selec_alignt)
-                    dpg.bind_item_theme(cell_size, size_alignt)
+                    dpg.bind_item_theme(cell_name, self.selec_alignt)
+                    dpg.bind_item_theme(cell_time, self.selec_alignt)
+                    if self.display_type:
+                        dpg.bind_item_theme(cell_type, self.selec_alignt)
+                    dpg.bind_item_theme(cell_size, self.size_alignt)
                     if self.allow_drag is True:
                         if file_name.endswith((".png", ".jpg")):
                             dpg.add_image(self.img_big_picture, parent=drag_payload)
@@ -617,7 +643,8 @@ class FileDialog:
                     dpg.set_value("ex_search", "")
                     chdir("..")
                     self.last_click_time = 0
-                self.last_click_time = current_time
+                else:
+                    self.last_click_time = current_time
 
         def filter_combo_selector(sender, app_data):
             filter_file = dpg.get_value(sender)
@@ -627,14 +654,17 @@ class FileDialog:
 
         def chdir(path):
             try:
-                print("Chdir:", path)
                 os.chdir(path)
                 cwd = os.getcwd()
-                reset_dir(default_path=cwd)
             except PermissionError as e:
                 message_box("File dialog - PerimssionError", f"Cannot open the folder because is a system folder or the access is denied\n\nMore info:\n{e}")
             except NotADirectoryError as e:
                 message_box("File dialog - not a directory", f"The selected item is not a directory, but a file.\n\nMore info:\n{e}")
+            except Exception as e:
+                message_box("Other CHDIR err:", str(e))
+            
+            reset_dir(default_path=os.getcwd())
+            
 
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             def internal():
@@ -720,8 +750,11 @@ class FileDialog:
             modify_selectables(True, root=root, exclude=exclude)
         
         # main file dialog header
-        with dpg.window(label="File dialog", tag=self.tag, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50,50)):
-            info_px = 50
+        with dpg.window(label="File dialog", tag=self.tag, no_resize=self.no_resize, show=False, modal=self.modal, 
+                        width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50,50),
+                        on_close=on_cancel) as self.window:
+            h = dpg.get_text_size("O")[1]
+            info_px = h * 2 + 28
 
             # horizontal group (shot_menu + dir_list)
             with dpg.group(horizontal=True):
@@ -824,21 +857,34 @@ class FileDialog:
                             iwow_date = 50
                             iwow_type = 10
                             iwow_size = 10
-                            dpg.add_table_column(label='Name',     init_width_or_weight=iwow_name, tag="ex_name")
-                            dpg.add_table_column(label='Date',     init_width_or_weight=iwow_date, tag="ex_date")
-                            dpg.add_table_column(label='Type',     init_width_or_weight=iwow_type, tag="ex_type")
-                            dpg.add_table_column(label='Size',     init_width_or_weight=iwow_size, width=10, tag="ex_size")
 
-            with dpg.group(horizontal=True):
-                dpg.add_spacer(width=480)
-                dpg.add_text('File type filter')
-                dpg.add_combo(items=self.filter_list,
-                              callback=filter_combo_selector, default_value=self.file_filter, width=-1)
+                            dpg.add_table_column(label='Name',     init_width_or_weight=iwow_name, tag="ex_name")
+                            dpg.add_table_column(label='Date', width_fixed=True, tag="ex_date")
+                            if self.display_type:
+                                dpg.add_table_column(label='Type', width_fixed=True, tag="ex_type")
+                            dpg.add_table_column(label='Size', width_fixed=True, tag="ex_size")                            
+
             
-            with dpg.group(horizontal=True) as btn_ret_grp:
-                dpg.add_spacer(width=int(self.width*0.831))
-                dpg.add_button(label="   OK   ", tag=self.tag+"_return", callback=return_items)
-                dpg.add_button(label=" Cancel ", callback=lambda: dpg.hide_item(self.tag))
+            with dpg.table(header_row=False):
+                longest_filter = max(self.filter_list, key=len)
+                file_filter_width = dpg.get_text_size(longest_filter)[0] + 29
+                dpg.add_table_column()
+                dpg.add_table_column(width_fixed=True)
+                dpg.add_table_column(width_fixed=True)
+                with dpg.table_row():
+                    dpg.add_table_cell()
+                    dpg.add_text('File type filter')
+                    dpg.add_combo(items=self.filter_list,
+                                    callback=filter_combo_selector, default_value=self.file_filter, width=file_filter_width)
+            
+            with dpg.table(header_row=False):
+                dpg.add_table_column()
+                dpg.add_table_column(width_fixed=True)
+                with dpg.table_row():
+                    dpg.add_table_cell()
+                    with dpg.group(horizontal=True) as btn_ret_grp:
+                        dpg.add_button(label="   OK   ", tag=self.tag+"_return", callback=return_items)
+                        dpg.add_button(label=" Cancel ", callback=on_cancel)
 
             if self.default_path == "cwd":
                 chdir(os.getcwd())
@@ -854,6 +900,14 @@ class FileDialog:
         chdir(self.default_path)
         dpg.show_item(self.tag)
 
-    def change_callback(self, callback):
-        self.callback = callback
-        dpg.configure_item(self.tag+"_return", callback=self.callback)
+    def set_select_callback(self, callback):
+        self.on_select = callback
+
+    def set_cancel_callback(self, callback):
+        self.on_cancel = callback     
+
+    def destroy(self):
+        dpg.delete_item(self.window)
+        dpg.delete_item(self.selec_alignt)
+        dpg.delete_item(self.size_alignt)
+        dpg.delete_item(self.texture_registry)

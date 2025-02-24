@@ -8,3 +8,8 @@ Changed the callback to return list[Tuple(filename, path)] instead of just list[
 Added FileDialog.set_image_root(path) to allow changing where the images are loaded from
 Implemented the multiselection flag
 Added files_only to allow only selecting files
+Added on_cancel callback and changed callback to on_select
+Changed some of the visual/layout of buttons
+Changed date format
+Made it so that if selecting OK and nothing is selected while in dirs_only, the CWD is used
+Fixed inputting invalid directories not resetting the search and/or crashing
