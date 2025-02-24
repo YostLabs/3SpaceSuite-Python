@@ -1,5 +1,5 @@
 # file_dialog 3.1
-# MIT lincensed
+# MIT licensed
 
 import dearpygui.dearpygui as dpg
 import os
@@ -18,6 +18,7 @@ class FileDialog:
         height:                 Sets the file dialog window height.
         min_size:               Sets the file dialog minimum size.
         dirs_only:              When true it will only list directories.
+        files_only:             When true it will only allow selecting files
         default_path:           The default path when file_dialog starts, if it's 'cwd' it will be the current working directory.
         filter_list:            An array of different file extensions.
         file_filter:            If it's for example .py it will only list that type of files.
@@ -33,6 +34,9 @@ class FileDialog:
     Returns:
         None
     """
+
+    IMAGE_ROOT = "images/"
+
     def __init__(
         self,
         title="File dialog",
@@ -41,6 +45,7 @@ class FileDialog:
         height=650,
         min_size=(460, 320),
         dirs_only=False,
+        files_only=True,
         default_path=os.getcwd(),
         filter_list=[".*", ".exe", ".bat", ".sh", ".msi", ".apk", ".bin", ".cmd", ".com", ".jar", ".out", ".py", ".pyl", ".phs", ".js", ".json", ".java", ".c", ".cpp", ".cs", ".h", ".rs", ".vbs", ".php", ".pl", ".rb", ".go", ".swift", ".ts", ".asm", ".lua", ".sh", ".bat", ".r", ".dart", ".ps1", ".html", ".htm", ".xml", ".css", ".ini", ".yaml", ".yml", ".config", ".md", ".rst", ".txt", ".rtf", ".doc", ".docx", ".pdf", ".odt", ".tex", ".log", ".csv", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".svg", ".webp", ".ico", ".psd", ".ai", ".eps", ".tga", ".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".aiff", ".mid", ".midi", ".opus", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".3gp", ".m4v", ".blend", ".fbx", ".obj", ".stl", ".3ds", ".dae", ".ply", ".glb", ".gltf", ".csv", ".sql", ".db", ".dbf", ".mdb", ".accdb", ".sqlite", ".xml", ".json", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".bz2", ".xz", ".tgz", ".cab", ".vdi", ".vmdk", ".vhd", ".vhdx", ".ova", ".ovf", ".qcow2", ".dockerfile", ".bak", ".old", ".sav", ".tmp", ".bk", ".ppack", ".mlt", ".torrent", ".ics"],
         file_filter=".*",
@@ -63,6 +68,8 @@ class FileDialog:
         self.height = height
         self.min_size = min_size
         self.dirs_only = dirs_only
+        self.files_only = files_only
+        if self.dirs_only: self.files_only = False #If only showing dirs, doesn't make sense to not be able to select dirs
         self.default_path = default_path
         self.filter_list = filter_list
         self.file_filter = file_filter
@@ -78,9 +85,14 @@ class FileDialog:
 
         self.PAYLOAD_TYPE = 'ws_' + self.tag
         self.selected_files = []
+        self.last_selection = None
         self.selec_height = 16
         self.image_transparency = 100
         self.last_click_time = 0
+
+        #For helping with selection operations
+        self.fileinfo_to_row: dict[str,int] = {}
+        self.row_to_fileinfo: dict[int,str] = {}
 
 
         # file dialog theme
@@ -94,40 +106,40 @@ class FileDialog:
                 dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, x=1, y=.5)
 
         # texture loading
-        diwidth, diheight, _, didata = dpg.load_image("images/document.png")
-        hwidth, hheight, _, hdata = dpg.load_image("images/home.png")
-        afiwidth, afiheight, _, afidata = dpg.load_image("images/add_folder.png")
-        afwidth, afheight, _, afdata = dpg.load_image("images/add_file.png")
-        mfwidth, mfheight, _, mfdata = dpg.load_image("images/mini_folder.png")
-        fiwidth, fiheight, _, fidata = dpg.load_image("images/folder.png")
-        mdwidth, mdheight, _, mddata = dpg.load_image("images/mini_document.png")
-        mewidth, meheight, _, medata = dpg.load_image("images/mini_error.png")
-        rwidth, rheight, _, rdata = dpg.load_image("images/refresh.png")
-        hdwidth, hdheight, _, hddata = dpg.load_image("images/hd.png")
-        pwidth, pheight, _, pdata = dpg.load_image("images/picture.png")
-        bpwidth, bpheight, _, bpdata = dpg.load_image("images/big_picture.png")
-        pfwidth, pfheight, _, pfdata = dpg.load_image("images/picture_folder.png")
-        dwidth, dheight, _, ddata = dpg.load_image("images/desktop.png")
-        vwidth, vheight, _, vdata = dpg.load_image("images/videos.png")
-        mwidth, mheight, _, mdata = dpg.load_image("images/music.png")
-        dfwidth, dfheight, _, dfdata = dpg.load_image("images/downloads.png")
-        dcfwidth, dcfheight, _, dcfdata = dpg.load_image("images/documents.png")
-        swidth, sheight, _, sdata = dpg.load_image("images/search.png")
-        bwidth, bheight, _, bdata = dpg.load_image("images/back.png")
-        cwidth, cheight, _, cdata = dpg.load_image("images/c.png")
-        gwidth, gheight, _, gdata = dpg.load_image("images/gears.png")
-        mnwidth, mnheight, _, mndata = dpg.load_image("images/music_note.png")
-        nwidth, nheight, _, ndata = dpg.load_image("images/note.png")
-        owidth, oheight, _, odata = dpg.load_image("images/object.png")
-        pywidth, pyheight, _, pydata = dpg.load_image("images/python.png")
-        scwidth, scheight, _, scdata = dpg.load_image("images/script.png")
-        vfwidth, vfheight, _, vfdata = dpg.load_image("images/video.png")
-        lwidth, lheight, _, ldata = dpg.load_image("images/link.png")
-        uwidth, uheight, _, udata = dpg.load_image("images/url.png")
-        vewidth, veheight, _, vedata = dpg.load_image("images/vector.png")
-        zwidth, zheight, _, zdata = dpg.load_image("images/zip.png")
-        awidth, aheight, _, adata = dpg.load_image("images/app.png")
-        iwidth, iheight, _, idata = dpg.load_image("images/iso.png")
+        diwidth, diheight, _, didata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}document.png")
+        hwidth, hheight, _, hdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}home.png")
+        afiwidth, afiheight, _, afidata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}add_folder.png")
+        afwidth, afheight, _, afdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}add_file.png")
+        mfwidth, mfheight, _, mfdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}mini_folder.png")
+        fiwidth, fiheight, _, fidata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}folder.png")
+        mdwidth, mdheight, _, mddata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}mini_document.png")
+        mewidth, meheight, _, medata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}mini_error.png")
+        rwidth, rheight, _, rdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}refresh.png")
+        hdwidth, hdheight, _, hddata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}hd.png")
+        pwidth, pheight, _, pdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}picture.png")
+        bpwidth, bpheight, _, bpdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}big_picture.png")
+        pfwidth, pfheight, _, pfdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}picture_folder.png")
+        dwidth, dheight, _, ddata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}desktop.png")
+        vwidth, vheight, _, vdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}videos.png")
+        mwidth, mheight, _, mdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}music.png")
+        dfwidth, dfheight, _, dfdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}downloads.png")
+        dcfwidth, dcfheight, _, dcfdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}documents.png")
+        swidth, sheight, _, sdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}search.png")
+        bwidth, bheight, _, bdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}back.png")
+        cwidth, cheight, _, cdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}c.png")
+        gwidth, gheight, _, gdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}gears.png")
+        mnwidth, mnheight, _, mndata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}music_note.png")
+        nwidth, nheight, _, ndata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}note.png")
+        owidth, oheight, _, odata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}object.png")
+        pywidth, pyheight, _, pydata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}python.png")
+        scwidth, scheight, _, scdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}script.png")
+        vfwidth, vfheight, _, vfdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}video.png")
+        lwidth, lheight, _, ldata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}link.png")
+        uwidth, uheight, _, udata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}url.png")
+        vewidth, veheight, _, vedata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}vector.png")
+        zwidth, zheight, _, zdata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}zip.png")
+        awidth, aheight, _, adata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}app.png")
+        iwidth, iheight, _, idata = dpg.load_image(f"{FileDialog.IMAGE_ROOT}iso.png")
 
         # low-level
         self.ico_document = [diwidth, diheight, didata]
@@ -258,6 +270,8 @@ class FileDialog:
         def delete_table():
             for child in dpg.get_item_children("explorer", 1):
                 dpg.delete_item(child)
+            self.row_to_fileinfo.clear()
+            self.fileinfo_to_row.clear()
 
         def get_file_size(file_path):
             # Get the file size in bytes
@@ -327,39 +341,78 @@ class FileDialog:
                 pass
             else:
                 self.callback(self.selected_files)
-            self.selected_files.clear()
             reset_dir(default_path=self.default_path)
 
         def open_drive(sender, app_data, user_data):
             chdir(user_data)
 
         def open_file(sender, app_data, user_data):
-            # Multi selection
-            if dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl):
-                if dpg.get_value(sender) is True:
-                    self.selected_files.append(user_data[1])
-                else:
-                    self.selected_files.remove(user_data[1])
-            # Single selection
-            else:
-                dpg.set_value(sender, False)
+            cur_row = self.fileinfo_to_row[user_data]
+            is_dir = os.path.isdir(user_data[1])
+            if self.multi_selection:
+                #Mass Selection Append
+                if dpg.is_key_down(dpg.mvKey_ModShift):
+                    if is_dir and self.files_only: #Ignore rows
+                        unselect_all(cur_row)
+                        return
+                    #Selects all files between last_selection and this selection. Any files not in this range will be unselected.
+                    #If last_selection is None, will treat the top row as the last item
+                    rows = list(self.row_to_fileinfo.keys())
+                    last_row = self.fileinfo_to_row[self.last_selection] if self.last_selection is not None else rows[0]
+                    i0 = rows.index(last_row)
+                    i1 = rows.index(cur_row)
+                    if i0 > i1:
+                        i0, i1 = i1, i0
+                    selected_rows = rows[i0:i1+1]
+                    
+                    self.selected_files.clear()
+                    unselect_all()
+                    for row in selected_rows:
+                        select_all(root=row)
+                        self.selected_files.append(self.row_to_fileinfo[row])
+                    
+                    #This intentiaonlly does not update last_selection to mimic windows
+                    return
+                # Multi selection Append
+                if dpg.is_key_down(dpg.mvKey_ModCtrl):
+                    if is_dir and self.files_only: #Ignore rows
+                        unselect_all(cur_row)
+                        return     
+                                   
+                    if dpg.get_value(sender) is True:
+                        self.selected_files.append(user_data[1])
+                    else:
+                        self.selected_files.remove(user_data[1])
 
-                current_time = time.time()
-                if current_time - self.last_click_time < 0.5:  # adjust the time as needed
-                    if user_data is not None and user_data[1] is not None:
-                        if os.path.isdir(user_data[1]):
-                            # print(f"Content:{dpg.get_item_label(sender)}, files: {user_data}")
-                            chdir(user_data[1])
-                            dpg.set_value("ex_search", "")
-                        elif os.path.isfile(user_data[1]):
-                            if not len(self.selected_files) > 1:
-                                self.selected_files.append(user_data[1])
-                                return_items()
-                                return user_data[1]
-                            else:
-                                return_items()
-                                return user_data[1]
-                self.last_click_time = current_time
+                    self.last_selection = user_data
+                    return
+            
+            # Single selection
+            #Unselect everything except this single file
+            if not (is_dir and self.files_only): #Only do the selection part if the current item is selectable
+                unselect_all(exclude=[cur_row])
+                self.selected_files.clear()
+
+                #Ensure the row is selected, don't allow unselecting a singular row. Clicking like this is always selecting
+                select_all(cur_row)
+                self.selected_files.append(user_data[1])
+            else:
+                unselect_all(cur_row) #This item isn't selectable, so don't select it
+
+            current_time = time.time()
+            # adjust the time as needed
+            if current_time - self.last_click_time < 0.5 and user_data == self.last_selection: #only double click if clicking the same thing
+                if user_data is not None and user_data[1] is not None:
+                    if is_dir: #On double click directory, go into it
+                        # print(f"Content:{dpg.get_item_label(sender)}, files: {user_data}")
+                        chdir(user_data[1])
+                        dpg.set_value("ex_search", "")
+                    elif os.path.isfile(user_data[1]): #On double click file, finish selecting
+                        return_items()
+                        return user_data[1]
+            self.last_click_time = current_time
+            
+            self.last_selection = user_data
 
         def _search():
             res = dpg.get_value("ex_search")
@@ -419,9 +472,10 @@ class FileDialog:
 
             item_size = get_file_size(item)
 
-            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, os.path.join(os.getcwd(), file_name)]}
+            fileinfo = (file_name, os.path.join(os.getcwd(), file_name))
+            kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': fileinfo}
             kwargs_file = {'tint_color': [255,255,255,255]}
-            with dpg.table_row(parent=parent):
+            with dpg.table_row(parent=parent) as row:
                 with dpg.group(horizontal=True):
                     if item_type == "Dir":
 
@@ -453,6 +507,9 @@ class FileDialog:
                         dpg.add_image(self.img_folder, parent=drag_payload)
                     elif item_type == "File":
                         dpg.add_image(self.img_document, parent=drag_payload)
+            
+            self.row_to_fileinfo[row] = fileinfo
+            self.fileinfo_to_row[fileinfo] = row
 
         def _makefile(item, callback, parent="explorer"):
             if self.file_filter == ".*" or item.endswith(self.file_filter):
@@ -463,11 +520,12 @@ class FileDialog:
 
                 item_type = "File"
 
+                fileinfo = (file_name, os.path.join(os.getcwd(), file_name))
                 item_size = get_file_size(item)
-                kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': [file_name, os.path.join(os.getcwd(), file_name)]}
+                kwargs_cell = {'callback': callback, 'span_columns': True, 'height': self.selec_height, 'user_data': fileinfo}
                 kwargs_file = {'tint_color': [255,255,255,self.image_transparency]}
 
-                with dpg.table_row(parent=parent):
+                with dpg.table_row(parent=parent) as row:
                     with dpg.group(horizontal=True):
 
                         if item_type == "Dir":
@@ -545,6 +603,9 @@ class FileDialog:
                             dpg.add_image(self.img_folder, parent=drag_payload)
                         elif item_type == "File":
                             dpg.add_image(self.img_document, parent=drag_payload)
+                
+                self.row_to_fileinfo[row] = fileinfo
+                self.fileinfo_to_row[fileinfo] = row
 
         def _back(sender, app_data, user_data):
             if dpg.is_key_down(dpg.mvKey_LControl) or dpg.is_key_down(dpg.mvKey_RControl):
@@ -566,6 +627,7 @@ class FileDialog:
 
         def chdir(path):
             try:
+                print("Chdir:", path)
                 os.chdir(path)
                 cwd = os.getcwd()
                 reset_dir(default_path=cwd)
@@ -577,6 +639,7 @@ class FileDialog:
         def reset_dir(file_name_filter=None, default_path=self.default_path):
             def internal():
                 self.selected_files.clear()
+                self.last_selection = None
                 try:
                     dpg.configure_item("ex_path_input", default_value=os.getcwd())
                     _dir = os.listdir(default_path) 
@@ -642,7 +705,20 @@ class FileDialog:
                 reset_dir(os.getcwd(), witem="size", order=user_data[0][1])
  """
 
+        def modify_selectables(new_value: bool, root="explorer", exclude=[]):
+            for item in dpg.get_item_children(root, 1):
+                if item in exclude: continue
+                if dpg.is_item_container(item):
+                    unselect_all(item)
+                elif dpg.get_item_type(item) == "mvAppItemType::mvSelectable":
+                    dpg.set_value(item, new_value)
 
+        def unselect_all(root="explorer", exclude=[]):
+            modify_selectables(False, root=root, exclude=exclude)
+
+        def select_all(root="explorer", exclude=[]):
+            modify_selectables(True, root=root, exclude=exclude)
+        
         # main file dialog header
         with dpg.window(label="File dialog", tag=self.tag, no_resize=self.no_resize, show=False, modal=self.modal, width=self.width, height=self.height, min_size=self.min_size, no_collapse=True, pos=(50,50)):
             info_px = 50
@@ -768,6 +844,10 @@ class FileDialog:
                 chdir(os.getcwd())
             else:
                 chdir(self.default_path)
+
+    @classmethod
+    def set_image_root(cls, path: str):
+        cls.IMAGE_ROOT = path
 
     # high-level functions
     def show_file_dialog(self):

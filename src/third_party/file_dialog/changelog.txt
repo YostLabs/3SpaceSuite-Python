@@ -1,0 +1,10 @@
+This file documents changes made to the fdialog.py that were not part of the original module
+
+Changed how selection works:
+    Added shift multi selection
+    Changed single clicking to show the clicked item as selected
+Changed double clicking to only trigger when double clicking the same file/folder
+Changed the callback to return list[Tuple(filename, path)] instead of just list[path]
+Added FileDialog.set_image_root(path) to allow changing where the images are loaded from
+Implemented the multiselection flag
+Added files_only to allow only selecting files
