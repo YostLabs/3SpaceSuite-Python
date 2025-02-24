@@ -518,6 +518,7 @@ class SensorOrientationWindow(StagedView):
         self.quat = [0, 0, 0, 1]
 
         self.hide_sensor = False
+        self.hide_arrows = False
         
         self.orientation_viewer = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
                                                       SensorOrientationWindow.TEXTURE_WIDTH, SensorOrientationWindow.TEXTURE_HEIGHT)
@@ -553,7 +554,7 @@ class SensorOrientationWindow(StagedView):
                     with dpg.child_window(label="Program") as program_window:
                         dpg.add_text("Program")
                         dpg.add_checkbox(label="Display Sensor", default_value=True, callback=self.__on_hide_sensor)
-                        dpg.add_checkbox(label="Display Arrows", default_value=True, enabled=False)
+                        dpg.add_checkbox(label="Display Arrows", default_value=True, callback=self.__on_hide_arrows)
                         with dpg.group(horizontal=True):
                             dpg.add_text("Interval (us):")
                             self.interval_drag = dpg.add_drag_float(default_value=self.streaming_hz, max_value=threespace_consts.STREAMING_MAX_HZ, 
@@ -632,6 +633,7 @@ class SensorOrientationWindow(StagedView):
 
         self.orientation_viewer.set_perspective(*rect)
         self.orientation_viewer.set_model_visible(not self.hide_sensor)
+        self.orientation_viewer.set_axes_visible(not self.hide_arrows)
         self.orientation_viewer.set_orientation_quat(gl_sensor_to_gl_quat(self.quat))
         with SensorOrientationWindow.SENSOR_TEXTURE_RENDERER:
             self.orientation_viewer.render()
@@ -641,6 +643,9 @@ class SensorOrientationWindow(StagedView):
 
     def __on_hide_sensor(self, sender, app_data, user_data):
         self.hide_sensor = not app_data
+
+    def __on_hide_arrows(self, sender, app_data, user_data):
+        self.hide_arrows = not app_data
 
     def __reregister_callback(self):
         if not self.streaming_enabled: return

@@ -30,6 +30,7 @@ class GlOrientationViewer:
 
         #The model that will be rotating
         self.model_visible = True
+        self.axes_visible = True
         self.model = model #TODO: Make me scalable        
 
         self.axis_renderer = None
@@ -65,6 +66,9 @@ class GlOrientationViewer:
 
     def set_model_visible(self, visible: bool):
         self.model_visible = visible
+    
+    def set_axes_visible(self, visible: bool):
+        self.axes_visible = visible
 
     def set_perspective(self, width, height):
         self.view_perspective = (width, height)
@@ -97,10 +101,11 @@ class GlOrientationViewer:
 
         #-----------------------------Render the model--------------------------------
         glColor(1, 1, 1, 1)
-        self.model.render()
+        if self.model_visible:
+            self.model.render()
 
         #-----------------------------Render its axes----------------------------------
-        if self.model_arrows:
+        if self.model_arrows and self.axes_visible:
             LETTER_OFFSET = 28 #TODO CHANGE ME
             #X
             glPushMatrix()
@@ -144,8 +149,8 @@ class GlOrientationViewer:
         glClearColor(*self.background_color)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         
-        if self.model_visible:
-            self.__render_model()
+    
+        self.__render_model()
 
         #------------------------------RENDER THE TOP LEFT DIAGRAM----------------------------------
         #Done last because it has transparency
