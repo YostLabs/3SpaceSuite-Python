@@ -37,7 +37,13 @@ class DefaultWindow(StagedView):
                 with dpg.group(horizontal=True):
                     self.circle_logo = dpg.add_image(self.icon_texture, width=display_height, height=display_height)
                     dpg.add_image(self.static_logo_texture, width=text_display_width, height=display_height)
-                dpg_ext.add_hyperlink("User Manual", "https://yostlabs.com/wp-content/uploads/pdf/3-Space-Sensor-Users-Manual-3.pdf")
+                dpg.add_text("Resources:")
+                with dpg.group(indent=8):
+                    dpg_ext.add_hyperlink("Website", "https://yostlabs.com/")
+                    dpg_ext.add_hyperlink("3-Space API", "https://github.com/YostLabs/3SpacePythonPackage")
+                    dpg_ext.add_hyperlink("Suite Source", "https://github.com/YostLabs/3SpaceSuite-Python")
+                    #dpg_ext.add_hyperlink("User Manual", "https://yostlabs.com/wp-content/uploads/pdf/3-Space-Sensor-Users-Manual-3.pdf")
+
         with dpg.item_handler_registry() as self.visible_handler:
             dpg.add_item_visible_handler(callback=self.__on_visible)
         dpg.bind_item_handler_registry(self.circle_logo, self.visible_handler)
@@ -56,3 +62,28 @@ class DefaultWindow(StagedView):
     def delete(self):
         dpg.delete_item(self.visible_handler)
         super().delete()
+
+
+def createAboutWindow():
+
+    def onWindowClose():
+        nonlocal window
+        dpg.delete_item(window)
+
+    with dpg.window(label="About", width=500, height=400, modal=True, no_collapse=True, on_close=onWindowClose) as window:
+        dpg.add_text("Developers:")
+        with dpg.group(indent=8):
+            dpg.add_text("Andy Riedlinger")
+
+        dpg.add_separator()
+        dpg.add_text("Third Party Resources:")
+        with dpg.group(indent=8):
+            dpg_ext.add_hyperlink("DearPyGui", "https://github.com/hoffstadt/DearPyGui")
+            dpg_ext.add_hyperlink("DearPyGui-Grid", "https://github.com/Atlamillias/dearpygui-grid")
+            dpg_ext.add_hyperlink("DearPyGui-FileDialog", "https://github.com/totallynotdrait/file_dialog")
+        with dpg.group(horizontal=True):
+            dpg.add_text("Icons by")
+            dpg_ext.add_hyperlink("Icons8", "https://icons8.com/")
+    dpg.render_dearpygui_frame()
+    dpg_ext.center_window(window)
+

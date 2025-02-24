@@ -6,6 +6,8 @@ from general_managers import GeneralManager
 from device_managers import DeviceManager
 from settings_manager import SettingsManager
 
+from default_window import createAboutWindow
+
 from utility import Logger
 import traceback
 
@@ -33,6 +35,8 @@ class MenuBar:
             #dpg.add_menu_item(label="Discover Ports", callback=self.__discover_ports)
             dpg.add_menu_item(label="Metrics", callback=dpg.show_metrics)
             dpg.add_menu_item(label="Registry", callback=dpg.show_item_registry)
+        
+        dpg.add_menu_item(label="About", callback=createAboutWindow)
 
         if parent is not None:
             dpg.pop_container_stack()
