@@ -13,3 +13,4 @@ Changed some of the visual/layout of buttons
 Changed date format
 Made it so that if selecting OK and nothing is selected while in dirs_only, the CWD is used
 Fixed inputting invalid directories not resetting the search and/or crashing
+Fixed double clicking not properly resetting the time in between clicks, resulting in triple/quadruple+ clicking
