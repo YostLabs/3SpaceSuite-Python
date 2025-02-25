@@ -63,14 +63,29 @@ class DefaultWindow(StagedView):
         dpg.delete_item(self.visible_handler)
         super().delete()
 
-
+VERSION = None
 def createAboutWindow():
+    global VERSION
+    if VERSION is None:
+        try:
+            with open(RESOURCE_FOLDER / "version.txt", 'r') as fp:
+                VERSION = fp.read()
+        except:
+            VERSION = "Unknown Version"
 
     def onWindowClose():
         nonlocal window
         dpg.delete_item(window)
 
     with dpg.window(label="About", width=500, height=400, modal=True, no_collapse=True, on_close=onWindowClose) as window:
+        with dpg.table(header_row=False):
+            dpg.add_table_column()
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column()
+            with dpg.table_row():
+                dpg.add_table_cell()
+                dpg.add_text(VERSION)
+                dpg.add_table_cell()
         dpg.add_text("Developers:")
         with dpg.group(indent=8):
             dpg.add_text("Andy Riedlinger")
