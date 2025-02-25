@@ -23,11 +23,14 @@ from yostlabs.math import vector
 import pathlib
 
 from resource_manager import *
+from settings_manager import GenericSettingsManager
 from macro_manager import MacroManager, MacroConfigurationWindow, TerminalMacro
 
 from gl_renderer import GL_Renderer
 from gl_orientation_window import GlOrientationViewer, gl_sensor_to_gl_quat, gl_space_to_sensor_quat
 from gl_texture_renderer import TextureRenderer
+
+SENSOR_SETTINGS_KEY = "sensor"
 
 class SensorBanner(SelectableButton):
 
@@ -1193,10 +1196,8 @@ class TableMatrix:
     def set_color(self, row: int, col: int, color: list[int]):
         dpg.configure_item(self.text_matrix[row][col], color=color)        
 
-#Temporarily being done like this just to preserve the folder
-#This should be changed to a setting at some point but doing
-#this for now
-LAST_FIRMWARE_FOLDER = None
+DEFAULT_FIRMWARE_FOLDER = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
+DEFAULT_FIRMWARE_KEY = "firmware_folder"
 
 from third_party.file_dialog.fdialog import FileDialog
 import threading
@@ -1318,19 +1319,21 @@ class SensorSettingsWindow(StagedView):
             self.reload_settings()
 
     def __on_firmware_file_selected(self, fileinfos):
-        global LAST_FIRMWARE_FOLDER
         self.close_firmware_selector()
         if len(fileinfos) == 0: return
         info = fileinfos[0]
         file_name, file_path = info
-        LAST_FIRMWARE_FOLDER = pathlib.Path(file_path).parent
+        settings = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY, default={})
+        settings[DEFAULT_FIRMWARE_KEY] = pathlib.Path(file_path).parent.as_posix()
+        GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
-        location = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
-        if LAST_FIRMWARE_FOLDER is not None:
-            location = LAST_FIRMWARE_FOLDER
+        location = DEFAULT_FIRMWARE_FOLDER
+        settings = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY)
+        if settings is not None and DEFAULT_FIRMWARE_KEY in settings:
+            location = pathlib.Path(settings[DEFAULT_FIRMWARE_KEY])
         self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
                                             modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
                                             default_path=location.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)
@@ -2061,19 +2064,21 @@ class BootloaderSettingsWindow(StagedView):
         dpg.delete_item(popup_window)
 
     def __on_firmware_file_selected(self, fileinfos):
-        global LAST_FIRMWARE_FOLDER
         self.close_firmware_selector()
         if len(fileinfos) == 0: return
         info = fileinfos[0]
         file_name, file_path = info
-        LAST_FIRMWARE_FOLDER = pathlib.Path(file_path).parent
+        settings = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY, default={})
+        settings[DEFAULT_FIRMWARE_KEY] = pathlib.Path(file_path).parent.as_posix()
+        GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
         MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
-        location = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
-        if LAST_FIRMWARE_FOLDER is not None:
-            location = LAST_FIRMWARE_FOLDER
+        location = DEFAULT_FIRMWARE_FOLDER
+        settings = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY)
+        if settings is not None and DEFAULT_FIRMWARE_KEY in settings:
+            location = pathlib.Path(settings[DEFAULT_FIRMWARE_KEY])
         self.firmware_selector = FileDialog(title="Firmware Selector", width=900, height=550, min_size=(700,400), files_only=True, multi_selection=False, 
                                             modal=True, on_select=self.__on_firmware_file_selected, on_cancel=self.close_firmware_selector,
                                             default_path=location.as_posix(), filter_list=[".xml"], file_filter=".xml", no_resize=False)

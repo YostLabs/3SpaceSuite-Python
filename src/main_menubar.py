@@ -50,16 +50,10 @@ class MenuBar:
         self.dark_theme = None
         self.light_theme = None
 
-        self.ui_settings_file = general_manager.settings_manager.settings_folder / "ui.json"
-        if self.ui_settings_file.exists():
-            with self.ui_settings_file.open('r') as fp:
-                try:
-                    settings: dict = json.load(fp)
-                except:
-                    settings = {}
-                theme = settings.get("theme", "Default")
-                self.__set_theme(self, theme)
-                dpg.set_value(self.theme_radio, theme)
+        settings = general_manager.settings_manager.load("ui.json") or {}
+        theme = settings.get("theme", "Default")
+        self.__set_theme(self, theme)
+        dpg.set_value(self.theme_radio, theme)
 
     def __load_start_window(self):
         self.general_manager.load_main_window()
@@ -80,8 +74,7 @@ class MenuBar:
             dpg.bind_theme(self.light_theme)
 
     def cleanup(self):
-        with self.ui_settings_file.open('w') as fp:
-            json.dump({"theme": dpg.get_value(self.theme_radio)}, fp)
+        self.general_manager.settings_manager.save("ui.json", {"theme": dpg.get_value(self.theme_radio)})
 
 #For some reason the callback for cancellation can't be a class func.
 #This is just here to silence the exception of it not being assigned anyways

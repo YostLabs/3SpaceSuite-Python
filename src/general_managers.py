@@ -2,7 +2,7 @@ from core_ui import BannerMenu, DynamicViewport
 from logger_windows import LoggerBanner, DataLogWindow, LoggerMasterWindow
 
 from device_managers import DeviceManager
-from settings_manager import SettingsManager
+from settings_manager import SettingsManager, GenericSettingsManager
 from macro_manager import MacroManager
 
 from default_window import DefaultWindow
@@ -16,6 +16,7 @@ class GeneralManager:
         self.banner_menu = banner_menu
 
         self.settings_manager = SettingsManager()
+        GenericSettingsManager.init(self.settings_manager)
         self.device_manager = DeviceManager(banner_menu, window_viewport, self.settings_manager)
         self.logger_manager = LoggerManager(banner_menu, window_viewport, self.device_manager)
 
