@@ -6,6 +6,7 @@ import PyInstaller.__main__
 import pathlib
 import git
 import time
+import shutil
 
 try:
     repo = git.Repo(".")
@@ -34,10 +35,21 @@ except:
     local_time = time.localtime()
     version = f"v{local_time.tm_year}.{local_time.tm_mon}.{local_time.tm_mday} Custom"
 
+parent_folder = pathlib.Path(__file__).parent
+
 #Write the version to a file that can be read by the application.
 #This file is ignored by the git repository
-with open(pathlib.Path(__file__).parent / "resources" / "version.txt", 'w') as fp:
+with open(parent_folder / "resources" / "version.txt", 'w') as fp:
     fp.write(version)
+
+#Clean up any old folders for a clean build
+build_folder = parent_folder / "build"
+dist_folder = parent_folder / "dist"
+if build_folder.exists():
+    shutil.rmtree(build_folder)
+if dist_folder.exists():
+    shutil.rmtree(dist_folder)
+
 
 debug = False
 
