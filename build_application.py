@@ -1,6 +1,35 @@
+#In addition to the requirements in requirements.txt,
+#this script requires PyInstaller and GitPython
+
 import glfw.library
 import PyInstaller.__main__
-import pathlib
+import git
+import time
+
+repo = git.Repo(".")
+current_commit = repo.head.commit
+
+#Compensate for timezone
+commit_date = current_commit.authored_date - current_commit.committer_tz_offset
+commit_date = time.gmtime(commit_date)
+
+version = f"v{commit_date.tm_year}.{commit_date.tm_mon}.{commit_date.tm_mday}"
+if repo.is_dirty():
+    version += f"d"
+
+if repo.active_branch != repo.heads.main:
+    version += f" {repo.active_branch.name}"
+else:
+    #Check if committed
+    exists = False
+    for commit in repo.iter_commits("origin/main"):
+        if commit == current_commit:
+            exists = True
+            break
+    if not exists:
+        version += "Custom"
+
+print(version)
 
 debug = False
 
