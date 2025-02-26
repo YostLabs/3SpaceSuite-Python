@@ -407,16 +407,31 @@ class ThreespaceDevice:
         try:
             data = self.__api.com.read_all()
         except Exception as e:
+            start_time = time.time()
+            error = None
+
+            #The reconnect will not work without giving the sensor time to actually finish restarting.
+            while time.time() - start_time < 1:
+                try:
+                    self.__api.check_dirty() #May have been a reboot. This should reconnect
+                except Exception as e:
+                    error = e
+                else: #Successfully reconnected
+                    error = None
+                    break
+
+            #Failed to reconnect
+            if error is not None:
+                self.report_error(e)
+                return ''
+            
+            #Reconnected, try a read
             try:
-                #The reconnect will not work without giving the sensor time to actually finish restarting.
-                #So for now this does nothing except change the reason for disconnect to Sensor Disconnect instead of arbitrary serial error
-                #time.sleep(1)
-                self.__api.check_dirty() #May have been a reboot. This should reconnect
                 data = self.__api.com.read_all() #check_dirty didn't work, so actually error
             except Exception as e:
                 self.report_error(e)
                 return ''
-        
+             
         if not decode:
             return data
 
