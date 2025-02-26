@@ -124,10 +124,22 @@ class MacroConfigurationWindow:
         if self.selected_macro is None: return
         self.macro_manager.remove_macro(self.selected_macro)
         active_banner = self.macro_selection_menu.active_banner
+        keys = list(self.macro_bindings.keys())
+        index = keys.index(active_banner)
+        if index + 1 < len(keys): #Go to next by default
+            next_banner = keys[index + 1]
+        elif index > 0: #Go to previous if no next
+            next_banner = keys[index - 1]
+        else: #Nothing remains
+            next_banner = None
         del self.macro_bindings[active_banner]
         self.macro_selection_menu.remove_banner(active_banner, auto_select=False)
-        self.macro_selection_menu.set_banner(None)
-        dpg.hide_item(self.config_window)
+        self.macro_selection_menu.set_banner(next_banner)
+        if next_banner is None:
+            self.selected_macro = None
+            dpg.hide_item(self.config_window)
+        else:
+            self.__on_macro_selected(next_banner)
 
     def __insert_macro(self, macro: TerminalMacro):
         button = SelectableButton(macro.name, on_select=self.__on_macro_selected, filter_key=macro.name.lower() + " " + macro.text.lower())
