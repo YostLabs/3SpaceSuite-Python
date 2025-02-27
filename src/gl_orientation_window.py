@@ -18,6 +18,8 @@ class GlOrientationViewer:
     #These are the arrows that will always be used for the top left display
     DEFAULT_ARROWS = None
 
+    ARROW_ORDER = [((1, 0, 0), 'X'), ((0, 1, 0), 'Y'), ((0, 0, 1), 'Z')]
+
     def __init__(self, model: OBJ, text_renderer: TextRenderer, font: Font, 
                  draw_width=800, draw_height=600,
                  background_color=[105 / 255, 105 / 255, 105 / 255, 1], model_arrows=True, tl_arrows=True):
@@ -34,6 +36,8 @@ class GlOrientationViewer:
         self.model = model #TODO: Make me scalable        
 
         self.axis_renderer = None
+        self.axis_order = [0, 1, 2]
+        self.axis_multipliers = [1, 1, 1]
         self.z = -80
         
         #Create texture/renderer for the top left arrows
@@ -62,13 +66,24 @@ class GlOrientationViewer:
         self.orientation = np.array([0, 0, 0, 1], dtype=np.float32)
     
     def set_orientation_quat(self, quat: list[float]):
+        self.data_type = "quat"
         self.orientation = quat
+
+    def set_orientation_matrix(self, matrix: list[float]):
+        self.data_type = "matrix"
+        if len(matrix) == 9:
+            matrix = np.array(matrix).reshape((3, 3))
+        self.orientation = matrix
 
     def set_model_visible(self, visible: bool):
         self.model_visible = visible
     
     def set_axes_visible(self, visible: bool):
         self.axes_visible = visible
+
+    def set_axis_info(self, order: list[int], multipliers: list[int]):
+        self.axis_order = order
+        self.axis_multipliers = multipliers
 
     def set_perspective(self, width, height):
         self.view_perspective = (width, height)
@@ -89,15 +104,19 @@ class GlOrientationViewer:
         glLoadIdentity()
 
         #Setup rotation of model
-        quat = yl_quat.quat_inverse(self.orientation)
-        matrix = yl_quat.quaternion_to_3x3_rotation_matrix(quat)
+        if self.data_type == "quat":
+            matrix = yl_quat.quaternion_to_3x3_rotation_matrix(self.orientation)
+        else:
+            matrix = self.orientation
 
         #Convert the 3x3 rotation matrix to the 4x4 model matrix
         model_matrix = np.identity(4)
         model_matrix[:3,:3] = matrix
 
         glTranslate(0, 0, self.z) #TODO: Change me
-        glMultMatrixf(model_matrix)
+
+        #Use the transpose because openGL expects column major, but numpy stores in row major
+        glMultMatrixf(model_matrix.T)
 
         #-----------------------------Render the model--------------------------------
         glColor(1, 1, 1, 1)
@@ -109,40 +128,50 @@ class GlOrientationViewer:
             LETTER_OFFSET = 28 #TODO CHANGE ME
             #X
             glPushMatrix()
-            glColor(1, 0, 0, 1)
+            color, letter = self.ARROW_ORDER[self.axis_order.index(0)]
+            mult = self.axis_multipliers[self.axis_order.index(0)]
+
+            glColor(*color, 1)
             glRotate(-90, 0, 1, 0)
+            glScale(1, 1, 1 * mult)
             glCallList(GlOrientationViewer.DEFAULT_ARROWS)
             glTranslate(0, 0, -LETTER_OFFSET)
             projection = glGetFloatv(GL_PROJECTION_MATRIX)
             mv = glGetFloatv(GL_MODELVIEW_MATRIX)
             mv[:3,:3] = np.identity(3)  #Setting the top left to the identity removes the rotation component but keeps translation. This allows it to stay facing the camera
             mvp = mv @ projection
-            self.text_renderer.render_text(self.font, "X", 0, 0, 0.1, [1, 0, 0], mvp, centered=True)
+            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)
             glPopMatrix()
 
             #Y
             glPushMatrix()
-            glColor(0, 1, 0, 1)
+            color, letter = self.ARROW_ORDER[self.axis_order.index(1)]
+            mult = self.axis_multipliers[self.axis_order.index(1)]
+            glColor(*color, 1)
             glRotate(90, 1, 0, 0)
+            glScale(1, 1, 1 * mult)
             glCallList(GlOrientationViewer.DEFAULT_ARROWS)
             glTranslate(0, 0, -LETTER_OFFSET)
             projection = glGetFloatv(GL_PROJECTION_MATRIX)
             mv = glGetFloatv(GL_MODELVIEW_MATRIX)
             mv[:3,:3] = np.identity(3)
             mvp = mv @ projection
-            self.text_renderer.render_text(self.font, "Y", 0, 0, 0.1, [0, 1, 0], mvp, centered=True)
+            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)
             glPopMatrix()
 
             #Z
             glPushMatrix()
-            glColor(0, 0, 1, 1)
+            color, letter = self.ARROW_ORDER[self.axis_order.index(2)]
+            mult = self.axis_multipliers[self.axis_order.index(2)]
+            glColor(*color, 1)
+            glScale(1, 1, 1 * mult)
             glCallList(GlOrientationViewer.DEFAULT_ARROWS)
             glTranslate(0, 0, -LETTER_OFFSET)
             projection = glGetFloatv(GL_PROJECTION_MATRIX)
             mv = glGetFloatv(GL_MODELVIEW_MATRIX)    
             mv[:3,:3] = np.identity(3)
             mvp = mv @ projection
-            self.text_renderer.render_text(self.font, "Z", 0, 0, 0.1, [0, 0, 1], mvp, centered=True)     
+            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)     
             glPopMatrix()
 
     def render(self):
@@ -185,17 +214,6 @@ class GlOrientationViewer:
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_CULL_FACE)
         glCullFace(GL_BACK)
-
-def gl_sensor_to_gl_quat(quat: list[float]):
-    #OpenGL: X = Right, Y = Up, Z = Towards Viewer/Out of screen
-    #Sensor: X = East/Right, Y = Up, Z = North/In If left handed
-    #The spaces differ in handedness, so first negate all axes, then negate the Z axis because it differs in direction
-    #The result is just negating X and Y
-    return [-quat[0], -quat[1], quat[2], quat[3]]
-
-def gl_space_to_sensor_quat(quat: list[float]):
-    #Inverse of gl_sensor_to_gl_quat (Technically the same function right now since no swapping is required)
-    return [-quat[0], -quat[1], quat[2], quat[3]]
 
 #Helper
 def draw3DArrow(stick_width: float, stick_length: float, triangle_width: float, triangle_length: float):

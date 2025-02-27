@@ -27,7 +27,7 @@ from settings_manager import GenericSettingsManager
 from macro_manager import MacroManager, MacroConfigurationWindow, TerminalMacro
 
 from gl_renderer import GL_Renderer
-from gl_orientation_window import GlOrientationViewer, gl_sensor_to_gl_quat, gl_space_to_sensor_quat
+from gl_orientation_window import GlOrientationViewer
 from gl_texture_renderer import TextureRenderer
 
 SENSOR_SETTINGS_KEY = "sensor"
@@ -197,7 +197,7 @@ class SensorConnectionWindow(StagedView):
                                                     background_color=(0, 0, 0, 0), tl_arrows=False, model_arrows=False)
         self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)
         self.sensor_obj.set_distance(50)
-        self.sensor_obj.set_orientation_quat(gl_sensor_to_gl_quat(quaternion.angles_to_quaternion([45, -45], "YX")))
+        self.sensor_obj.set_orientation_quat(quaternion.angles_to_quaternion([-45, 45], "YX"))
         with self.sensor_texture:
             self.sensor_obj.render()
 
@@ -513,8 +513,13 @@ class SensorOrientationWindow(StagedView):
     TEXTURE_WIDTH = 800
     TEXTURE_HEIGHT = 800
 
+    GL_AXIS_INFO = None
+
     def __init__(self, device: ThreespaceDevice):
         self.device = device
+
+        if SensorOrientationWindow.GL_AXIS_INFO is None:
+            SensorOrientationWindow.GL_AXIS_INFO = vector.parse_axis_string_info("xy-z") #Store how openGL should map to sensor space
 
         self.streaming_hz = 100
         self.streaming_enabled = False
@@ -632,12 +637,18 @@ class SensorOrientationWindow(StagedView):
             self.device.report_error(e)
 
     def update_image(self):
+        #Set configs
         rect = dpg.get_item_rect_size(self.image)
-
         self.orientation_viewer.set_perspective(*rect)
         self.orientation_viewer.set_model_visible(not self.hide_sensor)
         self.orientation_viewer.set_axes_visible(not self.hide_arrows)
-        self.orientation_viewer.set_orientation_quat(gl_sensor_to_gl_quat(self.quat))
+        self.orientation_viewer.set_axis_info(*self.device.cached_axis_info[:2])
+        
+        #Adapt the axis order of the sensor to the axis space of openGL
+        glQuat = self.device.convert_quat_order_fast(self.quat, self.GL_AXIS_INFO)
+        self.orientation_viewer.set_orientation_quat(glQuat) #OpenGL uses the quat order xy-z for how we want to display
+
+        #Render the image
         with SensorOrientationWindow.SENSOR_TEXTURE_RENDERER:
             self.orientation_viewer.render()
         pixels = SensorOrientationWindow.SENSOR_TEXTURE_RENDERER.get_texture_pixels()
@@ -703,6 +714,7 @@ class SensorOrientationWindow(StagedView):
             dpg.set_value(self.accel_enabled, self.device.is_accel_enabled())
             dpg.set_value(self.mag_enabled, self.device.is_mag_enabled())
             dpg.set_value(self.gyro_enabled, self.device.is_gyro_enabled())
+            self.device.cache_axis_order()
         except Exception as e:
             self.device.report_error(e)
 
@@ -1832,7 +1844,8 @@ class GradientDescentCalibrationWizard:
         dpg.disable_item(self.back_button)
         dpg.disable_item(self.next_button)
 
-        start_quat = gl_space_to_sensor_quat(self.sensor_obj.orientation)
+        #Convert form opengl back to sensor space
+        start_quat = quaternion.quaternion_swap_axes(self.sensor_obj.orientation, "xy-z", "xyz")
         start_time = time.time()
         elapsed_time = time.time() - start_time
         while elapsed_time < self.transition_time:
@@ -1848,7 +1861,7 @@ class GradientDescentCalibrationWizard:
         self.animating = False
 
     def render_quat(self, quat: list[float]):
-        self.sensor_obj.set_orientation_quat(gl_sensor_to_gl_quat(quat))
+        self.sensor_obj.set_orientation_quat(quaternion.quaternion_swap_axes(quat, "xyz", "xy-z")) #Map from sensor to openGL
         with self.sensor_texture:
             self.sensor_obj.render()
         texture = np.flip(self.sensor_texture.get_texture_pixels(), 0)

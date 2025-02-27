@@ -9,6 +9,8 @@ Also has some abstract devices, such as LoggerDevice
 from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, ThreespaceCommandInfo, threespaceCommandGetInfo, ThreespaceCmdResult
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
 from yostlabs.tss3.utils.version import ThreespaceFirmwareUploader
+import yostlabs.math.quaternion as yl_quat
+import yostlabs.math.vector as yl_vec
 from utility import Logger, Callback
 import yostlabs.tss3.consts as threespace_consts
 
@@ -63,7 +65,9 @@ class ThreespaceDevice:
         self.streaming_manager: ThreespaceStreamingManager = None
 
         #These will be loaded when initially opened
+        #self.dirty = False
         self.cached_serial_number = None
+        self.cached_axis_info = None
 
     @property
     def is_open(self):
@@ -82,6 +86,7 @@ class ThreespaceDevice:
         self.streaming_manager = ThreespaceStreamingManager(self.__api)
         self.streaming_manager.enable()
         self.cached_serial_number = self.get_serial_number()
+        self.cache_axis_order()
 
     def close(self):
         if not self.is_open: return
@@ -222,6 +227,7 @@ class ThreespaceDevice:
     def restart_sensor(self):
         self.streaming_manager.reset() #Disable anything relying on streaming since sensor must reset
         self.__api.softwareReset()
+        self.cache_axis_order()
 
     def set_led_color(self, rgb: list[int, int, int]):
         self.__api.set_settings(led_rgb=f"{rgb[0]/255},{rgb[1]/255},{rgb[2]/255}")
@@ -301,7 +307,19 @@ class ThreespaceDevice:
         return self.__api.get_settings("axis_order")
 
     def set_axis_order(self, order: str):
-        return self.__api.set_settings(axis_order=order)
+        result = self.__api.set_settings(axis_order=order)
+        if result[0] == 0: 
+            self.cache_axis_order(order)
+        return result
+
+    def cache_axis_order(self, axis_str: str = None):
+        if axis_str is None:
+            axis_str = self.get_axis_order()
+        self.cached_axis_info = yl_vec.parse_axis_string_info(axis_str)
+    
+    @staticmethod
+    def get_axis_info(order):
+        return 
 
     def get_gyro_calibration(self, id: int):
         return self.__get_calibration(f"gyro{id}")
@@ -382,18 +400,22 @@ class ThreespaceDevice:
     def is_mag_enabled(self):
         return bool(int(self.__api.get_settings("mag_enabled")))
 
+    def set_cached_settings_dirty(self):
+        #self.dirty = True
+        self.__api.set_cached_settings_dirty()
+
     def send_ascii_command(self, ascii):
         if self.is_api_streaming():
             return False
         command = f'{ascii}\n'.encode()
         self.__api.com.write(command)
-        self.__api.set_cached_settings_dirty() #May have modified settings, make sure it updates properly next time
+        self.set_cached_settings_dirty() #May have modified settings, make sure it updates properly next time
         return True
     
     def send_raw_data(self, data: bytes):
         self.__api.com.write(data)
         print("Wrote:", data)
-        self.__api.set_cached_settings_dirty()
+        self.set_cached_settings_dirty()
 
     def read_com_port(self, decode=True):
         """
@@ -492,6 +514,15 @@ class ThreespaceDevice:
 
     def offset_with_current_orientation(self):
         self.__api.setOffsetWithCurrentOrientation()
+
+    def convert_quat_order(self, quat: list[float], new_order: str):
+        return yl_quat.quaternion_swap_axes_fast(quat, self.cached_axis_info, yl_vec.parse_axis_string_info(new_order))
+    
+    def convert_quat_order_fast(self, quat: list[float], new_order_info: list[list, list, bool]):
+        return yl_quat.quaternion_swap_axes_fast(quat, self.cached_axis_info, new_order_info)
+
+    def is_right_handed(self):
+        return self.cached_axis_info[2]
 
     def set_offset(self, quat: list[float]):
         self.__api.set_settings(offset=','.join(str(v) for v in quat))
