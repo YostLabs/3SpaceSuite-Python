@@ -444,7 +444,7 @@ class ThreespaceDevice:
 
             #Failed to reconnect
             if error is not None:
-                self.report_error(e)
+                self.report_error(error)
                 return ''
             
             #Reconnected, try a read
