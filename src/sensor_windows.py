@@ -2040,6 +2040,7 @@ class BootloaderSettingsWindow(StagedView):
     def force_boot_firmware(self):
         try:
             self.device.boot_firmware()
+            self.device.disconnect()
         except Exception as e:
             self.device.report_error(e)
 
@@ -2075,6 +2076,7 @@ class BootloaderSettingsWindow(StagedView):
             self.device.report_error(e)
 
         dpg.delete_item(popup_window)
+        self.device.disconnect()
 
     def __on_firmware_file_selected(self, fileinfos):
         self.close_firmware_selector()

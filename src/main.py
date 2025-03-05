@@ -70,7 +70,6 @@ dpg.show_viewport()
 #or errors are thrown, the app won't crash as it tries to modify and uninitialized UI
 dpg.configure_app(manual_callback_management=True)
 dpg.set_frame_callback(2, general_manager.device_manager.discover_devices)
-#dpg.start_dearpygui()
 last_update_time = time.time()
 MAX_FPS = 120
 
@@ -80,7 +79,6 @@ try:
     pyi_splash.close()
 except: pass
 
-FPS_LIMIT = 200
 last_render_time = time.perf_counter()
 while dpg.is_dearpygui_running():
     general_manager.device_manager.update()
@@ -103,9 +101,6 @@ while dpg.is_dearpygui_running():
     #https://github.com/hoffstadt/DearPyGui/issues/2208
     MainLoopEventQueue.process_queued_events()
     dpg.run_callbacks(jobs)
-    # if time.time() - last_update_time > 1/100: #Not doing any smart logic, just limiting the time in the render. This will prob get like 75 FPS
-    #     dpg.render_dearpygui_frame()
-    #     last_update_time = time.time()
 
     cur_time = time.perf_counter()
     if cur_time - last_render_time > 1 / MAX_FPS:

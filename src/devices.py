@@ -429,6 +429,12 @@ class ThreespaceDevice:
         try:
             data = self.__api.com.read_all()
         except Exception as e:
+            #For now, leaving out the reconnect as it can cause problems
+            #Specifically, if done while in terminal, when entering bootloader, will automatically reconnect
+            #to the renumerated port. Then entering the orientation window could cause it to send bootloader commands
+            #that corrupt the firmware. Would rather it just instantly disconnects.
+            self.report_error(e)
+            return ''            
             start_time = time.time()
             error = None
 
@@ -469,11 +475,9 @@ class ThreespaceDevice:
         try:
             if prevent_disconnect:
                 self.ignore_errors = True
-            serial_number = self.get_serial_number()
+            self.get_serial_number()
             if prevent_disconnect:
                 self.ignore_errors = False
-            if self.cached_serial_number != serial_number: #It is a different sensor or not responding...
-                return False
             return True
         except:
             return False
