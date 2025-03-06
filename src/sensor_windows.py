@@ -522,6 +522,8 @@ class SensorOrientationWindow(StagedView):
             SensorOrientationWindow.GL_AXIS_INFO = vector.parse_axis_string_info("xy-z") #Store how openGL should map to sensor space
 
         self.streaming_hz = 100
+        if device.com_type == "BLE": #Temporary to account for BLE packet timings
+            self.streaming_hz = 33
         self.streaming_enabled = False
         self.quat = [0, 0, 0, 1]
 

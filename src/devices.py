@@ -80,6 +80,15 @@ class ThreespaceDevice:
     @property
     def in_bootloader(self):
         return self.__api.in_bootloader
+    
+    @property
+    def com_type(self):
+        if isinstance(self.com, ThreespaceSerialComClass):
+            return "SERIAL"
+        elif isinstance(self.com, ThreespaceBLEComClass):
+            return "BLE"
+        else:
+            return "UNKNOWN"
 
     def open(self):
         if self.is_open: return
