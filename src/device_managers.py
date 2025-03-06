@@ -16,8 +16,12 @@ from sensor_windows import SensorBanner, SensorMasterWindow
 from core_ui import BannerMenu, DynamicViewport
 from macro_manager import MacroManager
 
-from yostlabs.tss3.api import ThreespaceSensor, ThreespaceSerialComClass, ThreespaceComClass
-from yostlabs.tss3.api import ThreespaceSensor, ThreespaceSerialComClass, ThreespaceComClass
+from yostlabs.tss3.api import ThreespaceSensor
+
+#Import the communication objects used
+from yostlabs.communication.ble import ThreespaceComClass
+from yostlabs.communication.serial import ThreespaceSerialComClass
+from yostlabs.communication.ble import ThreespaceBLEComClass
 
 import serial
 import serial.tools.list_ports
@@ -84,6 +88,8 @@ class ThreespaceManager:
         #This is used to delay error handling for when it is safe to do so
         self.queued_for_removal = []
 
+        ThreespaceBLEComClass.set_scanner_continous(True)
+
     def discover_devices(self):
         #Find what ports have ThreeSpace Sensors
         valid_coms = []
@@ -93,9 +99,13 @@ class ThreespaceManager:
                 ser.port = port.device
                 valid_coms.append(ThreespaceSerialComClass(ser))
         
+        for ble_device in ThreespaceBLEComClass.auto_detect():
+            valid_coms.append(ble_device)
+        
         #Remove ports that have been disconnected
         cur_devices = list(self.devices.keys())
         for com in cur_devices:
+            if self.devices[com].device.is_open: continue #Don't remove already opened devices
             valid = False
             for other in valid_coms:
                 if self.are_coms_equal(com, other):
@@ -122,6 +132,8 @@ class ThreespaceManager:
         if type(a) is not type(b): return False
         if isinstance(a, ThreespaceSerialComClass):
             return a.ser.port == b.ser.port
+        elif isinstance(a, ThreespaceBLEComClass):
+            return a.client.address == b.client.address
         return False
 
     #Com classes are not required to implement == or hash, so this is required to use coms
@@ -137,8 +149,9 @@ class ThreespaceManager:
 
     def add_device_by_com(self, com: ThreespaceComClass):
         device = ThreespaceDevice(com)
-        if com.name in self.device_mapping:
-            device.name = self.device_mapping[com.name]
+        # if com.name in self.device_mapping:
+        #     device.name = self.device_mapping[com.name]
+        device.name = com.name
         Logger.log_info(f"Detected: {com.name}")
         device.on_error.subscribe(self.__on_sensor_error)
         device.on_disconnect.subscribe(self.__on_sensor_disconnect)

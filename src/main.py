@@ -1,3 +1,6 @@
+import sys
+import bleak.backends.winrt.util as bleak_util
+bleak_util.allow_sta() #Using a GUI that handles the event loop without a background thread for asyncio, so allow_sta
 print("Starting main")
 from resource_manager import *
 import dearpygui.dearpygui as dpg

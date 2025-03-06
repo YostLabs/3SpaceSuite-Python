@@ -7,6 +7,7 @@ Also has some abstract devices, such as LoggerDevice
 #from Threespace.USB_ExampleClass import UsbCom
 #from Threespace.ThreeSpaceAPI import ThreeSpaceSensor, Streamable, STREAM_CONTINUOUSLY
 from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, ThreespaceCommandInfo, threespaceCommandGetInfo, ThreespaceCmdResult
+from yostlabs.communication.ble import ThreespaceBLEComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
 from yostlabs.tss3.utils.version import ThreespaceFirmwareUploader
 import yostlabs.math.quaternion as yl_quat
@@ -40,6 +41,9 @@ class ThreespaceDevice:
         if isinstance(com, ThreespaceSerialComClass):
             com: ThreespaceSerialComClass
             self._name = "3Space" + str(self.com.ser.port)
+        elif isinstance(com, ThreespaceBLEComClass):
+            com: ThreespaceBLEComClass
+            self._name = self.com.name
         else:
             self._name = "3SpaceUnknown"
         
@@ -80,7 +84,15 @@ class ThreespaceDevice:
     def open(self):
         if self.is_open: return
         self.com.open()
-        self.__api = ThreespaceSensor(self.com, verbose=True)
+        try:
+            refresh_timeout = None
+            if isinstance(self.com, ThreespaceBLEComClass):
+                refresh_timeout = 0.1 #To help with connecting to a BLE sensor when it was initially streaming
+            self.__api = ThreespaceSensor(self.com, verbose=True, initial_clear_timeout=refresh_timeout)
+        #Don't allow the com to get stuck open
+        except Exception as e:
+            self.com.close()
+            raise e
         if self.__api.in_bootloader: 
             return
         self.streaming_manager = ThreespaceStreamingManager(self.__api)
@@ -555,9 +567,13 @@ class ThreespaceDevice:
 
     def cleanup(self):
         try:
-            self.__api.cleanup()
-            self.force_acquire_stream_lock(self, None)
-        except: pass
+            if self.__api is not None:
+                self.__api.cleanup()
+                #self.force_reset_streaming()
+        except Exception as e: 
+            print("Failed to cleanup", self.name)
+            print(e)
+            pass
 
     def __notify_property_update(self):
         for callback in self.property_update_callbacks:
