@@ -103,7 +103,7 @@ class ThreeSpaceLogDevice(LoggableDevice):
         self.highest_error = self.last_status
         self.errors = [self.last_status]
         self.new_errors = [self.last_status]
-        self.device.on_error.subscribe(self.__on_serial_error, front=True)
+        self.device.on_error.subscribe(self.__on_connection_error, front=True)
         self.cleaned_up = False
 
         #Validation values
@@ -242,9 +242,9 @@ class ThreeSpaceLogDevice(LoggableDevice):
             self.add_error(LogError(ErrorLevels.MAJOR, msg=f"Data Stream stolen from {self.device.name}"))
         self.cleanup()
     
-    def __on_serial_error(self, device, exception):
-        print("Serial Error")
-        self.add_error(LogError(ErrorLevels.MAJOR, msg=f"Serial Error from {self.device.name}"))
+    def __on_connection_error(self, device, exception):
+        print("Connection Error")
+        self.add_error(LogError(ErrorLevels.MAJOR, msg=f"Connection Error from {self.device.name}"))
 
     def cleanup(self):
         if self.cleaned_up:
@@ -257,6 +257,6 @@ class ThreeSpaceLogDevice(LoggableDevice):
             self.device.unregister_streaming_callback(self.streaming_callback)
             self.device.update_streaming_settings()
             self.device.resume_streaming(self)
-            self.device.on_error.unsubscribe(self.__on_serial_error)
+            self.device.on_error.unsubscribe(self.__on_connection_error)
         except:
             Logger.log_critical(f"{self.device.name} failed to properly close")
