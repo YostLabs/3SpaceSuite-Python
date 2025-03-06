@@ -564,7 +564,7 @@ class SensorOrientationWindow(StagedView):
                         dpg.add_checkbox(label="Display Sensor", default_value=True, callback=self.__on_hide_sensor)
                         dpg.add_checkbox(label="Display Arrows", default_value=True, callback=self.__on_hide_arrows)
                         with dpg.group(horizontal=True):
-                            dpg.add_text("Interval (us):")
+                            dpg.add_text("Update Rate (HZ):")
                             self.interval_drag = dpg.add_drag_float(default_value=self.streaming_hz, max_value=threespace_consts.STREAMING_MAX_HZ, 
                                                min_value=1, clamped=True, width=-1, format="%.1f")
                     with dpg.child_window(label="Commands") as commands_window:
@@ -719,8 +719,8 @@ class SensorOrientationWindow(StagedView):
             self.device.report_error(e)
 
     def notify_opened(self):
+        self.reload_dynamic_settings() #Just better to do this before starting streaming
         self.__start_viewer()
-        self.reload_dynamic_settings()
 
     def notify_closed(self):
         self.__stop_viewer()
