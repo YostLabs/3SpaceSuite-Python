@@ -474,7 +474,7 @@ class SensorTerminalWindow(StagedView):
 
         #Needs to be done in the main loop to not steal responses from windows, such
         #as orientation, changing settings while shutting down
-        MainLoopEventQueue.queue_event(self.__read_terminal)
+        MainLoopEventQueue.queue_sync_event(self.__read_terminal)
 
     def submit(self, parent=None):
         """
@@ -621,6 +621,8 @@ class SensorOrientationWindow(StagedView):
         dpg.bind_item_handler_registry(self.interval_drag, self.edited_handler)
 
         self.reload_dynamic_settings()
+        self.pixels_dirty = False
+        self.pixels = None
 
     def enable_component(self, sender, app_data, user_data):
         enabled = app_data
@@ -638,10 +640,9 @@ class SensorOrientationWindow(StagedView):
         except Exception as e:
             self.device.report_error(e)
 
-    def update_image(self):
+    def render_image(self):
+        #NOTE: GL rendering MUST happen in the main thread
         #Set configs
-        rect = dpg.get_item_rect_size(self.image)
-        self.orientation_viewer.set_perspective(*rect)
         self.orientation_viewer.set_model_visible(not self.hide_sensor)
         self.orientation_viewer.set_axes_visible(not self.hide_arrows)
         self.orientation_viewer.set_axis_info(*self.device.cached_axis_info[:2])
@@ -655,7 +656,24 @@ class SensorOrientationWindow(StagedView):
             self.orientation_viewer.render()
         pixels = SensorOrientationWindow.SENSOR_TEXTURE_RENDERER.get_texture_pixels()
         pixels = np.flip(pixels, 0)
-        dpg.set_value(self.texture, pixels.flatten())
+        self.pixels = pixels.flatten()
+        
+        #Will actually get rendered on the visible frame callback
+        self.pixels_dirty = True
+
+    def update_image(self):
+        rect = dpg.get_item_rect_size(self.image)
+        self.orientation_viewer.set_perspective(*rect)
+        if not self.pixels_dirty: return
+        #This may cause the rect size to be 1 frame behind the actual window, but not an easier
+        #way to ensure this gets called in a DPG callback
+        dpg.set_value(self.texture, self.pixels)
+        self.pixels_dirty = False
+
+    def __on_visible(self, sender, app_data):
+        self.grid()
+        self.grid2()
+        self.update_image()
 
     def __on_hide_sensor(self, sender, app_data, user_data):
         self.hide_sensor = not app_data
@@ -676,7 +694,7 @@ class SensorOrientationWindow(StagedView):
         self.streaming_hz = hz
         #This needs to happen synchronously in the main loop to avoid concurrency issues with the streaming manager
         #TODO: Change the streaming manager to have a lock around its function calls
-        MainLoopEventQueue.queue_event(self.__reregister_callback)
+        MainLoopEventQueue.queue_sync_event(self.__reregister_callback)
 
     def __on_interval_slider(self, sender, app_data, user_data):
         self.update_streaming_speed(dpg.get_value(self.interval_drag))
@@ -684,7 +702,7 @@ class SensorOrientationWindow(StagedView):
     def __on_orientation_updated(self, status: ThreespaceStreamingStatus):
         if status == ThreespaceStreamingStatus.Data:
             self.quat = self.device.get_streaming_value(StreamableCommands.GetTaredOrientation)
-            self.update_image()
+            self.render_image()
         elif status == ThreespaceStreamingStatus.Reset:
             self.__stop_viewer()
 
@@ -726,10 +744,6 @@ class SensorOrientationWindow(StagedView):
 
     def notify_closed(self):
         self.__stop_viewer()
-
-    def __on_visible(self, sender, app_data):
-        self.grid()
-        self.grid2()
 
     def delete(self):
         dpg.delete_item(self.edited_handler)
@@ -1341,7 +1355,7 @@ class SensorSettingsWindow(StagedView):
         settings[DEFAULT_FIRMWARE_KEY] = pathlib.Path(file_path).parent.as_posix()
         GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
-        MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
+        MainLoopEventQueue.queue_sync_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
         location = DEFAULT_FIRMWARE_FOLDER
@@ -1709,9 +1723,9 @@ class GradientDescentCalibrationWizard:
     def __on_keyboard_next_pressed(self):
         #Gotta queue this to run in the main loop so the animations can play properly
         if self.wizard_stage == GradientDescentCalibrationWizard.CONFIGURING:
-            MainLoopEventQueue.queue_event(self.__on_config_start_button)
+            MainLoopEventQueue.queue_sync_event(self.__on_config_start_button)
         elif self.wizard_stage == GradientDescentCalibrationWizard.GATHERING and not self.animating:
-            MainLoopEventQueue.queue_event(self.__on_next_button)
+            MainLoopEventQueue.queue_sync_event(self.__on_next_button)
 
     def __on_config_cancel_button(self):
         self.delete()
@@ -2089,7 +2103,7 @@ class BootloaderSettingsWindow(StagedView):
         settings[DEFAULT_FIRMWARE_KEY] = pathlib.Path(file_path).parent.as_posix()
         GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
-        MainLoopEventQueue.queue_event(lambda: self.__run_firmware_update(file_path))
+        MainLoopEventQueue.queue_sync_event(lambda: self.__run_firmware_update(file_path))
 
     def open_firmware_selector(self):
         location = DEFAULT_FIRMWARE_FOLDER
@@ -2186,7 +2200,7 @@ class BootloaderTerminalWindow(StagedView):
 
         #Needs to be done in the main loop to not steal responses from windows, such
         #as orientation, changing settings while shutting down
-        MainLoopEventQueue.queue_event(self.__read_terminal)
+        MainLoopEventQueue.queue_sync_event(self.__read_terminal)
 
     def submit(self, parent=None):
         """

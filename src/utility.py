@@ -235,18 +235,36 @@ class Callback:
                 print("Calling:", callback)
             callback(*args)
 
+from queue import Queue
 from types import FunctionType
 class MainLoopEventQueue:
 
-    events: set[FunctionType] = set()
+    sync_events: Queue[FunctionType] = Queue()
+    dpg_events: Queue[FunctionType] = Queue()
 
     @staticmethod
-    def queue_event(event: FunctionType):
-        MainLoopEventQueue.events.add(event)
+    def queue_sync_event(event: FunctionType):
+        MainLoopEventQueue.sync_events.put(event)
 
-    def process_queued_events():
-        events = MainLoopEventQueue.events.copy()
-        MainLoopEventQueue.events.clear()
+    @staticmethod
+    def queue_dpg_event(event: FunctionType):
+        MainLoopEventQueue.dpg_events.put(event)
+
+    @staticmethod
+    def process_sync_events():
+        events = []
+        while MainLoopEventQueue.sync_events.qsize() > 0:
+            events.append(MainLoopEventQueue.sync_events.get(block=False))
+
+        for event in events:
+            event()
+
+    @staticmethod
+    def process_dpg_events():
+        events = []
+        while MainLoopEventQueue.dpg_events.qsize() > 0:
+            events.append(MainLoopEventQueue.dpg_events.get(block=False))
+
         for event in events:
             event()
     

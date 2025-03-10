@@ -82,9 +82,26 @@ try:
     pyi_splash.close()
 except: pass
 
+#The purpose of this is to be a function that runs once per frame from DPGs handler thread
+#The reason for its existence is https://github.com/hoffstadt/DearPyGui/issues/2366
+#Basically, any DPG call has the potential to deadlock the program if not called from the DPG
+#handler thread. This provides a way for the main thread to schedule DPG calls that will be executed
+#from that thread
+def on_visible(unused):
+    MainLoopEventQueue.process_dpg_events()
+
+with dpg.item_handler_registry() as visible_handler:
+    dpg.add_item_visible_handler(callback=on_visible)
+dpg.bind_item_handler_registry(primary_window, visible_handler)
+
 last_render_time = time.perf_counter()
 while dpg.is_dearpygui_running():
+    start_time = time.time()
     general_manager.device_manager.update()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    if elapsed_time > 0.1:
+        print("Long update time:", elapsed_time)
     general_manager.logger_manager.update()
     
     #To avoid threading issues, running callbacks here
@@ -102,8 +119,8 @@ while dpg.is_dearpygui_running():
     #cancel_callback on file_dialog
     #all global/item handler callbacks via dpg.handler_registry/dpg.item_handler_registry
     #https://github.com/hoffstadt/DearPyGui/issues/2208
-    MainLoopEventQueue.process_queued_events()
-    dpg.run_callbacks(jobs)
+    MainLoopEventQueue.process_sync_events()
+    dpg.run_callbacks(jobs) #I am not actually sure this is safe anymore because of the issue related to the visible_handler
 
     cur_time = time.perf_counter()
     if cur_time - last_render_time > 1 / MAX_FPS:
