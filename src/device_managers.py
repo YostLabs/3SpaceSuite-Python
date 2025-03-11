@@ -88,7 +88,12 @@ class ThreespaceManager:
         #This is used to delay error handling for when it is safe to do so
         self.queued_for_removal = []
 
-        ThreespaceBLEComClass.set_scanner_continous(True)
+        self.ble_supported = False
+        try:
+            ThreespaceBLEComClass.set_scanner_continous(True)
+            self.ble_supported = True
+        except Exception as e:
+            print("BLE not supported:", e)
 
     def discover_devices(self):
         #Find what ports have ThreeSpace Sensors
@@ -99,8 +104,9 @@ class ThreespaceManager:
                 ser.port = port.device
                 valid_coms.append(ThreespaceSerialComClass(ser))
         
-        for ble_device in ThreespaceBLEComClass.auto_detect():
-            valid_coms.append(ble_device)
+        if self.ble_supported:
+            for ble_device in ThreespaceBLEComClass.auto_detect():
+                valid_coms.append(ble_device)
         
         #Remove ports that have been disconnected
         cur_devices = list(self.devices.keys())

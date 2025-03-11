@@ -1,13 +1,8 @@
 import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from yostlabs.math import quaternion
 
 from gl_font_loader import TextRenderer, Font
-
-import numpy as np
-
-from objloader import *
 
 class GL_Renderer:
     initialized = False
