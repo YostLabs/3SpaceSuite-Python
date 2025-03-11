@@ -1,3 +1,8 @@
+import platform
+import asyncio
+if platform.system() == 'Windows':
+   asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import sys
 import bleak.backends.winrt.util as bleak_util
 bleak_util.allow_sta() #Using a GUI that handles the event loop without a background thread for asyncio, so allow_sta
@@ -68,6 +73,13 @@ dpg.set_viewport_min_width(586)
 dpg.setup_dearpygui()
 dpg.set_viewport_vsync(False)
 dpg.show_viewport()
+
+#TEMPORARY - The bleak_util.allow_sta() should be all that is needed, however
+#that appears to not fully work on Windows 11, Windows 10 it does. This does fix problems
+#encountered on Windows11, however I do not know what side effects this may have since this
+#is an actual GUI program that wants to use STA. This is being put in for now as a quick fix
+if platform.system() == 'Windows' and int(platform.version().split('.')[2]) >= 22000: #Can't user platform.release() to check for 11 because windows 11 still returns 10...
+    bleak_util.uninitialize_sta()
 
 #Done to allow the UI to initialize before discovering devices, that way if any logging messages
 #or errors are thrown, the app won't crash as it tries to modify and uninitialized UI
