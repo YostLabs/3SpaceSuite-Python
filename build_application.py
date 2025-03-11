@@ -7,18 +7,22 @@ import pathlib
 import git
 import time
 import shutil
+import datetime
 
 try:
     repo = git.Repo(".")
     current_commit = repo.head.commit
 
-    #Compensate for timezone
-    commit_date = current_commit.authored_date - current_commit.committer_tz_offset
-    commit_date = time.gmtime(commit_date)
-
-    version = f"v{commit_date.tm_year}.{commit_date.tm_mon}.{commit_date.tm_mday}"
     if repo.is_dirty():
-        version += f"d"
+        dt = datetime.datetime.now()
+        version = f"v{dt.year}.{dt.month}.{dt.day}"
+        version += f" DEBUG"
+    else:
+        #Compensate for timezone
+        commit_date = current_commit.authored_date - current_commit.committer_tz_offset
+        commit_date = time.gmtime(commit_date)
+
+        version = f"v{commit_date.tm_year}.{commit_date.tm_mon}.{commit_date.tm_mday}"
 
     if repo.active_branch != repo.heads.main:
         version += f" {repo.active_branch.name}"
