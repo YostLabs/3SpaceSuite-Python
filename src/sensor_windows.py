@@ -1797,7 +1797,10 @@ class GradientDescentCalibrationWizard:
 
         #Can only get samples at the slowest speed of required components
         min_hz = max(min(*self.__cached_accels.values(), *self.__cached_mags.values()), 500)
-
+        
+        #Only gather data when button is pressed
+        #This is to prevent situations where streaming gets backed up due to slow device not being able to parse 500Hz
+        self.device.pause_streaming(self)
         self.device.register_streaming_callback(self.__on_sample_received, min_hz)
         self.device.update_streaming_settings()
 
@@ -1901,6 +1904,7 @@ class GradientDescentCalibrationWizard:
         self.accel_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.accel_samples }
         self.mag_totals = { k : np.array([0, 0, 0], dtype=np.float64) for k in self.mag_samples }
 
+        self.device.resume_streaming(self)
         self.device.update() #To remove any old readings
         self.num_readings = 0
         
@@ -1909,6 +1913,7 @@ class GradientDescentCalibrationWizard:
         while self.num_readings < GradientDescentCalibrationWizard.READINGS_PER_SAMPLE: #Could potentially read a bit more then num_readings, just depends on timing
             self.device.update() #Update the streaming until got all the readings
         self.gathering = False
+        self.device.pause_streaming(self)
 
         #Average it and append
         for accel in self.accel_totals:
@@ -1995,6 +2000,7 @@ class GradientDescentCalibrationWizard:
             #Stop streaming
             self.device.unregister_streaming_callback(self.__on_sample_received)
             self.device.unregister_all_streaming_commands_from_owner(self)
+            self.device.resume_streaming(self)
 
             #Restore ODRs that were below the minimum
             restored_accel_odrs = { k : v for k, v in self.__cached_accels.items() if v < GradientDescentCalibrationWizard.MIN_ODR }
