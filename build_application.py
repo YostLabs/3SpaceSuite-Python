@@ -46,16 +46,20 @@ parent_folder = pathlib.Path(__file__).parent
 with open(parent_folder / "resources" / "version.txt", 'w') as fp:
     fp.write(version)
 
+debug = False
+if debug:
+    name = "TSS-3 Suite DEBUG"
+else:
+    name = "TSS-3 Suite"
+
 #Clean up any old folders for a clean build
 build_folder = parent_folder / "build"
-dist_folder = parent_folder / "dist"
+dist_folder = parent_folder / "dist" / name
 if build_folder.exists():
     shutil.rmtree(build_folder)
 if dist_folder.exists():
     shutil.rmtree(dist_folder)
 
-
-debug = False
 
 cmd_properties = []
 cmd_properties.append(f'src/main.py')
@@ -66,12 +70,10 @@ cmd_properties.append(f"--add-data=resources:resources")
 cmd_properties.append(f"--icon=resources/images/icon.ico")
 cmd_properties.append(f"--splash=resources/images/logo.jpg")
 cmd_properties.append(f"--noconfirm")
+cmd_properties.append(f"--name={name}")
 
 if not debug:
-    cmd_properties.append(f"--name=TSS-3 Suite")
     cmd_properties.append(f"--noconsole")
-else:
-    cmd_properties.append(f"--name=TSS-3 Suite DEV")
 
 PyInstaller.__main__.run(cmd_properties)
 
