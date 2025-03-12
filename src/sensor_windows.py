@@ -1934,6 +1934,8 @@ class GradientDescentCalibrationWizard:
     def __finalize_calculation(self):
         self.wizard_stage = GradientDescentCalibrationWizard.CALCULATING
         self.__set_loading_window()
+        self.__restore_sensor_state() #Do this before starting the calculation
+
         self.result = CalibrationResult()
         gradient = ThreespaceGradientDescentCalibration(self.orientations)
         for mag in self.mag_samples:
@@ -1988,10 +1990,7 @@ class GradientDescentCalibrationWizard:
             samples.pop(-1)
         self.animate_transition(self.orientations[self.current_step-1])
 
-    def delete(self):
-        self.sensor_obj.delete()
-        self.sensor_texture.destroy()
-
+    def __restore_sensor_state(self):
         try:
             #Stop streaming
             self.device.unregister_streaming_callback(self.__on_sample_received)
@@ -2010,6 +2009,12 @@ class GradientDescentCalibrationWizard:
                 self.device.set_axis_order(self.__cached_axis_order)
         except Exception as e:
             self.device.report_error(e)
+
+    def delete(self):
+        self.sensor_obj.delete()
+        self.sensor_texture.destroy()
+
+        self.__restore_sensor_state()
 
         dpg.delete_item(self.gradient_registry)
         dpg.delete_item(self.keyboard_handler)
