@@ -6,8 +6,8 @@ import os
 import time
 import psutil
 import platform
-from glob import glob
-
+import platformdirs
+import pathlib
 
 class FileDialog:
     """
@@ -436,36 +436,63 @@ class FileDialog:
             res = dpg.get_value("ex_search")
             reset_dir(default_path=os.getcwd(), file_name_filter=res)
 
-        def get_directory_path(directory_name):
+        def get_directory_path(directory_name: str):
+            directory_name = directory_name.lower()
             try:
-                # Check for Linux or MacOS
-                if platform.system() in ["Linux", "Darwin"] and directory_name.lower() == "home":
-                    directory_path = os.path.expanduser("~")
-                # Check for Windows
-                elif platform.system() == "Windows" and directory_name.lower() == "home":
-                    directory_path = os.path.expanduser("~")
+                if directory_name == "home":
+                    return pathlib.Path.home()
+                elif directory_name == "desktop":
+                    return platformdirs.user_desktop_dir()
+                elif directory_name == "downloads":
+                    return platformdirs.user_downloads_dir()
+                elif directory_name == "pictures":
+                    return platformdirs.user_pictures_dir()
+                elif directory_name == "documents":
+                    return platformdirs.user_documents_dir()
+                elif directory_name == "music":
+                    return platformdirs.user_music_dir()
+                elif directory_name == "videos":
+                    return platformdirs.user_videos_dir()  
                 else:
-                    # Attempt to join the home directory with the specified directory name
-                    directory_path = os.path.join(os.path.expanduser("~"), directory_name)
+                    print("Unknown directory name:", directory_name)
+                    return "."                   
+            except:
+                print("Failed to find directory:", directory_name)
+                return "."
+   
 
-                # Verify if the directory exists
-                os.listdir(directory_path)  # Test access
-            except FileNotFoundError:
-                # Search for the directory in the user's home folder
-                search_path = os.path.expanduser("~/*/" + directory_name)
-                directory_path = glob.glob(search_path)
-                if directory_path:
-                    try:
-                        os.listdir(directory_path[0])  # Test access to the found path
-                        directory_path = directory_path[0]  # Use the found path
-                    except FileNotFoundError:
-                        message_box("File dialog - Error", "Could not find the selected directory")
-                        return "."
-                else:
-                    message_box("File dialog - Error", "Could not find the selected directory")
-                    return "."
+        # def get_directory_path(directory_name):
+        #     try:
+        #         # Check for Linux or MacOS
+        #         if platform.system() in ["Linux", "Darwin"] and directory_name.lower() == "home":
+        #             directory_path = os.path.expanduser("~")
+        #         # Check for Windows
+        #         elif platform.system() == "Windows" and directory_name.lower() == "home":
+        #             directory_path = os.path.expanduser("~")
+        #         else:
+        #             # Attempt to join the home directory with the specified directory name
+        #             directory_path = os.path.join(os.path.expanduser("~"), directory_name)
+
+        #         # Verify if the directory exists
+        #         os.listdir(directory_path)  # Test access
+        #     except FileNotFoundError:
+        #         return "."
+        #         # # Search for the directory in the user's home folder
+        #         # message_box("File dialog - Error", "Could not find the selected directory")
+        #         # search_path = os.path.expanduser("~/*/" + directory_name)
+        #         # directory_path = glob.glob(search_path)
+        #         # if directory_path:
+        #         #     try:
+        #         #         os.listdir(directory_path[0])  # Test access to the found path
+        #         #         directory_path = directory_path[0]  # Use the found path
+        #         #     except FileNotFoundError:
+        #         #         message_box("File dialog - Error", "Could not find the selected directory")
+        #         #         return "."
+        #         # else:
+        #         #     message_box("File dialog - Error", "Could not find the selected directory")
+        #         #     return "."
             
-            return directory_path
+        #     return directory_path
 
         def _is_hidden(filepath):
             name = os.path.basename(os.path.abspath(filepath))

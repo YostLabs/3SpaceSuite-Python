@@ -66,7 +66,7 @@ class DefaultLogGroup(LogGroup):
         for device in self.devices:
             metadata = device.get_metadata()
             if metadata is not None:
-                with open(output_folder / f"{self.name}.cfg", "w") as fp:
+                with open((output_folder / f"{self.name}.cfg").resolve().as_posix(), "w") as fp:
                     fp.write(metadata)
 
         ext = "csv" if self.is_csv else "bin"
@@ -248,6 +248,7 @@ class DataLogger:
                 log_group.start()
         except Exception as e:
             Logger.log_error("Failed to start logging")
+            Logger.log_error(str(e))
             self.stop_logging(verbose=False)
 
             #Cleanup the folder that was created. Don't want it since just instantly failed
