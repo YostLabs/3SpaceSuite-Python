@@ -84,7 +84,7 @@ class ThreespaceDevice:
     @property
     def com_type(self):
         if isinstance(self.com, ThreespaceSerialComClass):
-            return "SERIAL"
+            return "Serial"
         elif isinstance(self.com, ThreespaceBLEComClass):
             return "BLE"
         else:
@@ -597,6 +597,9 @@ class ThreespaceDevice:
     @property
     def name(self):
         return self._name
+    
+    def type(self):
+        return self._type
 
     @name.setter
     def name(self, name):

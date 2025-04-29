@@ -36,13 +36,17 @@ class SensorBanner(SelectableButton):
 
     def __init__(self, device: ThreespaceDevice, text = None, selected = False, on_select = None):
         super().__init__(text=text, selected=selected, on_select=on_select, height=50)
-        dpg.configure_item(self.button, label=device.name)
-
         self.device = device
+        dpg.configure_item(self.button, label=self.__name)
+
         self.device.subscribe_property_update(self.on_property_changed)
     
     def on_property_changed(self, device: ThreespaceDevice):
-        dpg.configure_item(self.button, label=device.name)
+        dpg.configure_item(self.button, label=self.__name)
+
+    @property
+    def __name(self):
+        return f"{self.device.name} ({self.device.com_type})"
 
 
 class SensorMasterWindow(StagedView):
