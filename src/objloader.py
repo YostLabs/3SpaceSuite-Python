@@ -42,7 +42,7 @@ class OBJ:
                 mtl[values[0]] = list(map(float, values[1:]))
         return contents
 
-    def __init__(self, filename, swapyz=False):
+    def __init__(self, filename, swapyz=False, scale=1):
         """Loads a Wavefront OBJ file. """
         self.vertices = []
         self.normals = []
@@ -61,6 +61,7 @@ class OBJ:
                 v = list(map(float, values[1:4]))
                 if swapyz:
                     v = v[0], v[2], v[1]
+                v = v[0] * scale, v[1] * scale, v[2] * scale
                 self.vertices.append(v)
             elif values[0] == 'vn':
                 v = list(map(float, values[1:4]))
@@ -70,9 +71,9 @@ class OBJ:
             elif values[0] == 'vt':
                 self.texcoords.append(list(map(float, values[1:3])))
             elif values[0] in ('usemtl', 'usemat'):
-                material = values[1]
+                material = ' '.join(values[1:])
             elif values[0] == 'mtllib':
-                self.mtl = self.loadMaterial(os.path.join(dirname, values[1]))
+                self.mtl = self.loadMaterial(os.path.join(dirname, ' '.join(values[1:])))
             elif values[0] == 'f':
                 face = []
                 texcoords = []

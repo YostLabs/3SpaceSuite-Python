@@ -192,7 +192,7 @@ class SensorConnectionWindow(StagedView):
             self.texture = dpg.add_raw_texture(width=self.texture_width, height=self.texture_height, default_value=[],  format=dpg.mvFormat_Float_rgba)
 
         #render the object
-        self.sensor_obj = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+        self.sensor_obj = GlOrientationViewer(obj_lib.getObjFromSerialNumber(device.cached_serial_number), GL_Renderer.text_renderer, GL_Renderer.base_font,
                                                     self.texture_width, self.texture_height,
                                                     background_color=(0, 0, 0, 0), tl_arrows=False, model_arrows=False)
         self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)
@@ -530,7 +530,7 @@ class SensorOrientationWindow(StagedView):
         self.hide_sensor = False
         self.hide_arrows = False
         
-        self.orientation_viewer = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+        self.orientation_viewer = GlOrientationViewer(obj_lib.getObjFromSerialNumber(device.cached_serial_number), GL_Renderer.text_renderer, GL_Renderer.base_font,
                                                       SensorOrientationWindow.TEXTURE_WIDTH, SensorOrientationWindow.TEXTURE_HEIGHT)
 
         if SensorOrientationWindow.SENSOR_TEXTURE_RENDERER is None:
@@ -1675,7 +1675,7 @@ class GradientDescentCalibrationWizard:
 
         self.texture_width = 400
         self.texture_height = 400
-        self.sensor_obj = GlOrientationViewer(obj_lib.MiniSensorObj, GL_Renderer.text_renderer, GL_Renderer.base_font,
+        self.sensor_obj = GlOrientationViewer(obj_lib.getObjFromSerialNumber(device.cached_serial_number), GL_Renderer.text_renderer, GL_Renderer.base_font,
                                                     self.texture_width, self.texture_height, tl_arrows=False)
         self.sensor_obj.set_distance(Z_DIST)
         self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)

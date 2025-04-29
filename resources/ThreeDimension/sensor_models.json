@@ -1,0 +1,22 @@
+{
+	"Models": {
+		"BaseEM": {
+			"Path": "Embedded/TSS-EM-2_6.obj",
+			"Scale": 1
+		},
+		"BaseDL": {
+			"Path":  "DataLogger/DL3.obj",
+			"Scale": 6.8
+		}
+	},
+	"Mapping": {
+		"EM": {
+			"Base": "BaseEM"
+		},
+		"DL": {
+			"Base": "BaseDL"
+		},
+		
+		"Default": "BaseEM"
+	}
+}
