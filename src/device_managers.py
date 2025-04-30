@@ -31,6 +31,8 @@ import platform
 from utility import Logger
 import time
 
+import dataclasses
+
 def is_threespace_detected(port):
     try:
         sensor = ThreespaceSensor(port, timeout=0.05)
@@ -65,9 +67,32 @@ class DeviceManager:
 import dearpygui.dearpygui as dpg
 ThreespaceGroup = NamedTuple("ThreespaceGroup", [("device", ThreespaceDevice), ("banner", SensorBanner), ("main_window", SensorMasterWindow)])
 from macro_manager import MacroConfigurationWindow
+
+@dataclasses.dataclass
+class SerialSettings:
+    enabled: bool = True
+
+@dataclasses.dataclass
+class BleSettings:
+    enabled: bool = True
+    filter: str = "YL-TSS-.*"
+    show_hidden: bool = False
+    allow: list[str] = dataclasses.field(default_factory=list)
+    deny: list[str] = dataclasses.field(default_factory=list)
+
+@dataclasses.dataclass
+class ThreespaceManagerSettings:
+    serial: SerialSettings = dataclasses.field(default_factory=SerialSettings)
+    ble: BleSettings = dataclasses.field(default_factory=BleSettings)
+
+    def __post_init__(self):
+        if isinstance(self.serial, dict):
+            self.serial = SerialSettings(**self.serial)
+        if isinstance(self.ble, dict):
+            self.ble = BleSettings(**self.ble)
+
 class ThreespaceManager:
 
-    
     POTENTIAL_RPI_PORTS = ["/dev/ttyAMA0", "/dev/ttyAMA1", "/dev/ttyAMA2", "/dev/ttyAMA3", "/dev/ttyAMA4", "/dev/ttyAMA5"]
 
     def __init__(self, banner_menu: BannerMenu, window_viewport: DynamicViewport, settings_manager: SettingsManager):
@@ -88,6 +113,8 @@ class ThreespaceManager:
         #This is used to delay error handling for when it is safe to do so
         self.queued_for_removal = []
 
+        self.load_settings()
+
         self.ble_supported = False
         try:
             ThreespaceBLEComClass.set_scanner_continous(True)
@@ -95,23 +122,43 @@ class ThreespaceManager:
         except Exception as e:
             Logger.log_error(f"Failed to start BLE scanning: {e}")
 
+    def save_settings(self):
+        if self.settings is None: return
+        self.settings_manager.save("tss_device_manager.json", self.settings, default=lambda o: dataclasses.asdict(o))
+
+    def load_settings(self):
+        setting_dict = self.settings_manager.load("tss_device_manager.json")
+        if setting_dict is None:
+            self.settings = ThreespaceManagerSettings()
+        else:
+            self.settings = ThreespaceManagerSettings(**setting_dict)
+
     def discover_devices(self):
-        #Find what ports have ThreeSpace Sensors
+        #---------------------Find what ports have ThreeSpace Sensors--------------------------------
         valid_coms = []
-        for port in ThreespaceSerialComClass.enumerate_ports():
-            if port.pid & ThreespaceSerialComClass.PID_V3_MASK == ThreespaceSerialComClass.PID_V3_MASK or port.pid == ThreespaceSerialComClass.PID_BOOTLOADER:
-                ser = serial.Serial(None, baudrate=115200, timeout=2) #By seperating the port assignment from the constructor, can create the object without automatically opening the port
-                ser.port = port.device
-                valid_coms.append(ThreespaceSerialComClass(ser))
+        if self.settings.serial.enabled:
+            for port in ThreespaceSerialComClass.enumerate_ports():
+                if port.pid & ThreespaceSerialComClass.PID_V3_MASK == ThreespaceSerialComClass.PID_V3_MASK or port.pid == ThreespaceSerialComClass.PID_BOOTLOADER:
+                    ser = serial.Serial(None, baudrate=115200, timeout=2) #By seperating the port assignment from the constructor, can create the object without automatically opening the port
+                    ser.port = port.device
+                    valid_coms.append(ThreespaceSerialComClass(ser))
         
-        if self.ble_supported:
+        if self.ble_supported and self.settings.ble.enabled:
             for ble_device in ThreespaceBLEComClass.auto_detect():
+                if ble_device.address in self.settings.ble.deny: continue #In the deny List
+                if not self.settings.ble.show_hidden and \
+                    not ble_device.address in self.settings.ble.allow and \
+                    not ble_device.name.startswith(self.settings.ble.filter): continue #Not a valid name for current filter and not an exception
                 valid_coms.append(ble_device)
         
-        #Remove ports that have been disconnected
+        #-----------------------------Update/Remove ports that have been disconnected--------------------------------
         cur_devices = list(self.devices.keys())
         for com in cur_devices:
-            if self.devices[com].device.is_open: continue #Don't remove already opened devices
+            if self.devices[com].device.is_open: 
+                #If its a ble device, make sure to flag its address as a valid address
+                if isinstance(com, ThreespaceBLEComClass) and not com.address in self.settings.ble.allow:
+                    self.settings.ble.allow.append(com.address)
+                continue #Don't remove already opened devices
             valid = False
             for other in valid_coms:
                 if self.are_coms_equal(com, other):
@@ -232,6 +279,7 @@ class ThreespaceManager:
                 group.device.cleanup()
             except: pass
         self.save_device_names()
+        self.save_settings()
 
     def update(self):
         """

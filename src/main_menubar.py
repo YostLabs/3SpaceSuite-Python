@@ -7,6 +7,7 @@ from device_managers import DeviceManager
 from settings_manager import SettingsManager
 
 from default_window import createAboutWindow
+from device_managers_ui import ThreespaceManagerToolbar
 
 from utility import Logger
 import traceback
@@ -36,6 +37,10 @@ class MenuBar:
             dpg.add_menu_item(label="Metrics", callback=dpg.show_metrics)
             dpg.add_menu_item(label="Registry", callback=dpg.show_item_registry)
         
+        self.ts_manager_toolbar = ThreespaceManagerToolbar(general_manager.device_manager.threespace_manager)
+        with dpg.menu(label="Connection"):
+            self.ts_manager_toolbar.submit()
+
         dpg.add_menu_item(label="About", callback=createAboutWindow)
 
         if parent is not None:
@@ -57,9 +62,6 @@ class MenuBar:
 
     def __load_start_window(self):
         self.general_manager.load_main_window()
-
-    def __discover_ports(self):
-        self.device_manager.discover_devices()
 
     def __set_theme(self, sender, app_data):
         if app_data == "Default":
