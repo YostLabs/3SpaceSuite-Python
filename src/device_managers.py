@@ -148,6 +148,7 @@ class ThreespaceManager:
                 if ble_device.address in self.settings.ble.deny: continue #In the deny List
                 if not self.settings.ble.show_hidden and \
                     not ble_device.address in self.settings.ble.allow and \
+                    not ble_device.name is None and \
                     not ble_device.name.startswith(self.settings.ble.filter): continue #Not a valid name for current filter and not an exception
                 valid_coms.append(ble_device)
         
