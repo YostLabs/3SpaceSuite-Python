@@ -93,7 +93,7 @@ class ThreespaceManager:
             ThreespaceBLEComClass.set_scanner_continous(True)
             self.ble_supported = True
         except Exception as e:
-            print("BLE not supported:", e)
+            Logger.log_error(f"Failed to start BLE scanning: {e}")
 
     def discover_devices(self):
         #Find what ports have ThreeSpace Sensors

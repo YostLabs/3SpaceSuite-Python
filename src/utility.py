@@ -50,6 +50,8 @@ class Logger:
     def init(cls):
         cls.log_windows: list[LogWindow] = []
 
+        cls.buffered_messages: list[tuple[str, int]] = []
+
 
     #This is seperated out so that log files, and thus session folders, are only generated if
     #an actual data logging session takes place, not just every time the app is opened
@@ -82,6 +84,11 @@ class Logger:
     @classmethod
     def connect_window(cls, window: LogWindow):
         cls.log_windows.append(window)
+        if len(cls.log_windows) == 1:
+            for message, level in cls.buffered_messages:
+                window._log(message, level)
+            cls.buffered_messages.clear()
+
 
     @classmethod
     def _log(cls, message, level):
@@ -89,7 +96,10 @@ class Logger:
         if cls.LOG_FILE is not None:
             cls.LOG_FILE.write(msg)
             cls.LOG_FILE.flush()
-            
+        
+        if len(cls.log_windows) == 0:
+            cls.buffered_messages.append((message, level))
+
         with dpg_lock():
             for log_window in cls.log_windows:
                 log_window._log(message, level)
