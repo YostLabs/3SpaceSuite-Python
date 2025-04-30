@@ -75,7 +75,7 @@ class SerialSettings:
 @dataclasses.dataclass
 class BleSettings:
     enabled: bool = True
-    filter: str = "YL-TSS-.*"
+    filter: str = "YL-TSS-"
     show_hidden: bool = False
     allow: list[str] = dataclasses.field(default_factory=list)
     deny: list[str] = dataclasses.field(default_factory=list)
