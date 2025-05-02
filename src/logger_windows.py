@@ -71,7 +71,7 @@ class DataLogWindow(StagedView):
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (255, 104, 37, 193))
 
         with dpg.stage(label="Data Log Window Stage") as self._stage_id:
-            with dpg.child_window(autosize_x=True, autosize_y=True, label="DataLogWindow", menubar=True) as self.child_window:
+            with dpg.child_window(autosize_x=True, autosize_y=True, label="DataLogWindow") as self.child_window:
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_stretch=True, init_width_or_weight=0.1)
                     dpg.add_table_column(width_stretch=True, init_width_or_weight=0.4)
