@@ -137,7 +137,6 @@ class DataLogWindow(StagedView):
             on_close()
             if len(selections) == 0:
                 return
-            print(f"{selections=}")
             path = selections[0][1]
             self.log_settings.output_directory = pathlib.Path(path)
             dpg.set_value(self.input_directory_text, self.log_settings.output_directory.as_posix())            
@@ -261,7 +260,6 @@ class DataLogConfigWindow(StagedView):
         self.log_settings.binary_mode = app_data == "Binary"
 
     def notify_opened(self):
-        print(f"{self.log_settings.to_dict()=}")
         self.slots_window.notify_opened()
 
     def delete(self):
