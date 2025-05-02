@@ -4,7 +4,7 @@ Windows Specific to the Logger/General Tab
 import dearpygui.dearpygui as dpg
 from dpg_ext.global_lock import dpg_lock
 
-from dpg_ext.staged_view import StagedView
+from dpg_ext.staged_view import StagedView, StagedTabManager
 from dpg_ext.selectable_button import SelectableButton
 from dpg_ext.dynamic_button import DynamicButton
 from dpg_ext.filtered_dropdown import FilteredDropdown
@@ -17,107 +17,35 @@ from typing import Callable
 
 from device_managers import DeviceManager, ThreespaceDevice
 
+import dataclasses
 from dataclasses import dataclass
 from utility import WatchdogTimer, Logger
 import pathlib
 from resource_manager import *
 
 from devices import StreamableCommands, ThreespaceStreamingOption
+from log_settings import LogSettings
 
 class LoggerBanner(SelectableButton): ...
 
 from log_data import DataLogger
-class LoggerMasterWindow(StagedView):
+class LoggerMasterWindow(StagedTabManager):
 
-    def __init__(self, device_manager: DeviceManager, data_logger: DataLogger):
+    def __init__(self, device_manager: DeviceManager, data_logger: DataLogger, log_settings: LogSettings):
+        super().__init__()
         with dpg.stage(label="Logger Master Stage") as self._stage_id:
             with dpg.tab_bar(label="Logger Tabs"):
-                with dpg.tab(label="Logging"):
-                    self.data_log_window = DataLogWindow(device_manager, data_logger)
-                    self.data_log_window.submit(dpg.top_container_stack())  
-
-@dataclass
-class LogSettings:
-    """
-    Data binding class for the logging settings and ability to save to file
-    """
-
-    MODE_BINARY = 0
-    MODE_ASCII = 1
-
-    DEFAULT_OUTPUT_DIRECTORY = PLATFORM_FOLDERS.user_documents_path / "TSS_Suite" / "log_data"
-
-    def __init__(self):
-        with dpg.value_registry() as self.__registry:
-            self._value_header_status = dpg.add_bool_value(default_value=False)
-            self._value_header_timestamp = dpg.add_bool_value(default_value=False)
-            self._value_header_echo = dpg.add_bool_value(default_value=True)
-            self._value_header_checksum = dpg.add_bool_value(default_value=False)
-            self._value_header_serial = dpg.add_bool_value(default_value=False)
-            self._value_header_length = dpg.add_bool_value(default_value=False)
-
-            self._value_binary_mode = dpg.add_bool_value(default_value=False)
-            self._value_synchronize_timestamp = dpg.add_bool_value(default_value=False)
-            self._value_log_hz = dpg.add_float_value(default_value=200)
-            self._value_log_duration = dpg.add_float_value(default_value=0) #0 is forever
+                self.set_tab_bar(dpg.top_container_stack())
+                with dpg.tab(label="Logging") as self.logging_tab:
+                    self.data_log_window = DataLogWindow(device_manager, data_logger, log_settings)
+                    self.data_log_window.submit(dpg.top_container_stack())
+                    self.add_tab(dpg.top_container_stack(), self.data_log_window)
+                with dpg.tab(label="Log Config"):
+                    self.data_log_config_window = DataLogConfigWindow(device_manager, log_settings)  
+                    self.data_log_config_window.submit(dpg.top_container_stack())
+                    self.add_tab(dpg.top_container_stack(), self.data_log_config_window)
         
-        self.output_directory = LogSettings.DEFAULT_OUTPUT_DIRECTORY
-
-        self.slot_configuration: dict[str,list[ThreespaceStreamingOption]] = {
-            "general": []
-        }
-
-    def get_slots_for_serial(self, serial_number: int):
-        #Default to streaming the timestamp and tared orientation if not in the dictionary yet
-        #I do timestamp because it allows data charts to operate as well
-        return self.slot_configuration.get(serial_number, [ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None), ThreespaceStreamingOption(StreamableCommands.GetTaredOrientation, None)])
-
-    @property
-    def header_status(self):
-        return dpg.get_value(self._value_header_status)
-
-    @property
-    def header_timestamp(self):
-        return dpg.get_value(self._value_header_timestamp)
-
-    @property
-    def header_echo(self):
-        return dpg.get_value(self._value_header_echo)
-
-    @property
-    def header_checksum(self):
-        return dpg.get_value(self._value_header_checksum)
-
-    @property
-    def header_serial(self):
-        return dpg.get_value(self._value_header_serial)
-
-    @property
-    def header_length(self):
-        return dpg.get_value(self._value_header_length)      
-    
-    @property
-    def binary_mode(self):
-        return dpg.get_value(self._value_binary_mode)
-    
-    @binary_mode.setter
-    def binary_mode(self, value):
-        dpg.set_value(self._value_binary_mode, value)
-
-    @property
-    def synchronize_timestamp(self):
-        return dpg.get_value(self._value_synchronize_timestamp)
-
-    @property
-    def hz(self):
-        return dpg.get_value(self._value_log_hz)
-
-    @property
-    def duration(self):
-        return dpg.get_value(self._value_log_duration)            
-
-    def delete(self):
-        dpg.delete_item(self.__registry)
+        self.set_open_tab(self.logging_tab)
 
 
 import threading
@@ -126,8 +54,8 @@ from log_data import DataLogger, DefaultLogGroup
 from log_devices import ThreeSpaceLogDevice
 class DataLogWindow(StagedView):
 
-    def __init__(self, device_manager: DeviceManager, data_logger: DataLogger):
-        self.log_settings = LogSettings()
+    def __init__(self, device_manager: DeviceManager, data_logger: DataLogger, log_settings: LogSettings):
+        self.log_settings = log_settings
         self.data_logger = data_logger
         self.device_manager = device_manager
         with dpg.theme(label="Start Button Theme") as self.start_theme:
@@ -144,28 +72,6 @@ class DataLogWindow(StagedView):
 
         with dpg.stage(label="Data Log Window Stage") as self._stage_id:
             with dpg.child_window(autosize_x=True, autosize_y=True, label="DataLogWindow", menubar=True) as self.child_window:
-                with dpg.menu_bar():
-                    with dpg.menu(label="Config"):
-                        dpg.add_button(label="Data", width=-1, callback=self.__on_data_option_selected)
-                        with dpg.menu(label="Header"):
-                            dpg.add_checkbox(label="Status", source=self.log_settings._value_header_status)
-                            dpg.add_checkbox(label="Timestamp", source=self.log_settings._value_header_timestamp)
-                            dpg.add_checkbox(label="Echo", source=self.log_settings._value_header_echo, enabled=False)
-                            dpg.add_checkbox(label="Checksum", source=self.log_settings._value_header_checksum)
-                            dpg.add_checkbox(label="Serial#", source=self.log_settings._value_header_serial)
-                            dpg.add_checkbox(label="Length", source=self.log_settings._value_header_length)
-                        with dpg.menu(label="Mode"):
-                            dpg.add_radio_button(items=["Ascii", "Binary"], callback=self.__mode_radio_callback)
-                    with dpg.menu(label="Timing"):
-                        dpg.add_checkbox(label="Synchronize Timestamp", source=self.log_settings._value_synchronize_timestamp)
-                        dpg.add_input_float(label="HZ", source=self.log_settings._value_log_hz, step=10, min_value=0.001, max_value=2000, max_clamped=True, min_clamped=True)
-                        with dpg.group(horizontal=True):
-                            #Max value of 1 Week. It can go much higher then that, but capping at that for now since this is meant more as a testing suite
-                            #then an incredibly robust logging system that will reliably have no errors for an extremely long period of time.
-                            dpg.add_input_float(label="Duration", source=self.log_settings._value_log_duration, step=1, min_value=0, max_value=604800)
-                            dpg.add_text("?", color=theme_lib.color_tooltip)
-                            with dpg.tooltip(dpg.last_item()):
-                                dpg.add_text("A duration of 0 logs forever")
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_stretch=True, init_width_or_weight=0.1)
                     dpg.add_table_column(width_stretch=True, init_width_or_weight=0.4)
@@ -217,15 +123,10 @@ class DataLogWindow(StagedView):
                 self.log_window = LogWindow(height=-1, flush_count=100)
                 self.log_window.submit(parent=dpg.top_container_stack())
 
-            self.log_options_window: SensorLoggingConfigWindow = None
-
             self.data_logger.on_update.subscribe(self.on_data_logger_update)
             self.data_logger.on_logging_stopped.subscribe(self.on_data_logger_stopped)
 
         Logger.connect_window(self.log_window)
-
-    def __mode_radio_callback(self, sender, app_data, user_data):
-        self.log_settings.binary_mode = app_data == "Binary"
 
     def __on_select_button(self, sender, app_data, user_data):
         def on_close():
@@ -249,17 +150,6 @@ class DataLogWindow(StagedView):
                                             default_path=default_path.as_posix(), filter_list=[""], file_filter="", no_resize=False)
         
         firmware_selector.show_file_dialog()
-
-    def __on_data_option_selected(self, sender, app_data, user_data):
-        if self.log_options_window is not None:
-            return
-        self.log_options_window = SensorLoggingConfigWindow(self.device_manager, self.log_settings, on_close=self.__on_data_config_closed)
-    
-    def __on_data_config_closed(self):
-        if self.log_options_window is None:
-            return
-        self.log_options_window.delete()
-        self.log_options_window = None
 
     def start_logging(self):
         if self.data_logger.is_logging():
@@ -309,50 +199,188 @@ class DataLogWindow(StagedView):
         dpg.delete_item(self.stop_theme)
         dpg.delete_item(self.start_theme)
 
-import data_charts
-class SensorLoggingConfigWindow:
+class DataLogConfigWindow(StagedView):
 
-    def __init__(self, device_manager: DeviceManager, log_settings: LogSettings, on_close: Callable):
+    def __init__(self, device_manager: DeviceManager, log_settings: LogSettings):
         self.device_manager = device_manager
         self.log_settings = log_settings
 
-        self.device_menus: dict[ThreespaceDevice, StreamingOptionSelectionMenu] = {}
-        with dpg.window(label="Data Config", width=600, height=400, show=True, no_open_over_existing_popup=False, on_close=on_close) as self.window:
-            with dpg.tree_node(label="General", default_open=True, span_full_width=False):
-                dpg.add_button(label="Apply", callback=self.apply_general_settings)
+        with dpg.stage(label="Data Log Config Stage") as self._stage_id:
+            with dpg.child_window(autosize_x=True, autosize_y=True, label="DataLogConfigWindow") as self.window:
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Header:")
+                    dpg.add_text("?", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(dpg.last_item()):
+                        dpg.add_text("The Echo, Checksum, and Length header fields are forced on as required by the 3-Space API.", wrap=300)
+                with dpg.group(indent=24): #The sole purpose of this group is for the indent
+                    with dpg.table(header_row=False, borders_innerH=False, borders_innerV=False, borders_outerH=False, borders_outerV=False):
+                        dpg.add_table_column()
+                        dpg.add_table_column()
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_checkbox(label="Status", source=self.log_settings._value_header_status)
+                            dpg.add_checkbox(label="Timestamp", source=self.log_settings._value_header_timestamp)
+                            dpg.add_checkbox(label="Echo", source=self.log_settings._value_header_echo, enabled=False)
+                        with dpg.table_row():
+                            dpg.add_checkbox(label="Checksum", source=self.log_settings._value_header_checksum, enabled=False)
+                            dpg.add_checkbox(label="Serial#", source=self.log_settings._value_header_serial)
+                            dpg.add_checkbox(label="Length", source=self.log_settings._value_header_length, enabled=False)
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Data Mode:")
+                    default_mode = "Binary" if self.log_settings.binary_mode else "Ascii"
+                    dpg.add_radio_button(items=["Ascii", "Binary"], callback=self.__mode_radio_callback, horizontal=True, default_value=default_mode)
+                    dpg.add_text("?", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(dpg.last_item()):
+                        dpg.add_text("When using Ascii mode the Checksum and Length header fields will still be gathered in Binary and so may appear inaccurate.", wrap=300)
+                
+                with dpg.table(header_row=False, borders_innerH=False, borders_innerV=False, borders_outerH=False, borders_outerV=False):
+                    dpg.add_table_column(init_width_or_weight=275, width_fixed=True)
+                    dpg.add_table_column()
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        with dpg.group(horizontal=True):
+                            dpg.add_checkbox(label="Synchronize Timestamp", source=self.log_settings._value_synchronize_timestamp)
+                            dpg.add_text("?", color=theme_lib.color_tooltip)
+                            with dpg.tooltip(dpg.last_item()):
+                                dpg.add_text("If selected, timestamps will reset to 0 when logging starts.", wrap=300)
+                        dpg.add_input_float(label="HZ", source=self.log_settings._value_log_hz, step=10, min_value=0.001, max_value=2000, max_clamped=True, min_clamped=True)
+                        with dpg.group(horizontal=True):
+                            #Max value of 1 Week. It can go much higher then that, but capping at that for now since this is meant more as a testing suite
+                            #then an incredibly robust logging system that will reliably have no errors for an extremely long period of time.
+                            dpg.add_input_float(label="Duration", source=self.log_settings._value_log_duration, step=1, min_value=0, max_value=604800)
+                            dpg.add_text("?", color=theme_lib.color_tooltip)
+                            with dpg.tooltip(dpg.last_item()):
+                                dpg.add_text("A duration of 0 logs forever")
+                dpg.add_spacer()
+                dpg.add_separator()
+                dpg.add_spacer()
+                dpg.add_text("Logging Slot Configuration")
+                self.slots_window = LoggingSlotsConfigWindow(device_manager, log_settings).submit()
+
+    def __mode_radio_callback(self, sender, app_data, user_data):
+        self.log_settings.binary_mode = app_data == "Binary"
+
+    def notify_opened(self):
+        print(f"{self.log_settings.to_dict()=}")
+        self.slots_window.notify_opened()
+
+    def delete(self):
+        self.slots_window.delete()
+
+
+import data_charts
+class LoggingSlotsConfigWindow(StagedView):
+
+    def __init__(self, device_manager: DeviceManager, log_settings: LogSettings):
+        self.device_manager = device_manager
+        self.log_settings = log_settings
+
+        self.default_item = "Select a Sensor"
+        self.devices = [d for d in self.device_manager.threespace_manager.get_devices() if d.is_open and not d.in_bootloader]
+        self.keys = [d.name for d in self.devices]
+        self.keys.insert(0, self.default_item)
+        self.device_menu: StreamingOptionSelectionMenu = None
+        self.loaded_device = None
+
+        with dpg.stage(label="Data Log Slots Stage") as self._stage_id:
+            dpg.add_text("General:")
+            with dpg.group(indent=24):
+                dpg.add_button(label="Apply to all sensors", callback=self.apply_general_settings)
                 
                 options = self.log_settings.slot_configuration["general"]
                 self.general_menu = StreamingOptionSelectionMenu(on_modified_callback=self.__on_slots_modified)
                 self.general_menu.overwrite_options(options)
-            
-            for device in self.device_manager.threespace_manager.get_devices():
-                if not device.is_open or device.in_bootloader:
-                    continue
-                with dpg.tree_node(label=device.name):
-                    options = self.log_settings.get_slots_for_serial(device.cached_serial_number)
-                    self.device_menus[device] = StreamingOptionSelectionMenu(device, on_modified_callback=self.__on_slots_modified)
-                    self.device_menus[device].overwrite_options(options)
+
+            dpg.add_text("Sensor:")
+            with dpg.group(indent=24):
+                with dpg.group(horizontal=True):
+                    self.dropdown = FilteredDropdown(items=self.keys, default_item=self.default_item, 
+                        width=int(200*1.36), allow_custom_options=False, allow_empty=False,
+                        callback=self.__on_device_selected).submit()
+                    self.apply_to_specific_button = dpg.add_button(label="Apply General", show=False, callback=lambda s, a: self.apply_to_current())
+                self.selected_sensor_container = dpg.add_group()
+
+
+        self.__on_device_selected(None, self.default_item)
+
+    def notify_opened(self):
+        #Reload available devices
+        self.devices = [d for d in self.device_manager.threespace_manager.get_devices() if d.is_open and not d.in_bootloader]
+        self.keys = [d.name for d in self.devices]
+        self.keys.insert(0, self.default_item)
+        reset = self.loaded_device not in self.devices
+
+        #Update the selection with available devices
+        self.dropdown.clear_all_items()
+        for key in self.keys:
+            self.dropdown.add_item(key)
+        
+        #Load device to show if the previous device is no longer present
+        if reset:
+            self.dropdown.set_value(self.default_item)
+            self.__on_device_selected(None, self.default_item)
+
+    def __on_device_selected(self, sender, value: str):
+        device = None
+        if value != self.default_item:
+            devices = self.device_manager.threespace_manager.get_devices()
+            for d in devices:
+                if d.name == value:
+                    device = d
+                    break
+            if device is None:
+                Logger.log_error(f"Failed to find device for selection: {value}")
+        self.__load_device(device)
+    
+    def __load_device(self, device: ThreespaceDevice):
+        if self.loaded_device == device: return
+        self.__clear_device()
+        if device is None:
+            return
+        options = self.log_settings.get_slots_for_serial(device.cached_serial_number)
+        dpg.push_container_stack(self.selected_sensor_container)
+        self.device_menu = StreamingOptionSelectionMenu(device, on_modified_callback=self.__on_slots_modified)
+        dpg.pop_container_stack()
+        self.loaded_device = device
+        self.device_menu.overwrite_options(options)
+        dpg.show_item(self.apply_to_specific_button)
+
+    def __clear_device(self):
+        if self.device_menu is not None:
+            self.device_menu.delete()
+            self.device_menu = None
+        dpg.delete_item(self.selected_sensor_container, children_only=True)
+        dpg.hide_item(self.apply_to_specific_button)
+        self.loaded_device = None
 
     def __on_slots_modified(self, sender: "StreamingOptionSelectionMenu"):
         options = sender.get_options()
         if sender == self.general_menu:
             self.log_settings.slot_configuration["general"] = options
         else:
-            for device, menu in self.device_menus.items():
-                if menu != sender: continue
-                self.log_settings.slot_configuration[device.cached_serial_number] = options
-                break
-
-    def delete(self):
-        for menu in self.device_menus.values():
-            menu.delete()
-        self.general_menu.delete()
-        dpg.delete_item(self.window)
+            if self.loaded_device is None:
+                Logger.log_error("Slots modified but no device loaded.")
+                return
+            self.log_settings.slot_configuration[self.loaded_device.cached_serial_number] = options
     
+    def apply_to_current(self, options: list[ThreespaceStreamingOption] = None):
+        if self.device_menu is None: return
+        if options is None:
+            options = self.general_menu.get_options()
+        self.device_menu.overwrite_options(options)
+
     def apply_general_settings(self):
         options = self.general_menu.get_options()
-        for menu in self.device_menus.values():
-            menu.overwrite_options(options)
+        self.apply_to_current(options)
+        for device in self.devices:
+            if not device.is_open or device.in_bootloader: #Shouldn't be, but double checking
+                continue
+            self.log_settings.slot_configuration[device.cached_serial_number] = options
+
+    def delete(self):
+        self.__clear_device()
+        self.general_menu.delete()
+        self.dropdown.delete()
 
 class StreamingOptionSelectionMenu:
 

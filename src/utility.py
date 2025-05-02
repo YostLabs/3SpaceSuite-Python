@@ -1,5 +1,7 @@
 import threading
 from dpg_ext.global_lock import dpg_lock
+import dataclasses
+
 class WatchdogTimer:
     def __init__(self, on_timeout, timeout=1, ):
         """
@@ -277,4 +279,38 @@ class MainLoopEventQueue:
 
         for event in events:
             event()
+
+#Used to allow to_dict to also get values from @property variables
+#as well as load a class from that same dict setting the associated property variables.
+#It does that in addition to working with the base dictionary features from dataclasses
+class PropertyDict:
+
+    def to_dict(self):
+        dict = {}
+        if dataclasses.is_dataclass(self):
+            dict |= dataclasses.asdict(self)
+        dict |= {
+            k: v.fget(self)
+            for k, v in self.__class__.__dict__.items()
+            if isinstance(v, property)
+        }
+        return dict
     
+    @classmethod
+    def from_dict(cls, dict: dict, *args, empty_setters=False, **kwargs):
+        instance = cls(*args, **kwargs)
+        instance_properties = {k: v for k, v in cls.__dict__.items() if isinstance(v, property)}
+        for key, value in dict.items():
+            if key in instance.__dict__:
+                instance.__dict__[key] = value
+            elif key in instance_properties:
+                prop = instance_properties[key]
+                if prop.fset is None:
+                    if not empty_setters:
+                        raise Exception("Attempting to create from dict with missing setter")
+                    else:
+                        continue
+                instance_properties[key].fset(instance, value)
+            else:
+                raise Exception(f"Unknown dictionary element for creating {cls} from dict")
+        return instance
