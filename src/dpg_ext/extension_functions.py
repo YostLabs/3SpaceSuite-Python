@@ -37,6 +37,9 @@ def get_global_parent_pos(parent):
     parent_type = get_item_type_value(parent)
     if parent_type not in (dpg.mvGroup, dpg.mvTreeNode, dpg.mvCollapsingHeader): #These don't affect positioning for some reason
         pos = dpg.get_item_pos(parent)
+    if parent_type in (dpg.mvTable, dpg.mvChildWindow, dpg.mvWindowAppItem): #These have scrolling that can affect positioning
+        pos[0] -= dpg.get_x_scroll(parent)
+        pos[1] -= dpg.get_y_scroll(parent)
     parents_parent = dpg.get_item_parent(parent)
     if parents_parent is not None:
         parent_pos = get_global_parent_pos(parents_parent)
