@@ -59,8 +59,9 @@ class SensorMasterWindow(StagedTabManager):
     DISCONNECT_THEME = None
     INVISIBLE_THEME = None
 
-    def __init__(self, threespace_device: ThreespaceDevice, sensor_banner: SensorBanner, macro_manager: MacroManager):
+    def __init__(self, threespace_device: ThreespaceDevice, sensor_banner: SensorBanner, macro_manager: MacroManager, on_connect: Callable = None):
         super().__init__()
+        self.on_conect = on_connect
         if SensorMasterWindow.DISCONNECT_THEME is None:
             with dpg.theme(label="SensorDisconnectTheme") as SensorMasterWindow.DISCONNECT_THEME:
                 with dpg.theme_component(dpg.mvTabButton):
@@ -149,6 +150,9 @@ class SensorMasterWindow(StagedTabManager):
             self.load_bootloader_windows()
         else:
             self.load_firmware_windows()
+        
+        if self.on_conect is not None:
+            self.on_conect(self.device)
 
     def __disconnect_selected(self):
         self.device.disconnect()

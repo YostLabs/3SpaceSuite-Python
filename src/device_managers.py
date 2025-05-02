@@ -28,7 +28,7 @@ import serial.tools.list_ports
 
 import platform
 
-from utility import Logger
+from utility import Logger, Callback
 import time
 
 import dataclasses
@@ -113,6 +113,8 @@ class ThreespaceManager:
         #This is used to delay error handling for when it is safe to do so
         self.queued_for_removal = []
 
+        self.on_device_opened = Callback()
+
         self.load_settings()
 
         self.ble_supported = False
@@ -121,6 +123,9 @@ class ThreespaceManager:
             self.ble_supported = True
         except Exception as e:
             Logger.log_error(f"Failed to start BLE scanning: {e}")
+
+    def notify_opened(self, device: ThreespaceDevice):
+        self.on_device_opened._notify(device)
 
     def save_settings(self):
         if self.settings is None: return
@@ -211,7 +216,7 @@ class ThreespaceManager:
         device.on_disconnect.subscribe(self.__on_sensor_disconnect)
         with dpg_lock():
             banner = SensorBanner(device)
-            group = ThreespaceGroup(device, banner, SensorMasterWindow(device, banner, self.macro_manager))
+            group = ThreespaceGroup(device, banner, SensorMasterWindow(device, banner, self.macro_manager, on_connect=self.notify_opened))
         self.devices[com] = group
         self.banner_menu.add_banner(group.banner)
         group.banner.add_selected_callback(lambda _: self.load_sensor_window(com))        
