@@ -16,7 +16,7 @@ from utility import Logger, Callback
 import yostlabs.tss3.consts as threespace_consts
 
 import platform
-from typing import Callable
+from typing import Callable, Any
 
 import time
 
@@ -156,8 +156,8 @@ class ThreespaceDevice:
     def resume_streaming(self, lock: object):
         return self.streaming_manager.resume(lock)
 
-    def register_streaming_callback(self, callback: Callable, hz=None, only_newest=False):
-        self.streaming_manager.register_callback(callback, hz=hz, only_newest=only_newest)
+    def register_streaming_callback(self, callback: Callable[[ThreespaceStreamingStatus,Any],None], hz=None, only_newest=False, user_data=None):
+        self.streaming_manager.register_callback(callback, hz=hz, only_newest=only_newest, user_data=user_data)
     
     def unregister_streaming_callback(self, callback: Callback):
         return self.streaming_manager.unregister_callback(callback)
@@ -195,6 +195,9 @@ class ThreespaceDevice:
     def is_api_streaming(self):
         if not self.is_open: return False
         return self.__api.is_streaming is True
+
+    def get_streaming_batch(self):
+        return self.__api.getStreamingBatch()
 
     def reset_timestamp(self):
         self.__api.set_settings(timestamp=0)

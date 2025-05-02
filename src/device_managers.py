@@ -276,14 +276,21 @@ class ThreespaceManager:
             #This includes things like streaming settings, odr settings & axis settings (calibration), ...
             try:
                 group.main_window.delete()
-            except: pass
+            except Exception as e:
+                print("Failed to delete main window:", e)
 
             #Just in case the above failed to properly clean everything up
             try:
                 if group.device.is_api_streaming():
-                        group.device.force_reset_streaming()
+                    group.device.force_reset_streaming()
+            except Exception as e:
+                print("Failed to cleanup streaming:", e)
+
+            try:
                 group.device.cleanup()
-            except: pass
+            except Exception as e:
+                print("Failed to force cleanup device", e)
+
         self.save_device_names()
         self.save_settings()
 

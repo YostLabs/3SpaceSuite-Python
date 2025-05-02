@@ -47,6 +47,34 @@ class LoggerMasterWindow(StagedTabManager):
         
         self.set_open_tab(self.logging_tab)
 
+def start_logging(data_logger: DataLogger, device_manager: DeviceManager, log_settings: LogSettings):
+    if data_logger.is_logging():
+        return
+
+    groups = []
+    for device in device_manager.threespace_manager.get_devices():
+        if not device.is_open or device.in_bootloader: continue 
+        device.set_response_header(success_fail=log_settings.header_status, timestamp=log_settings.header_timestamp, 
+                                    echo=log_settings.header_echo, checksum=log_settings.header_checksum, 
+                                    serial_number=log_settings.header_serial, data_len=log_settings.header_length)
+        stream_options = log_settings.get_slots_for_serial(device.cached_serial_number)
+        log_device = ThreeSpaceLogDevice(device, stream_options, 
+                                            log_settings.hz, binary=log_settings.binary_mode,
+                                            sync_timestamp=log_settings.synchronize_timestamp)
+        groups.append(DefaultLogGroup([log_device], device.name, csv=not log_settings.binary_mode))
+    if len(groups) == 0:
+        Logger.log_warning("No available log devices connected.")
+        return
+
+    data_logger.set_duration(log_settings.duration)
+    data_logger.set_log_groups(groups)
+    data_logger.set_output_folder(log_settings.output_directory)
+    data_logger.start_logging()
+
+def stop_logging(data_logger: DataLogger):
+    if not data_logger.is_logging():
+        return
+    data_logger.stop_logging()
 
 import threading
 import time
@@ -151,33 +179,10 @@ class DataLogWindow(StagedView):
         firmware_selector.show_file_dialog()
 
     def start_logging(self):
-        if self.data_logger.is_logging():
-            return
-
-        groups = []
-        for device in self.device_manager.threespace_manager.get_devices():
-            if not device.is_open or device.in_bootloader: continue 
-            device.set_response_header(success_fail=self.log_settings.header_status, timestamp=self.log_settings.header_timestamp, 
-                                       echo=self.log_settings.header_echo, checksum=self.log_settings.header_checksum, 
-                                       serial_number=self.log_settings.header_serial, data_len=self.log_settings.header_length)
-            stream_options = self.log_settings.get_slots_for_serial(device.cached_serial_number)
-            log_device = ThreeSpaceLogDevice(device, stream_options, 
-                                             self.log_settings.hz, binary=self.log_settings.binary_mode,
-                                             sync_timestamp=self.log_settings.synchronize_timestamp)
-            groups.append(DefaultLogGroup([log_device], device.name, csv=not self.log_settings.binary_mode))
-        if len(groups) == 0:
-            Logger.log_warning("No available log devices connected.")
-            return
-
-        self.data_logger.set_duration(self.log_settings.duration)
-        self.data_logger.set_log_groups(groups)
-        self.data_logger.set_output_folder(self.log_settings.output_directory)
-        self.data_logger.start_logging()
+        start_logging(self.data_logger, self.device_manager, self.log_settings)
 
     def stop_logging(self):
-        if not self.data_logger.is_logging():
-            return
-        self.data_logger.stop_logging()
+        stop_logging(self.data_logger)
 
     def on_data_logger_stopped(self):
         dpg.set_value(self.fps_text, "0")
