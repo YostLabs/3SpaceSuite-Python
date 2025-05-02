@@ -18,6 +18,7 @@ class StagedView:
         dpg.unstage(self._stage_id)
         if parent is not None:
             dpg.pop_container_stack()
+        return self
 
     """
     This is just a way to notify the staged view it is being closed
@@ -38,3 +39,51 @@ class StagedView:
                 for child in dpg.get_item_children(self._stage_id, slot):
                     dpg.delete_item(child)
             dpg.delete_item(self._stage_id)
+
+class StagedTabManager(StagedView):
+
+    def __init__(self):
+        self.staged_view_dict: dict[int,StagedView] = None
+        self.deleted = False
+        self.open_tab = None
+        self.tab_bar = None
+
+    def add_tab(self, tab: int, view: StagedView):
+        if self.staged_view_dict is None: self.staged_view_dict = {}
+        self.staged_view_dict[tab] = view
+
+    def set_open_tab(self, tab: int):
+        self.open_tab = tab
+        if self.tab_bar is not None:
+            #Have to initialize the tab value for DPG to track it
+            #Visuals will work without this, but dpg.get_value() on notify_opened would not
+            dpg.set_value(self.tab_bar, tab)
+
+    def set_tab_bar(self, tab_bar: int):
+        """
+        Call before set_open_tab
+        """
+        self.tab_bar = tab_bar
+        dpg.set_item_callback(tab_bar, self.__tab_callback)
+
+    def notify_opened(self):
+        if self.deleted or self.staged_view_dict is None: return
+        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_opened()
+
+    def notify_closed(self):
+        if self.deleted or self.staged_view_dict is None: return
+        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_closed()
+
+    def __tab_callback(self, sender, app_data, user_data):
+        if self.deleted: return
+        if self.open_tab is not None and self.open_tab != app_data:
+            self.staged_view_dict[self.open_tab].notify_closed()
+        self.open_tab = app_data
+        self.staged_view_dict[app_data].notify_opened()
+    
+    def delete(self):
+        if self.staged_view_dict is not None:
+            for window in self.staged_view_dict.values():
+                window.delete()
+        super().delete()
+        self.deleted = True

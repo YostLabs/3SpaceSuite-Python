@@ -3,7 +3,7 @@ import dpg_ext.extension_functions as dpg_ext
 from dpg_ext.log_window import MultilineText
 from dpg_ext.selectable_button import SelectableButton
 from dpg_ext.filtered_dropdown import FilteredDropdown
-from dpg_ext.staged_view import StagedView
+from dpg_ext.staged_view import StagedView, StagedTabManager
 from dpg_ext.global_lock import dpg_lock
 
 from devices import ThreespaceDevice, StreamableCommands, ThreespaceStreamingManager, ThreespaceStreamingStatus, ThreespaceCommandInfo, threespace_consts
@@ -49,7 +49,7 @@ class SensorBanner(SelectableButton):
         return f"{self.device.name} ({self.device.com_type})"
 
 
-class SensorMasterWindow(StagedView):
+class SensorMasterWindow(StagedTabManager):
     """
     The window that contains all the other windows
     that are specific to a sensor. Can also handle
@@ -60,6 +60,7 @@ class SensorMasterWindow(StagedView):
     INVISIBLE_THEME = None
 
     def __init__(self, threespace_device: ThreespaceDevice, sensor_banner: SensorBanner, macro_manager: MacroManager):
+        super().__init__()
         if SensorMasterWindow.DISCONNECT_THEME is None:
             with dpg.theme(label="SensorDisconnectTheme") as SensorMasterWindow.DISCONNECT_THEME:
                 with dpg.theme_component(dpg.mvTabButton):
@@ -77,59 +78,54 @@ class SensorMasterWindow(StagedView):
                 self.connection_window.submit()
 
         #On connection, the actual window will be loaded
-        self.staged_view_dict = None
-
         self.macro_manager = macro_manager
         self.device = threespace_device
-        self.deleted = False
 
     def load_firmware_windows(self):
         dpg.push_container_stack(self.child_window)
-        self.staged_view_dict: dict[int,StagedView] = {}
-        with dpg.tab_bar(label="Sensor Tabs", callback=self.__tab_callback) as self.tab_bar:
+        with dpg.tab_bar(label="Sensor Tabs"):
+            self.set_tab_bar(dpg.top_container_stack())
             with dpg.tab(label="Orientation") as self.main_tab:
                 orientation_window = SensorOrientationWindow(self.device)
                 orientation_window.submit(dpg.top_container_stack())
-                self.staged_view_dict[dpg.top_container_stack()] = orientation_window
+                self.add_tab(dpg.top_container_stack(), orientation_window)
             with dpg.tab(label="Terminal"):
                 self.terminal_window = SensorTerminalWindow(self.device, self.macro_manager)
                 self.terminal_window.submit(dpg.top_container_stack())     
-                self.staged_view_dict[dpg.top_container_stack()] = self.terminal_window                          
+                self.add_tab(dpg.top_container_stack(), self.terminal_window)                       
             with dpg.tab(label="Data Charts"):
                 self.data_window = SensorDataChartsWindow(self.device)
                 self.data_window.submit(dpg.top_container_stack())   
-                self.staged_view_dict[dpg.top_container_stack()] = self.data_window
+                self.add_tab(dpg.top_container_stack(), self.data_window)
             with dpg.tab(label="EEPTS"):
                 eepts_window = EeptsWindow(self.device)
                 eepts_window.submit(dpg.top_container_stack())   
-                self.staged_view_dict[dpg.top_container_stack()] = eepts_window               
+                self.add_tab(dpg.top_container_stack(), eepts_window)          
             with dpg.tab(label="Calibration"):
                 self.calibration_window = SensorCalibrationWindow(self.device)
                 self.calibration_window.submit(dpg.top_container_stack())
-                self.staged_view_dict[dpg.top_container_stack()] = self.calibration_window
+                self.add_tab(dpg.top_container_stack(), self.calibration_window)
             with dpg.tab(label="Settings"):
                 self.settings_window = SensorSettingsWindow(self.device)
                 self.settings_window.submit(dpg.top_container_stack())
-                self.staged_view_dict[dpg.top_container_stack()] = self.settings_window
+                self.add_tab(dpg.top_container_stack(), self.settings_window)
             dpg.add_tab_button(label="          ")
             dpg.bind_item_theme(dpg.last_item(), SensorMasterWindow.INVISIBLE_THEME)
             dpg.add_tab_button(label="Disconnect", callback=self.__disconnect_selected)
             dpg.bind_item_theme(dpg.last_item(), SensorMasterWindow.DISCONNECT_THEME)
         dpg.pop_container_stack()
 
-        self.open_tab = self.main_tab
-        #Have to initialize the tab value for DPG to track it
-        #Visuals will work without this, but dpg.get_value() on notify_opened would not
-        dpg.set_value(self.tab_bar, self.open_tab)
+        self.set_open_tab(self.main_tab)
         self.notify_opened()
 
     def load_bootloader_windows(self):
         dpg.push_container_stack(self.child_window)
-        self.staged_view_dict: dict[int,StagedView] = {}
-        with dpg.tab_bar(label="Sensor Tabs", callback=self.__tab_callback) as self.tab_bar:  
+        with dpg.tab_bar(label="Sensor Tabs") as self.tab_bar:  
+            self.set_tab_bar(dpg.top_container_stack())
             with dpg.tab(label="Settings") as self.main_tab:
                 settings_window = BootloaderSettingsWindow(self.device)
                 settings_window.submit(dpg.top_container_stack())
+                self.add_tab(dpg.top_container_stack(), settings_window)
                 self.staged_view_dict[dpg.top_container_stack()] = settings_window
             with dpg.tab(label="Terminal"):
                 terminal_window = BootloaderTerminalWindow(self.device)
@@ -141,10 +137,7 @@ class SensorMasterWindow(StagedView):
             dpg.bind_item_theme(dpg.last_item(), SensorMasterWindow.DISCONNECT_THEME)
         dpg.pop_container_stack()
 
-        self.open_tab = self.main_tab
-        #Have to initialize the tab value for DPG to track it
-        #Visuals will work without this, but dpg.get_value() on notify_opened would not
-        dpg.set_value(self.tab_bar, self.open_tab)
+        self.set_open_tab(self.main_tab)
         self.notify_opened()
 
     def on_sensor_opened(self):
@@ -156,30 +149,11 @@ class SensorMasterWindow(StagedView):
             self.load_bootloader_windows()
         else:
             self.load_firmware_windows()
-        
-
-    def notify_opened(self):
-        if self.deleted or self.staged_view_dict is None: return
-        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_opened()
-
-    def notify_closed(self):
-        if self.deleted or self.staged_view_dict is None: return
-        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_closed()
-
-    def __tab_callback(self, sender, app_data, user_data):
-        if self.deleted: return
-        if self.open_tab is not None and self.open_tab != app_data:
-            self.staged_view_dict[self.open_tab].notify_closed()
-        self.open_tab = app_data
-        self.staged_view_dict[app_data].notify_opened()
 
     def __disconnect_selected(self):
         self.device.disconnect()
 
     def delete(self):
-        if self.staged_view_dict is not None:
-            for window in self.staged_view_dict.values():
-                window.delete()
         if self.connection_window is not None:
             self.connection_window.delete()
         super().delete()
