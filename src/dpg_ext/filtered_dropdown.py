@@ -61,7 +61,13 @@ class FilteredDropdown(StagedView):
 
     def remove_item(self, item):
         if item in self.selectables:
-            self.selectables.pop(item)
+            selectable = self.selectables.pop(item)
+            dpg.delete_item(selectable)
+
+    def clear_all_items(self):
+        for selectable in self.selectables.values():
+            dpg.delete_item(selectable)
+        self.selectables.clear()
 
     def get_value(self):
         if self.allow_custom:
@@ -162,13 +168,23 @@ class FilteredDropdown(StagedView):
             pos = get_global_item_pos(self.dropdown_input)
             viewport_height = dpg.get_viewport_height()
 
-            dropdown_popup_pos = (pos[0], pos[1] + height)
+            dropdown_popup_pos_down = (pos[0], pos[1] + height)
+            dropdown_popup_pos_base_up = (pos[0], pos[1] - 4)
             num_selectables = len(self.selectables)
             text_height = dpg.get_text_size("")[1]
             selectables_height = 8 * 2 + (num_selectables - 1) * 4 + num_selectables * text_height #Window_padding + (len - 1) * item_spacing + len * text_height
             #Idk why this is off by a bit less then 50, but I am just going to do -50 anyways.
             #I think it has to do with the title and menu bar, just don't care to check
-            dropdown_height = min(self.window_height, viewport_height - 50 - dropdown_popup_pos[1], selectables_height)
+            dropdown_height_down = min(self.window_height, viewport_height - dropdown_popup_pos_down[1] - 50, selectables_height)
+            dropdown_height_up = min(self.window_height, selectables_height, dropdown_popup_pos_base_up[1])
+
+            if dropdown_height_up > dropdown_height_down:
+                dropdown_height = dropdown_height_up
+                #The previous pos was at the base, move the pos to the top
+                dropdown_popup_pos = (dropdown_popup_pos_base_up[0], dropdown_popup_pos_base_up[1] - dropdown_height)
+            else:
+                dropdown_height = dropdown_height_down
+                dropdown_popup_pos = dropdown_popup_pos_down
 
             self.__set_selected(self.selected_selectable) #Make sure only the current value is selected
 
