@@ -48,7 +48,9 @@ class StagedTabManager(StagedView):
         self.open_tab = None
         self.tab_bar = None
 
-    def add_tab(self, tab: int, view: StagedView):
+    def add_tab(self, view: StagedView, tab: int = None):
+        if tab is None:
+            tab = dpg.top_container_stack()
         if self.staged_view_dict is None: self.staged_view_dict = {}
         self.staged_view_dict[tab] = view
 
@@ -59,10 +61,12 @@ class StagedTabManager(StagedView):
             #Visuals will work without this, but dpg.get_value() on notify_opened would not
             dpg.set_value(self.tab_bar, tab)
 
-    def set_tab_bar(self, tab_bar: int):
+    def set_tab_bar(self, tab_bar: int = None):
         """
         Call before set_open_tab
         """
+        if tab_bar is None:
+            tab_bar = dpg.top_container_stack()
         self.tab_bar = tab_bar
         dpg.set_item_callback(tab_bar, self.__tab_callback)
 

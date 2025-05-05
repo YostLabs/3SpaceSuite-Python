@@ -37,11 +37,9 @@ class LoggerMasterWindow(StagedTabManager):
             with dpg.tab_bar(label="Logger Tabs"):
                 self.set_tab_bar(dpg.top_container_stack())
                 with dpg.tab(label="Logging") as self.logging_tab:
-                    self.data_log_window = DataLogWindow(device_manager, data_logger, log_settings)
-                    self.data_log_window.submit(dpg.top_container_stack())
-                    self.add_tab(dpg.top_container_stack(), self.data_log_window)
+                    self.add_tab(DataLogWindow(device_manager, data_logger, log_settings).submit())
                 with dpg.tab(label="Log Config"):
-                    self.data_log_config_window = DataLogConfigWindow(device_manager, log_settings)  
+                    self.add_tab(DataLogConfigWindow(device_manager, log_settings).submit())
                     self.data_log_config_window.submit(dpg.top_container_stack())
                     self.add_tab(dpg.top_container_stack(), self.data_log_config_window)
         

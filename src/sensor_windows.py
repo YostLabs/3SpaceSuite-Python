@@ -87,29 +87,17 @@ class SensorMasterWindow(StagedTabManager):
         with dpg.tab_bar(label="Sensor Tabs"):
             self.set_tab_bar(dpg.top_container_stack())
             with dpg.tab(label="Orientation") as self.main_tab:
-                orientation_window = SensorOrientationWindow(self.device)
-                orientation_window.submit(dpg.top_container_stack())
-                self.add_tab(dpg.top_container_stack(), orientation_window)
+                self.add_tab(SensorOrientationWindow(self.device).submit())
             with dpg.tab(label="Terminal"):
-                self.terminal_window = SensorTerminalWindow(self.device, self.macro_manager)
-                self.terminal_window.submit(dpg.top_container_stack())     
-                self.add_tab(dpg.top_container_stack(), self.terminal_window)                       
+                self.add_tab(SensorTerminalWindow(self.device, self.macro_manager).submit())                   
             with dpg.tab(label="Data Charts"):
-                self.data_window = SensorDataChartsWindow(self.device)
-                self.data_window.submit(dpg.top_container_stack())   
-                self.add_tab(dpg.top_container_stack(), self.data_window)
+                self.add_tab(SensorDataChartsWindow(self.device).submit())
             with dpg.tab(label="EEPTS"):
-                eepts_window = EeptsWindow(self.device)
-                eepts_window.submit(dpg.top_container_stack())   
-                self.add_tab(dpg.top_container_stack(), eepts_window)          
+                self.add_tab(EeptsWindow(self.device).submit())       
             with dpg.tab(label="Calibration"):
-                self.calibration_window = SensorCalibrationWindow(self.device)
-                self.calibration_window.submit(dpg.top_container_stack())
-                self.add_tab(dpg.top_container_stack(), self.calibration_window)
+                self.add_tab(SensorCalibrationWindow(self.device).submit())
             with dpg.tab(label="Settings"):
-                self.settings_window = SensorSettingsWindow(self.device)
-                self.settings_window.submit(dpg.top_container_stack())
-                self.add_tab(dpg.top_container_stack(), self.settings_window)
+                self.add_tab(SensorSettingsWindow(self.device).submit())
             dpg.add_tab_button(label="          ")
             dpg.bind_item_theme(dpg.last_item(), SensorMasterWindow.INVISIBLE_THEME)
             dpg.add_tab_button(label="Disconnect", callback=self.__disconnect_selected)
@@ -124,14 +112,9 @@ class SensorMasterWindow(StagedTabManager):
         with dpg.tab_bar(label="Sensor Tabs") as self.tab_bar:  
             self.set_tab_bar(dpg.top_container_stack())
             with dpg.tab(label="Settings") as self.main_tab:
-                settings_window = BootloaderSettingsWindow(self.device)
-                settings_window.submit(dpg.top_container_stack())
-                self.add_tab(dpg.top_container_stack(), settings_window)
-                self.staged_view_dict[dpg.top_container_stack()] = settings_window
+                self.add_tab(BootloaderSettingsWindow(self.device).submit())
             with dpg.tab(label="Terminal"):
-                terminal_window = BootloaderTerminalWindow(self.device)
-                terminal_window.submit(dpg.top_container_stack())     
-                self.staged_view_dict[dpg.top_container_stack()] = terminal_window                          
+                self.add_tab(BootloaderTerminalWindow(self.device).submit())                        
             dpg.add_tab_button(label="          ")
             dpg.bind_item_theme(dpg.last_item(), SensorMasterWindow.INVISIBLE_THEME)
             dpg.add_tab_button(label="Disconnect", callback=self.__disconnect_selected)
@@ -457,22 +440,6 @@ class SensorTerminalWindow(StagedView):
         #Needs to be done in the main loop to not steal responses from windows, such
         #as orientation, changing settings while shutting down
         MainLoopEventQueue.queue_sync_event(self.__read_terminal)
-
-    def submit(self, parent=None):
-        """
-        Puts the SensorWindow in the parent component,
-        else creates its own window
-        """
-        if parent is not None:
-            self.container = parent
-            dpg.push_container_stack(self.container)
-        else:
-            self.container = dpg.add_window(label="SensorTerminalWindow", pos=(200, 200))
-            dpg.push_container_stack(self.container)
-
-        dpg.unstage(self._stage_id)
-       
-        dpg.pop_container_stack()
 
     def delete(self):
         dpg.delete_item(self.terminal_handler)
@@ -2194,22 +2161,6 @@ class BootloaderTerminalWindow(StagedView):
         #Needs to be done in the main loop to not steal responses from windows, such
         #as orientation, changing settings while shutting down
         MainLoopEventQueue.queue_sync_event(self.__read_terminal)
-
-    def submit(self, parent=None):
-        """
-        Puts the SensorWindow in the parent component,
-        else creates its own window
-        """
-        if parent is not None:
-            self.container = parent
-            dpg.push_container_stack(self.container)
-        else:
-            self.container = dpg.add_window(label="SensorTerminalWindow", pos=(200, 200))
-            dpg.push_container_stack(self.container)
-
-        dpg.unstage(self._stage_id)
-       
-        dpg.pop_container_stack()
 
     def delete(self):
         dpg.delete_item(self.terminal_handler)
