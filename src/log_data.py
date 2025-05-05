@@ -62,11 +62,18 @@ class DefaultLogGroup(LogGroup):
             Logger.log_error(f"Failed to setup log group {self.name}")
             return
         
+        #Create the folder for this group
+        output_folder = output_folder / self.name
+        if not output_folder.exists():
+            output_folder.mkdir()
+
         #Create metadata files
         for device in self.devices:
             metadata = device.get_metadata()
             if metadata is not None:
-                with open((output_folder / f"{self.name}.cfg").resolve().as_posix(), "w") as fp:
+                base_name = "settings" if len(self.devices) == 1 else f"{self.name}"
+                out_location = output_folder / f"{base_name}.cfg"
+                with open(out_location.resolve().as_posix(), "w") as fp:
                     fp.write(metadata)
 
         ext = "csv" if self.is_csv else "bin"

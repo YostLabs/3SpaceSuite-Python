@@ -203,8 +203,10 @@ class ThreeSpaceLogDevice(LoggableDevice):
         return result
 
     def get_metadata(self):
+        serial_number = self.device.get_serial_number()
         settings = self.device.get_all_settings()
-        setting_string = '\n'.join(f"{key}={value}" for key, value in settings.items())
+        setting_string = f"serial_number=0x{serial_number:x}\n"
+        setting_string += '\n'.join(f"{key}={value}" for key, value in settings.items())
         return setting_string
 
     def get_errors(self) -> list[LogError]:
