@@ -63,6 +63,7 @@ class GlOrientationViewer:
         self.background_color = background_color
         self.view_perspective = (self.width, self.height)
 
+        self.data_type = "quat"
         self.orientation = np.array([0, 0, 0, 1], dtype=np.float32)
     
     def set_orientation_quat(self, quat: list[float]):
