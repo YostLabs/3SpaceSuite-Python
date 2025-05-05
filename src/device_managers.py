@@ -138,8 +138,16 @@ class ThreespaceManager:
         else:
             self.settings = ThreespaceManagerSettings(**setting_dict)
 
-    def discover_devices(self):
-        #---------------------Find what ports have ThreeSpace Sensors--------------------------------
+    def __show_ble_device(self, device: ThreespaceBLEComClass):
+        if device.address in self.settings.ble.deny: return False #In the reject List
+        if self.settings.ble.show_hidden: return True #Show all is set
+        if device.address in self.settings.ble.allow: return True #explicitly allowed
+        if device.name is None: return False #None names have no chance of matching the filter
+        if device.name.startswith(self.settings.ble.filter): return True #Matched the filter, so allowed
+        return False #Default to hidden unless allowed by the settings above
+    
+    #---------------------Find potential com classes for ThreespaceSensors--------------------------------
+    def __discover_coms(self):
         valid_coms = []
         if self.settings.serial.enabled:
             for port in ThreespaceSerialComClass.enumerate_ports():
@@ -150,43 +158,43 @@ class ThreespaceManager:
         
         if self.ble_supported and self.settings.ble.enabled:
             for ble_device in ThreespaceBLEComClass.auto_detect():
-                if ble_device.address in self.settings.ble.deny: continue #In the deny List
-                if not self.settings.ble.show_hidden and \
-                    not ble_device.address in self.settings.ble.allow and \
-                    not ble_device.name is None and \
-                    not ble_device.name.startswith(self.settings.ble.filter): continue #Not a valid name for current filter and not an exception
+                if not self.__show_ble_device(ble_device): continue
                 valid_coms.append(ble_device)
         
-        #-----------------------------Update/Remove ports that have been disconnected--------------------------------
+        return valid_coms
+
+    #-----------------------------Update/Remove connected ports based on potential ports--------------------------------
+    def __update_registered_devices(self, available_coms: list[ThreespaceComClass]):
+        #Cache this before adding coms to minimize checks
         cur_devices = list(self.devices.keys())
+
+        #Add ports that haven't been registered
+        for com in available_coms:
+            if not self.is_com_registered(com):
+                self.add_device_by_com(com)
+            else:
+                self.update_device_by_com(com)
+
         for com in cur_devices:
-            if self.devices[com].device.is_open: 
+            #--------------Handle active devices----------------------
+            if self.devices[com].device.is_open:
                 #If its a ble device, make sure to flag its address as a valid address
                 if isinstance(com, ThreespaceBLEComClass) and not com.address in self.settings.ble.allow:
                     self.settings.ble.allow.append(com.address)
-                continue #Don't remove already opened devices
-            valid = False
-            for other in valid_coms:
-                if self.are_coms_equal(com, other):
-                    valid = True
-                    break
-            if not valid:
-                self.remove_device_by_com(com)
+            
+            #-------------Handle inactive devices------------------
+            else:
+                available = False
+                for available_com in available_coms:
+                    if self.are_coms_equal(com, available_com): #The current device is still available for connection, so leave it connected
+                        available = True
+                        break
+                if not available:
+                    self.remove_device_by_com(com)
 
-        #Add ports that haven't been connected
-        for com in valid_coms:
-            if not self.is_com_registered(com):
-                self.add_device_by_com(com)
+    def discover_devices(self):
+        self.__update_registered_devices(self.__discover_coms())
 
-        # if platform.system() == 'Linux': #For Linux, gotta also browse the RPI UART Ports
-        #     for port in self.POTENTIAL_RPI_PORTS:
-        #         if port in self.devices:
-        #             if not self.devices[port].device.is_connected(prevent_disconnect=True): #Prevent disconnect just meant to silence errors
-        #                 self.remove_device_by_port(port)
-        #         else:
-        #             if is_threespace_detected(port):
-        #                 self.add_device_by_port(port)
-    
     def are_coms_equal(self, a: ThreespaceComClass, b: ThreespaceComClass):
         if type(a) is not type(b): return False
         if isinstance(a, ThreespaceSerialComClass):
@@ -220,6 +228,15 @@ class ThreespaceManager:
         self.devices[com] = group
         self.banner_menu.add_banner(group.banner)
         group.banner.add_selected_callback(lambda _: self.load_sensor_window(com))        
+
+    def update_device_by_com(self, com: ThreespaceComClass):
+        registered_com = self.get_registered_com(com)
+        if registered_com is None: return
+        if isinstance(registered_com, ThreespaceBLEComClass):
+            if com.name is not None and com.name != registered_com.name: #Name was updated
+                registered_com._ThresspaceBLEComClass__name = com.name
+                self.devices[registered_com].device.name = com.name
+        pass
 
     def remove_device_by_com(self, com: ThreespaceComClass):
         com = self.get_registered_com(com)

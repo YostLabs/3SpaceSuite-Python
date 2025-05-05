@@ -47,6 +47,9 @@ class ThreespaceDevice:
         else:
             self._name = "3SpaceUnknown"
         
+        if self._name is None:
+            self._name = "Unknown"
+        
         self.property_update_callbacks = []
 
         self.silence_errors = False
