@@ -12,7 +12,7 @@ PLATFORM_FOLDERS_ROAMING = PlatformDirs(INTERNAL_APPNAME, APP_AUTHOR, roaming=Tr
 APPLICATION_FOLDER = pathlib.Path(__file__).parent.parent.parent
 
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'): #From PyInstaller. So parent = _internal, want that folders parent
-    RESOURCE_FOLDER = pathlib.Path(__file__).with_name("resources")
+    RESOURCE_FOLDER = pathlib.Path(__file__).parent.with_name("resources")
 else:
     RESOURCE_FOLDER = APPLICATION_FOLDER / "resources"
 
