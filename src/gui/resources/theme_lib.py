@@ -27,8 +27,10 @@ hyperlink_theme = None
 
 red_button_theme = None
 
+round_theme = None
+
 def init():
-    global plot_x_line_theme, plot_y_line_theme, plot_z_line_theme, plot_w_line_theme, plot_indicator_theme, connect_button_theme, hyperlink_theme, red_button_theme
+    global plot_x_line_theme, plot_y_line_theme, plot_z_line_theme, plot_w_line_theme, plot_indicator_theme, connect_button_theme, hyperlink_theme, red_button_theme, round_theme
 
     with dpg.theme(label="plot_x_line_theme") as plot_x_line_theme:
         with dpg.theme_component(dpg.mvLineSeries):
@@ -60,5 +62,10 @@ def init():
         with dpg.theme_component(dpg.mvButton):
             dpg.add_theme_color(dpg.mvThemeCol_Button, (*color_disconnect_red, 200))   
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (*color_disconnect_red, 160))   
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (*color_disconnect_red, 180))            
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (*color_disconnect_red, 180))       
+
+    with dpg.theme(label="Round Slider") as round_theme:
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 12, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 12, category=dpg.mvThemeCat_Core)
         
