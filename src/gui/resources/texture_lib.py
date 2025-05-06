@@ -1,5 +1,5 @@
 import dearpygui.dearpygui as dpg
-from resource_manager import *
+from managers.resource_manager import *
 
 class Texture:
 

@@ -1,6 +1,6 @@
 import dataclasses
 from utility import PropertyDict
-from resource_manager import *
+from managers.resource_manager import *
 import dearpygui.dearpygui as dpg
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingOption, StreamableCommands
 

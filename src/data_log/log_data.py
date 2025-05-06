@@ -1,5 +1,5 @@
-from log_devices import LoggableDevice, ThreeSpaceLogDevice
-from log_errors import LogError, ErrorLevel, ErrorLevels
+from data_log.log_devices import LoggableDevice, ThreeSpaceLogDevice
+from data_log.log_errors import LogError, ErrorLevel, ErrorLevels
 from utility import Logger, Callback
 import threading
 import traceback
@@ -179,7 +179,7 @@ class DefaultLogGroup(LogGroup):
         elif error.level == ErrorLevels.MAJOR:
             Logger.log_error(f"{timestamp}    {error.msg}")
 
-from device_managers import DeviceManager
+from managers.device_managers import DeviceManager
 from utility import str_to_foldername
 class DataLogger:
 

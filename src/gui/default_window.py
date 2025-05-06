@@ -1,4 +1,4 @@
-from resource_manager import *
+from managers.resource_manager import *
 
 import PIL.Image
 import dearpygui.dearpygui as dpg

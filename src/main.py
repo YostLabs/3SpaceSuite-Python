@@ -7,11 +7,11 @@ import sys
 import bleak.backends.winrt.util as bleak_util
 bleak_util.allow_sta() #Using a GUI that handles the event loop without a background thread for asyncio, so allow_sta
 print("Starting main")
-from resource_manager import *
+from managers.resource_manager import *
 import dearpygui.dearpygui as dpg
-from gl_renderer import GL_Renderer
-from main_menubar import MenuBar
-import theme_lib, obj_lib, texture_lib
+from graphics.gl_renderer import GL_Renderer
+from gui.main_menubar import MenuBar
+import gui.resources.theme_lib as theme_lib, gui.resources.obj_lib as obj_lib, gui.resources.texture_lib as texture_lib
 import time
 
 #Initialization
@@ -30,7 +30,7 @@ FileDialog.set_image_root(image_root.as_posix() + "/")
 
 from utility import Logger, MainLoopEventQueue
 Logger.init()
-from core_ui import FontManager
+from gui.core_ui import FontManager
 GL_Renderer.init()
 obj_lib.init()
 
@@ -49,16 +49,16 @@ with dpg.window(label="Main Window") as primary_window:
         dpg.add_table_column(width_stretch=True, init_width_or_weight=800, label="SelectedViewCol")
         with dpg.table_row(label="Table Row"):
             with dpg.table_cell(label="Banner Menu Cell"):
-                from core_ui import BannerMenu
+                from gui.core_ui import BannerMenu
                 banner_menu = BannerMenu()
                 banner_menu.submit()
             with dpg.table_cell(label="Viewport Cell"):
-                from core_ui import DynamicViewport
+                from gui.core_ui import DynamicViewport
                 selected_viewport = DynamicViewport() #Just reserving space
                 selected_viewport.submit()
 
 
-from general_managers import GeneralManager
+from managers.general_managers import GeneralManager
 general_manager = GeneralManager(banner_menu, selected_viewport)
 menu = MenuBar(menu_bar, general_manager)
 

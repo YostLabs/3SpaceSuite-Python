@@ -2,7 +2,7 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-from gl_font_loader import TextRenderer, Font
+from graphics.gl_font_loader import TextRenderer, Font
 
 class GL_Renderer:
     initialized = False

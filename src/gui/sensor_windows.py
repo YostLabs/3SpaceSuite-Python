@@ -13,8 +13,8 @@ from utility import Logger, MainLoopEventQueue
 from dataclasses import dataclass, field
 from typing import Callable
 
-from core_ui import FontManager, DpgWizard
-import theme_lib, obj_lib, texture_lib
+from gui.core_ui import FontManager, DpgWizard
+import gui.resources.theme_lib as theme_lib, gui.resources.obj_lib as obj_lib, gui.resources.texture_lib as texture_lib
 
 import math
 import numpy as np
@@ -22,15 +22,16 @@ from yostlabs.math import quaternion
 from yostlabs.math import vector
 import pathlib
 
-from resource_manager import *
-from settings_manager import GenericSettingsManager
-from macro_manager import MacroManager, MacroConfigurationWindow, TerminalMacro
+from managers.resource_manager import *
+from managers.settings_manager import GenericSettingsManager
+from managers.macro_manager import MacroManager, TerminalMacro
+from gui.macro_window import MacroConfigurationWindow
 
-from gl_renderer import GL_Renderer
-from gl_orientation_window import GlOrientationViewer
-from gl_texture_renderer import TextureRenderer
+from graphics.gl_renderer import GL_Renderer
+from graphics.gl_orientation_window import GlOrientationViewer
+from graphics.gl_texture_renderer import TextureRenderer
 
-from orientation_view import OrientationView
+from gui.orientation_view import OrientationView
 
 SENSOR_SETTINGS_KEY = "sensor"
 

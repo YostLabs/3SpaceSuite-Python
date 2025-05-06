@@ -1,14 +1,14 @@
-from core_ui import BannerMenu, DynamicViewport
-from logger_windows import LoggerBanner, DataLogWindow, LoggerMasterWindow
+from gui.core_ui import BannerMenu, DynamicViewport
+from gui.logger_windows import LoggerBanner, DataLogWindow, LoggerMasterWindow
 
-from device_managers import DeviceManager
-from settings_manager import SettingsManager, GenericSettingsManager
-from macro_manager import MacroManager
+from managers.device_managers import DeviceManager
+from managers.settings_manager import SettingsManager, GenericSettingsManager
+from managers.macro_manager import MacroManager
 
-from default_window import DefaultWindow
+from gui.default_window import DefaultWindow
 
-from log_data import DataLogger
-from log_settings import LogSettings, LOG_SETTINGS_KEY
+from data_log.log_data import DataLogger
+from data_log.log_settings import LogSettings, LOG_SETTINGS_KEY
 
 class GeneralManager:
 

@@ -6,15 +6,15 @@ elements that require access to them
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from settings_manager import SettingsManager
+    from managers.settings_manager import SettingsManager
 
 from dpg_ext.global_lock import dpg_lock
 
 from devices import ThreespaceDevice
 from typing import NamedTuple
-from sensor_windows import SensorBanner, SensorMasterWindow
-from core_ui import BannerMenu, DynamicViewport
-from macro_manager import MacroManager
+from gui.sensor_windows import SensorBanner, SensorMasterWindow
+from gui.core_ui import BannerMenu, DynamicViewport
+from managers.macro_manager import MacroManager
 
 from yostlabs.tss3.api import ThreespaceSensor
 
@@ -64,9 +64,7 @@ class DeviceManager:
     def update(self):
         self.threespace_manager.update()
 
-import dearpygui.dearpygui as dpg
 ThreespaceGroup = NamedTuple("ThreespaceGroup", [("device", ThreespaceDevice), ("banner", SensorBanner), ("main_window", SensorMasterWindow)])
-from macro_manager import MacroConfigurationWindow
 
 @dataclasses.dataclass
 class SerialSettings:

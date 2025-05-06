@@ -4,7 +4,7 @@ and Logger logic
 """
 from devices import ThreespaceDevice, ThreespaceStreamingOption, StreamableCommands, ThreespaceStreamingStatus, ThreespaceCmdResult
 import yostlabs.tss3.consts as threespace_consts
-from log_errors import LogError, ErrorLevel, ErrorLevels
+from data_log.log_errors import LogError, ErrorLevel, ErrorLevels
 from utility import Logger
 
 from typing import NamedTuple, ClassVar

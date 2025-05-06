@@ -1,6 +1,6 @@
-from device_managers import ThreespaceManager
+from managers.device_managers import ThreespaceManager
 import dearpygui.dearpygui as dpg
-from core_ui import StagedView
+from gui.core_ui import StagedView
 
 class ThreespaceManagerToolbar(StagedView):
 

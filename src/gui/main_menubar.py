@@ -2,12 +2,12 @@ import dearpygui.dearpygui as dpg
 from dpg_ext.global_lock import dpg_lock
 from dpg_ext.themes import create_theme_imgui_dark, create_theme_imgui_light, create_theme_imgui_default
 
-from general_managers import GeneralManager
-from device_managers import DeviceManager
-from settings_manager import SettingsManager
+from managers.general_managers import GeneralManager
+from managers.device_managers import DeviceManager
+from managers.settings_manager import SettingsManager
 
-from default_window import createAboutWindow
-from device_managers_ui import ThreespaceManagerToolbar
+from gui.default_window import createAboutWindow
+from gui.device_managers_ui import ThreespaceManagerToolbar
 
 from utility import Logger
 import traceback

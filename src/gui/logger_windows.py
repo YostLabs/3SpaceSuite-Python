@@ -11,24 +11,24 @@ from dpg_ext.filtered_dropdown import FilteredDropdown
 from dpg_ext.log_window import LogWindow
 from third_party.file_dialog.fdialog import FileDialog
 
-from core_ui import FontManager
-import theme_lib
+from gui.core_ui import FontManager
+import gui.resources.theme_lib as theme_lib
 from typing import Callable
 
-from device_managers import DeviceManager, ThreespaceDevice
+from managers.device_managers import DeviceManager, ThreespaceDevice
 
 import dataclasses
 from dataclasses import dataclass
 from utility import WatchdogTimer, Logger
 import pathlib
-from resource_manager import *
+from managers.resource_manager import *
 
 from devices import StreamableCommands, ThreespaceStreamingOption
-from log_settings import LogSettings
+from data_log.log_settings import LogSettings
 
 class LoggerBanner(SelectableButton): ...
 
-from log_data import DataLogger
+from data_log.log_data import DataLogger
 class LoggerMasterWindow(StagedTabManager):
 
     def __init__(self, device_manager: DeviceManager, data_logger: DataLogger, log_settings: LogSettings):
@@ -40,8 +40,6 @@ class LoggerMasterWindow(StagedTabManager):
                     self.add_tab(DataLogWindow(device_manager, data_logger, log_settings).submit())
                 with dpg.tab(label="Log Config"):
                     self.add_tab(DataLogConfigWindow(device_manager, log_settings).submit())
-                    self.data_log_config_window.submit(dpg.top_container_stack())
-                    self.add_tab(dpg.top_container_stack(), self.data_log_config_window)
         
         self.set_open_tab(self.logging_tab)
 
@@ -76,8 +74,8 @@ def stop_logging(data_logger: DataLogger):
 
 import threading
 import time
-from log_data import DataLogger, DefaultLogGroup
-from log_devices import ThreeSpaceLogDevice
+from data_log.log_data import DataLogger, DefaultLogGroup
+from data_log.log_devices import ThreeSpaceLogDevice
 class DataLogWindow(StagedView):
 
     def __init__(self, device_manager: DeviceManager, data_logger: DataLogger, log_settings: LogSettings):

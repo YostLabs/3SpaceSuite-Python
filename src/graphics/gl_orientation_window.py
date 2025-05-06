@@ -1,7 +1,7 @@
 
-from objloader import OBJ
-from gl_texture_renderer import TextureRenderer
-from gl_font_loader import Font, TextRenderer
+from graphics.objloader import OBJ
+from graphics.gl_texture_renderer import TextureRenderer
+from graphics.gl_font_loader import Font, TextRenderer
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np

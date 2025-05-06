@@ -1,9 +1,9 @@
 import dearpygui.dearpygui as dpg
 
-from gl_texture_renderer import TextureRenderer
-from gl_orientation_window import GlOrientationViewer
-from gl_renderer import GL_Renderer
-from objloader import OBJ
+from graphics.gl_texture_renderer import TextureRenderer
+from graphics.gl_orientation_window import GlOrientationViewer
+from graphics.gl_renderer import GL_Renderer
+from graphics.objloader import OBJ
 
 import yostlabs.math.vector as vector
 import yostlabs.math.quaternion as yl_quat

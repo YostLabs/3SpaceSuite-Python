@@ -1,9 +1,9 @@
 """
 A place to load the object files one time for the entire application
 """
-from resource_manager import *
-from objloader import OBJ
-from settings_manager import SettingsManager
+from managers.resource_manager import *
+from graphics.objloader import OBJ
+from managers.settings_manager import SettingsManager
 from yostlabs.tss3.consts import *
 
 __YLDEFAULTMODELPATH = "DataLogger/DL3_standard v1.obj"

@@ -1,4 +1,4 @@
-from resource_manager import *
+from managers.resource_manager import *
 from dpg_ext.selectable_button import SelectableButton
 from dpg_ext.staged_view import StagedView
 from dpg_ext.extension_functions import center_window_handler_callback
