@@ -10,6 +10,8 @@ from gui.default_window import DefaultWindow
 from data_log.log_data import DataLogger
 from data_log.log_settings import LogSettings, LOG_SETTINGS_KEY
 
+import version
+
 class GeneralManager:
 
     def __init__(self, banner_menu: BannerMenu, window_viewport: DynamicViewport):
@@ -22,6 +24,7 @@ class GeneralManager:
         self.logger_manager = LoggerManager(banner_menu, window_viewport, self.device_manager)
 
         self.main_window = DefaultWindow()
+        version.load_version()
     
     def load_main_window(self):
         self.banner_menu.set_banner(None)

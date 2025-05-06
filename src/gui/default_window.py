@@ -63,15 +63,9 @@ class DefaultWindow(StagedView):
         dpg.delete_item(self.visible_handler)
         super().delete()
 
-VERSION = None
+
+import version
 def createAboutWindow():
-    global VERSION
-    if VERSION is None:
-        try:
-            with open(RESOURCE_FOLDER / "version.txt", 'r') as fp:
-                VERSION = fp.read()
-        except:
-            VERSION = "Unknown Version"
 
     def onWindowClose():
         nonlocal window
@@ -84,7 +78,7 @@ def createAboutWindow():
             dpg.add_table_column()
             with dpg.table_row():
                 dpg.add_table_cell()
-                dpg.add_text(VERSION)
+                dpg.add_text(version.get_version())
                 dpg.add_table_cell()
         dpg.add_text("Developers:")
         with dpg.group(indent=8):

@@ -10,6 +10,8 @@ from utility import Logger
 from typing import NamedTuple, ClassVar
 import time
 
+import version
+
 #To seperate the actual device logic from logging itself
 #LoggableDevice will be applied to another layer of abstraction/decorator
 #around the actual device instead of having the base device classes inherit from this
@@ -205,7 +207,7 @@ class ThreeSpaceLogDevice(LoggableDevice):
     def get_metadata(self):
         serial_number = self.device.get_serial_number()
         settings = self.device.get_all_settings()
-        setting_string = f"serial_number=0x{serial_number:x}\n"
+        setting_string = f"#Suite {version.get_version()}\nserial_number=0x{serial_number:x}\n"
         setting_string += '\n'.join(f"{key}={value}" for key, value in settings.items())
         return setting_string
 
