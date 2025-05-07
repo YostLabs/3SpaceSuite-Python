@@ -561,7 +561,7 @@ class FileDialog:
             self.fileinfo_to_row[fileinfo] = row
 
         def _makefile(item, callback, parent="explorer"):
-            if self.file_filter == ".*" or item.endswith(self.file_filter):
+            if self.file_filter == ".*" or any(item.endswith(v) for v in self.file_filter.split('/')):
                 file_name = os.path.basename(item)
 
                 creation_time = os.path.getctime(item)
