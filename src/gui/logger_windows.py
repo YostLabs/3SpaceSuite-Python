@@ -42,11 +42,12 @@ class LoggerMasterWindow(StagedTabManager):
                 with dpg.tab(label="Log Config"):
                     self.add_tab(DataLogConfigWindow(device_manager, log_settings).submit())
                 with dpg.tab(label="Orientation"):
-                    self.add_tab(OrientationReplayWindow().submit())
+                    self.orient_window = OrientationReplayWindow()
+                    self.add_tab(self.orient_window.submit())
                 with dpg.tab(label="Data Charts"):
                     self.add_tab(OrientationReplayWindow().submit())
                 with dpg.tab(label="Replay Config"):
-                    self.add_tab(ReplayConfigWindow(log_settings).submit())                                        
+                    self.add_tab(ReplayConfigWindow(self.orient_window, log_settings).submit())                                        
         
         self.set_open_tab(self.logging_tab)
 

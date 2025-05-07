@@ -4,8 +4,9 @@ settings that are required for interpreting raw data or the
 results of reading the data.
 """
 
-from yostlabs.tss3.api import ThreespaceHeaderInfo
-from yostlabs.tss3.utils.streaming import ThreespaceStreamingOption, StreamableCommands, get_stream_options_from_str
+from yostlabs.tss3.api import ThreespaceHeaderInfo, ThreespaceCmdResult, ThreespaceHeader
+from yostlabs.tss3.utils.streaming import ThreespaceStreamingOption, get_stream_options_from_str, stream_options_to_command
+from yostlabs.tss3.utils.parser import ThreespaceBinaryParser
 import yostlabs.math.vector as yl_vec
 
 from pathlib import Path
@@ -71,10 +72,14 @@ class TssDataFileSettings:
     stream_slots: list[ThreespaceStreamingOption] = dataclasses.field(default_factory=list)
     
     def __post_init__(self):
-        self.axis_order_info = yl_vec.parse_axis_string_info(self.axis_order)
+        self.update_axis_cache()
+        self.update_slot_cache()
 
     def update_axis_cache(self):
         self.axis_order_info = yl_vec.parse_axis_string_info(self.axis_order)
+
+    def update_slot_cache(self):
+        self.option_to_index = { option: i for i, option in enumerate(self.stream_slots) }
 
     @staticmethod
     def from_config_file(path: Path):
@@ -149,21 +154,103 @@ class TssDataFileSettings:
         
         return settings
 
+def cast_via_struct_char(value: str, format):
+    if format in "bBhHiIlLqQnN": #Integer types
+        if value.startswith("0x"):
+            value = int(value, 16)
+        else:
+            value = int(value)
+    elif format in "efd":
+        value = float(value)
+    return value
+
 @dataclasses.dataclass
 class TssDataFile:
     path: Path
 
     settings: TssDataFileSettings = dataclasses.field(default_factory=TssDataFileSettings)
 
+    def __post_init__(self):
+        self.data: list[ThreespaceCmdResult] = []
+
     def load_data(self):
-        pass
+        self.settings.update_slot_cache() #Allows faster lookup of values
 
-    @property
-    def length(self):
-        return 0
+        if self.path.suffix == ".csv":
+            self.__load_ascii()
+        elif self.path.suffix == ".bin":
+            self.__load_binary()
+        else:
+            raise ValueError("Unknown file type")
 
-    def __getitem__(self, key):
-        return None
+    def __load_ascii(self):
+        command = stream_options_to_command(self.settings.stream_slots) #Get the command object to figure out the data types
+        
+        command_out_formats = [cmd.out_format.strip('<') for cmd in command.commands if cmd is not None]
+        ascii_header_format = self.settings.header.format.strip('<') 
+        #Not going to use anything like pandas to load this. That would be excessive
+        with self.path.open('r') as fp:
+            fp.readline() #Skip the header line
+            for line in fp:
+                data = line.strip().split(',')
+
+                #Get the header
+                header_data = []
+                i = 0
+                for f in ascii_header_format:
+                    v = cast_via_struct_char(data[i], f)
+                    header_data.append(v)   
+                    i += 1  
+                header = ThreespaceHeader.from_tuple(tuple(header_data), self.settings.header)
+
+                command_data = []
+                #Get each commands output
+                for format in command_out_formats:
+                    converted_data = []
+                    for f in format:
+                        v = cast_via_struct_char(data[i], f)
+                        converted_data.append(v)
+                        i += 1
+                    if len(converted_data) == 1:
+                        command_data.append(converted_data[0])
+                    else:
+                        command_data.append(converted_data)
+                self.data.append(ThreespaceCmdResult(command_data, header))
+        
+        print("Loaded Ascii Data:")
+        print(self.data)
+
+
+    def __load_binary(self):
+        #Create the parser and load the data
+        parser = ThreespaceBinaryParser()
+        with self.path.open('rb') as fp:
+            parser.insert_data(fp.read())
+
+        #Configure reading the data
+        parser.set_header(self.settings.header)
+        parser.register_command(stream_options_to_command(self.settings.stream_slots))
+
+        #Get all the responses
+        result = parser.parse_message()
+        while result is not None:
+            self.data.append(result)
+            result = parser.parse_message()
+        
+        print("Loaded Data:")
+        print(self.data)
+    
+    def get_value(self, index, option: ThreespaceStreamingOption):
+        return self[index].data[self.settings.option_to_index[option]]
+
+    def get_header(self, index):
+        return self[index].header
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, key) -> ThreespaceCmdResult:
+        return self.data[key]
 
 
 if __name__ == "__main__":

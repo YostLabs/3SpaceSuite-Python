@@ -14,12 +14,20 @@ import gui.resources.obj_lib as obj_lib
 import gui.resources.theme_lib as theme_lib
 
 from yostlabs.math.vector import parse_axis_string_info
+from yostlabs.tss3.api import StreamableCommands
 from utility import MainLoopEventQueue, Logger
 
-from data_file import TssDataFile, TssDataFileSettings, validate_axis_order
+from data_file import TssDataFile, TssDataFileSettings, validate_axis_order, ThreespaceStreamingOption
 from data_log.log_settings import LogSettings
 
 from pathlib import Path
+
+TIME_BASED_INDEX = 0
+TIME_BASED_HEADER = 1
+TIME_BASED_CMD = 2
+
+TARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetTaredOrientation, None)
+UNTARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetUntaredOrientation, None)
 
 class OrientationReplayWindow(StagedView):
 
@@ -29,8 +37,12 @@ class OrientationReplayWindow(StagedView):
     def __init__(self):
         self.render_queued = False
 
-        self.playback_time_based = True
-        self.playback_speed = 1
+        self.playback_time_source = TIME_BASED_CMD
+        self.orientation_source: ThreespaceStreamingOption = None
+
+        self.data_file: TssDataFile = None
+        self.quat = [0, 0, 0, 1]
+        self.axis_info = parse_axis_string_info("xyz")
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
@@ -45,7 +57,7 @@ class OrientationReplayWindow(StagedView):
                     with dpg.group(horizontal=True):
                         #Which drag gets used will be based on whether the loaded data has timestamps in it or not
                         self.playback_time_drag = dpg.add_drag_float(label="Playback Speed", format="%0.01fx", width=80, 
-                                                                     default_value=self.playback_speed, speed=0.01, 
+                                                                     default_value=1, speed=0.01, 
                                                                      max_value=16, min_value=0.1, show=self.playback_time_based)
                         self.playback_hz_drag = dpg.add_drag_int(label="Playback Speed", format="%d Hz", width=100, 
                                                                  min_value=1, max_value=2000*16,
@@ -53,7 +65,7 @@ class OrientationReplayWindow(StagedView):
                         dpg.add_child_window(border=False, width=-115, height=1)
                         dpg.add_button(label="Pause")
                         dpg.add_button(label="Play")
-                    self.timeline_slider = dpg.add_slider_int(width=-1, format="%d/0", max_value=0, min_value=0, clamped=True, default_value=0)
+                    self.timeline_slider = dpg.add_slider_int(width=-1, format="%d/0", max_value=0, min_value=0, clamped=True, default_value=0, callback=self.__timeline_callback)
                     dpg.bind_item_theme(self.timeline_slider, theme_lib.round_theme)
                 self.grid.push(self.timeline_window, 0, 1)
             
@@ -62,17 +74,82 @@ class OrientationReplayWindow(StagedView):
             dpg.add_item_resize_handler(callback=self.__on_resize)
         dpg.bind_item_handler_registry(self.orientation_viewer.image, self.visible_handler)
     
-    def render_image(self):
-        self.orientation_viewer.render_image([0, 0, 0, 1], parse_axis_string_info("xyz"))
+    @property
+    def playback_time_based(self):
+        return self.playback_time_source != TIME_BASED_INDEX
 
+    def set_index(self, index: int):
+        if self.data_file is None or self.orientation_source is None: return
+        self.quat = self.data_file.get_value(index, self.orientation_source)
+        print("Setting quat:", self.quat)
+        self.queue_render()
+
+        dpg.set_value(self.timeline_slider, index+1)
+
+    def set_default(self):
+        """
+        Must be called from main thread
+        """
+        dpg.configure_item(self.timeline_slider, max_value=0, default_value=0)
+        self.quat = [0, 0, 0, 1]
+        self.axis_info = parse_axis_string_info("xyz")
+        self.queue_render()
+
+    def set_data_file(self, data_file: TssDataFile):
+        """
+        Must be called from main thread
+        """
+        self.set_default()
+        self.data_file = data_file
+        if len(data_file) == 0: return
+
+        if TARED_ORIENTATION_SOURCE in data_file.settings.stream_slots:
+            self.orientation_source = TARED_ORIENTATION_SOURCE
+        elif UNTARED_ORIENTATION_SOURCE in data_file.settings.stream_slots:
+            self.orientation_source = UNTARED_ORIENTATION_SOURCE
+        else:
+            self.orientation_source = None
+            return
+
+        #Set the time source
+        if ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None) in data_file:
+            self.set_time_source(TIME_BASED_CMD)
+        elif data_file.settings.header.timestamp_enabled:
+            self.set_time_source(TIME_BASED_HEADER)
+        else:
+            self.set_time_source(TIME_BASED_INDEX)
+            dpg.set_value(self.playback_hz_drag, data_file.settings.data_hz)
+        
+        self.axis_info = self.data_file.settings.axis_order_info
+
+        dpg.configure_item(self.timeline_slider, min_value=1, max_value=len(data_file), format=f"%d/{len(data_file)}")
+        self.set_index(0)
+
+    def set_time_source(self, source: int):
+        self.playback_time_source = source
+
+        if source == TIME_BASED_INDEX:
+            dpg.show_item(self.playback_hz_drag)
+            dpg.hide_item(self.playback_time_drag)
+        else:
+            dpg.show_item(self.playback_time_drag)
+            dpg.hide_item(self.playback_hz_drag)
+    
+    #This should almost always be used over render_image
     def queue_render(self):
         if self.render_queued: return
         self.render_queued = True
         MainLoopEventQueue.queue_sync_event(self.__render_image_queue)
 
+    def render_image(self):
+        self.orientation_viewer.render_image(self.quat, self.axis_info)
+
     def __render_image_queue(self):
         self.render_queued = False
         self.render_image()
+
+    def __timeline_callback(self, sender, app_data, user_data):
+        self.set_index(app_data-1)
 
     def notify_opened(self):
         MainLoopEventQueue.queue_sync_event(self.render_image)
@@ -94,8 +171,9 @@ class ReplayConfigWindow(StagedView):
 
     VALID_DATA_FILE_EXTENSIONS = (".csv", ".bin")
 
-    def __init__(self, log_settings: LogSettings):
+    def __init__(self, orient_window: OrientationReplayWindow, log_settings: LogSettings):
         self.log_settings = log_settings #Used for the default directory to load when file exploring
+        self.orient_window = orient_window
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window():
@@ -107,7 +185,7 @@ class ReplayConfigWindow(StagedView):
                     self.data_file_input = dpg.add_input_text(hint="Data File", width=-80)
                     dpg.add_button(label="Select", callback=self.__start_data_file_select)
                 dpg.add_spacer(height=20)
-                dpg.add_button(label="Load Data")
+                dpg.add_button(label="Load Data", callback=self.load_data)
 
                 dpg.add_separator()
                 dpg.add_text("Loaded Settings:")
@@ -190,8 +268,13 @@ class ReplayConfigWindow(StagedView):
             return
         
         data_file = TssDataFile(data_path, settings)
-        #Now what?
-        #Load the data into memory I guess
+        try:
+            data_file.load_data()
+        except Exception as e:
+            dpg_ext.create_popup_message(f"Failed to load data\n{e}", title="Error")
+            return
+        
+        self.orient_window.set_data_file(data_file)
 
     def set_settings_from_obj(self, settings: TssDataFileSettings):
         #Set all possible settings based on the loaded settings
