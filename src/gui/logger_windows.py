@@ -46,7 +46,7 @@ class LoggerMasterWindow(StagedTabManager):
                 with dpg.tab(label="Data Charts"):
                     self.add_tab(OrientationReplayWindow().submit())
                 with dpg.tab(label="Replay Config"):
-                    self.add_tab(ReplayConfigWindow().submit())                                        
+                    self.add_tab(ReplayConfigWindow(log_settings).submit())                                        
         
         self.set_open_tab(self.logging_tab)
 

@@ -4,6 +4,7 @@ Windows used for the replay tabs
 import dearpygui.dearpygui as dpg
 import dpg_ext.extension_functions as dpg_ext
 import third_party.dearpygui_grid as dpg_grid
+from third_party.file_dialog.fdialog import FileDialog
 
 from gui.core_ui import StagedView
 from gui.orientation_view import OrientationView
@@ -13,7 +14,12 @@ import gui.resources.obj_lib as obj_lib
 import gui.resources.theme_lib as theme_lib
 
 from yostlabs.math.vector import parse_axis_string_info
-from utility import MainLoopEventQueue
+from utility import MainLoopEventQueue, Logger
+
+from data_file import TssDataFile, TssDataFileSettings, validate_axis_order
+from data_log.log_settings import LogSettings
+
+from pathlib import Path
 
 class OrientationReplayWindow(StagedView):
 
@@ -86,17 +92,20 @@ class OrientationReplayWindow(StagedView):
     
 class ReplayConfigWindow(StagedView):
 
-    def __init__(self):
+    VALID_DATA_FILE_EXTENSIONS = (".csv", ".bin")
+
+    def __init__(self, log_settings: LogSettings):
+        self.log_settings = log_settings #Used for the default directory to load when file exploring
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window():
                 dpg.add_text("File Loading:")
                 with dpg.group(horizontal=True):
-                    dpg.add_button(label="Load from Folder")
-                    dpg.add_button(label="Load settings from file")
+                    dpg.add_button(label="Load from Folder", callback=self.__start_folder_select)
+                    dpg.add_button(label="Load settings from file", callback=self.__start_config_file_select)
                 with dpg.group(horizontal=True):
-                    dpg.add_input_text(hint="Data File")
-                    dpg.add_button(label="Select")
+                    self.data_file_input = dpg.add_input_text(hint="Data File", width=-80)
+                    dpg.add_button(label="Select", callback=self.__start_data_file_select)
                 dpg.add_spacer(height=20)
                 dpg.add_button(label="Load Data")
 
@@ -110,20 +119,242 @@ class ReplayConfigWindow(StagedView):
                             dpg.add_table_column()
                             dpg.add_table_column()
                             with dpg.table_row():
-                                dpg.add_checkbox(label="Status")
-                                dpg.add_checkbox(label="Timestamp")
-                                dpg.add_checkbox(label="Echo")
+                                self.status_box = dpg.add_checkbox(label="Status")
+                                self.timestamp_box = dpg.add_checkbox(label="Timestamp")
+                                self.echo_box = dpg.add_checkbox(label="Echo")
                             with dpg.table_row():
-                                dpg.add_checkbox(label="Checksum")
-                                dpg.add_checkbox(label="Serial#")
-                                dpg.add_checkbox(label="Length")
+                                self.checksum_box = dpg.add_checkbox(label="Checksum")
+                                self.serial_box = dpg.add_checkbox(label="Serial#")
+                                self.length_box = dpg.add_checkbox(label="Length")
                 with dpg.tree_node(label="Orientation", default_open=True):
-                    dpg.add_input_text(label="Axis Order", default_value="XYZ", width=200)
-                    dpg.add_combo(["DL", "MDI"], label="Model", width=200, default_value="DL")
+                    self.axis_order_input = dpg.add_input_text(label="Axis Order", width=200)
+                    self.model_combo = dpg.add_combo(["DL", "MDI"], label="Model", width=200)
                 
                 with dpg.tree_node(label="Data Gathering", default_open=True):
-                    dpg.add_input_float(label="Hz", width=200, default_value=200)
+                    self.data_hz_input = dpg.add_input_float(label="Hz", width=200)
                     dpg.add_text("Slots:")
                     self.stream_slots_menu = StreamingOptionSelectionMenu(None)
+        
+        with dpg.item_handler_registry() as self.edited_handler:
+            dpg.add_item_deactivated_after_edit_handler(callback=self.__axis_order_edited)
+        dpg.bind_item_handler_registry(self.axis_order_input, self.edited_handler)
 
-                
+        self.default_settings()
+
+    def default_settings(self):
+        dpg.set_value(self.status_box, False)
+        dpg.set_value(self.timestamp_box, False)
+        dpg.set_value(self.echo_box, False)
+        dpg.set_value(self.checksum_box, False)
+        dpg.set_value(self.serial_box, False)
+        dpg.set_value(self.length_box, False)
+
+        self.set_axis_order("XYZ")
+        dpg.set_value(self.model_combo, "DL") #TODO: CHANGE ME
+
+        dpg.set_value(self.data_hz_input, 200)
+        self.stream_slots_menu.overwrite_options([])
+
+    def load_config_file(self, path: Path):
+        self.default_settings() #Set settings back to default so if an error occurs, defaults are set
+
+        try:
+            #Note: This loads as much data as it can. Anything not available gets set to None.
+            settings = TssDataFileSettings.from_config_file(path)
+        except Exception as e:
+            Logger.log_error(f"Failed to load config file {path} with error {e}")
+            dpg.render_dearpygui_frame() #Required to allow the modal file explorer to close so the modal popup can show
+            dpg_ext.create_popup_message(f"Failed to load settings from {path.as_posix()}", title="Error", width=400)
+            return
+        
+        errors = self.set_settings_from_obj(settings)
+        if len(errors) > 0:
+            message = "Failed to load the following settings:\n"
+            for error in errors:
+                message += f"  {error}\n"
+            message += "\nPlease enter them manually or load a different file."
+            dpg.render_dearpygui_frame() #Required to allow the modal file explorer to close so the modal popup can show
+            dpg_ext.create_popup_message(message, title="Error", width=400)
+            print(message)
+
+    def load_data(self):
+        data_path = dpg.get_value(self.data_file_input)
+        data_path = Path(data_path)
+        if not data_path.exists() or data_path.suffix not in self.VALID_DATA_FILE_EXTENSIONS:
+            dpg_ext.create_popup_message("Invalid data path supplied.", title="Error")
+            return
+        
+        settings = self.get_settings()
+        if settings is None:
+            dpg_ext.create_popup_message("Invalid settings supplied.", title="Error")
+            return
+        
+        data_file = TssDataFile(data_path, settings)
+        #Now what?
+        #Load the data into memory I guess
+
+    def set_settings_from_obj(self, settings: TssDataFileSettings):
+        #Set all possible settings based on the loaded settings
+        errors = []
+        if settings.header is None:
+            errors.append("Header")
+        else:
+            dpg.set_value(self.status_box, settings.header.status_enabled)
+            dpg.set_value(self.timestamp_box, settings.header.timestamp_enabled)
+            dpg.set_value(self.echo_box, settings.header.echo_enabled)
+            dpg.set_value(self.checksum_box, settings.header.checksum_enabled)
+            dpg.set_value(self.serial_box, settings.header.serial_enabled)
+            dpg.set_value(self.length_box, settings.header.length_enabled)
+        
+        if settings.axis_order is None:
+            errors.append("Axis Order")
+        else:
+            dpg.set_value(self.axis_order_input, settings.axis_order)
+        
+        if settings.serial_no is None:
+            errors.append("Model")
+        else:
+            print("IMPLEMENT MODEL SELECTION NAME FROM SN")
+        
+        if settings.data_hz is None:
+            errors.append("Data Hz")
+        else:
+            dpg.set_value(self.data_hz_input, settings.data_hz)
+        
+        if settings.stream_slots is None:
+            errors.append("Stream Slots")
+        else:
+            self.stream_slots_menu.overwrite_options(settings.stream_slots)
+        
+        return errors
+
+    def get_settings(self):
+        settings = TssDataFileSettings()
+
+        #Header
+        settings.header.status_enabled = dpg.get_value(self.status_box)
+        settings.header.timestamp_enabled = dpg.get_value(self.timestamp_box)
+        settings.header.echo_enabled = dpg.get_value(self.echo_box)
+        settings.header.checksum_enabled = dpg.get_value(self.checksum_box)
+        settings.header.serial_enabled = dpg.get_value(self.serial_box)
+        settings.header.length_enabled = dpg.get_value(self.length_box)
+
+        #Axis Order
+        axis_order = dpg.get_value(self.axis_order_input)
+        #This shouldn't be required because the edited handler ensures the value is always valid
+        if not validate_axis_order(axis_order):
+            return None
+        
+        settings.axis_order = axis_order
+        settings.update_axis_cache()
+
+        settings.data_hz = dpg.get_value(self.data_hz_input)
+        settings.stream_slots = self.stream_slots_menu.get_options()
+
+        return settings
+
+    def __start_data_file_select(self, sender, app_data):
+        def on_close():
+            nonlocal selector
+            selector.destroy()
+
+        def on_select(selections):
+            on_close()
+            if len(selections) == 0:
+                return
+            path = Path(selections[0][1])
+            dpg.set_value(self.data_file_input, path.as_posix()) 
+        
+        default_path = self.log_settings.output_directory
+        filter_list = ['/'.join(self.VALID_DATA_FILE_EXTENSIONS)]
+        filter_list.extend(self.VALID_DATA_FILE_EXTENSIONS)
+        selector = FileDialog(title="Data File Selector", width=900, height=550, min_size=(700,400), files_only=True,
+                                            multi_selection=False, modal=True, on_select=on_select, on_cancel=on_close,
+                                            default_path=default_path.as_posix(), filter_list=filter_list, file_filter=filter_list[0], no_resize=False)        
+        selector.show_file_dialog()
+
+    def __start_config_file_select(self, sender, app_data):
+        def on_close():
+            nonlocal selector
+            selector.destroy()
+
+        def on_select(selections):
+            on_close()
+            if len(selections) == 0:
+                return
+
+            self.load_config_file(Path(selections[0][1]))         
+        
+        default_path = self.log_settings.output_directory
+        selector = FileDialog(title="Config File Selector", width=900, height=550, min_size=(700,400), files_only=True,
+                                            multi_selection=False, modal=True, on_select=on_select, on_cancel=on_close,
+                                            default_path=default_path.as_posix(), filter_list=[".cfg"], file_filter=".cfg", no_resize=False)        
+        selector.show_file_dialog()
+
+    def __find_data_and_config(self, folder: Path):
+        data_file = None
+        config_file = None
+        subfolders = []
+        for file in folder.iterdir():
+            if file.suffix in self.VALID_DATA_FILE_EXTENSIONS:
+                data_file = file
+            elif file.suffix == ".cfg":
+                config_file = file
+            
+            if file.is_dir():
+                subfolders.append(file)
+
+            if data_file != None and config_file != None:
+                break
+        
+        return data_file, config_file, subfolders
+
+    def __start_folder_select(self, sender, app_data):
+        def on_close():
+            nonlocal selector
+            selector.destroy()
+
+        def on_select(selections):
+            on_close()
+            if len(selections) == 0:
+                return
+            
+            folder = Path(selections[0][1])
+            
+            #Recurse into subfolders if only 1 to allow easily loading based off timestamps if only one device logged.
+            #If more then one device logged, this will instead error as the user would need to select the device            
+            recurse_count = 0 #Prevent infinite loops
+            data_file, config_file, subfolders = self.__find_data_and_config(folder)
+            while data_file is None and config_file is None and len(subfolders) == 1 and recurse_count < 5:
+                folder = subfolders[0]
+                data_file, config_file, subfolders = self.__find_data_and_config(folder)
+
+            if data_file is not None:
+                dpg.set_value(self.data_file_input, data_file.as_posix())
+            
+            if config_file is not None:
+                self.load_config_file(config_file)
+        
+        default_path = self.log_settings.output_directory
+        selector = FileDialog(title="Data Folder Selector", width=900, height=550, min_size=(700,400), dirs_only=True,
+                                            multi_selection=False, modal=True, on_select=on_select, on_cancel=on_close,
+                                            default_path=default_path.as_posix(), no_resize=False)        
+        selector.show_file_dialog()
+
+    def set_axis_order(self, order: str):
+        if not validate_axis_order(order):
+            return
+        dpg.set_value(self.axis_order_input, order)
+        self.axis_order = order
+
+    def __axis_order_edited(self, sender, app_data, user_data):
+        new_order = dpg.get_value(app_data)
+        if not validate_axis_order(new_order):
+            self.set_axis_order(self.axis_order)
+        else:
+            self.axis_order = new_order
+
+    def delete(self):
+        dpg.delete_item(self.edited_handler)
+        self.stream_slots_menu.delete()
+        return super().delete()
