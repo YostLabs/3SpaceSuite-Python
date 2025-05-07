@@ -90,24 +90,63 @@ def add_hyperlink(text: str, address: str):
     dpg.add_button(label=text, callback=lambda:webbrowser.open(address))
     dpg.bind_item_theme(dpg.last_item(), hyperlink_theme)
 
+from dataclasses import dataclass
+@dataclass
+class PopupButton:
+    label: str = ""
+    callback: Callable = None
+    
+
+def create_popup(text: str = "", buttons: list[str] = [], title: str = "Confirmation", width=350,
+                    always_center: bool = True):
+    """
+    Creates a modal window with supplied text a button for each string provided.
+    Returns a tuple of: (window, visible_handler, buttons)
+    """
+    return_buttons = []
+
+    with dpg.window(label=title, modal=True, no_resize=True, show=True, width=width, no_move=always_center) as popup:
+        dpg.add_text(text, wrap=width)
+        if len(buttons) > 0:
+            with dpg.group(horizontal=True):
+                for label in buttons:
+                    return_buttons.append(dpg.add_button(label=label))
+
+        visible_handler = None
+        if always_center:
+            with dpg.item_handler_registry() as visible_handler:
+                dpg.add_item_visible_handler(callback=center_window_handler_callback, user_data=popup)
+            dpg.bind_item_handler_registry(popup, visible_handler)
+    
+    def __on_close(sender, app_data):
+        dpg.delete_item(popup)
+        if visible_handler is not None:
+            dpg.delete_item(visible_handler)
+    
+    dpg.configure_item(popup, on_close=__on_close)
+
+    return popup, visible_handler, return_buttons
+
+def create_popup_message(text: str = "", title: str = "", width=350, always_center: bool = True):
+    window, handler, buttons = create_popup(text=text, buttons=["Ok"], title=title, width=width, always_center=always_center)
+
+    def __on_select(sender, app_data, user_data):
+        dpg.delete_item(window)
+        if handler is not None:
+            dpg.delete_item(handler)
+    
+    dpg.set_item_callback(buttons[0], __on_select)
+
 def create_confirm_popup(text: str = "", on_cancel: Callable = None, on_confirm: Callable = None, title: str = "Confirmation", width=350,
                             always_center: bool = True):
     """
     Creates a modal window with supplied text and a cancel and confirm button with settable callbacks
     """
-    with dpg.window(label=title, modal=True, no_resize=True, show=True, width=width, no_move=always_center) as confirm_popup:
-        dpg.add_text(text, wrap=width)
-        with dpg.group(horizontal=True):
-            confirm_button = dpg.add_button(label="Confirm", user_data=on_confirm)
-            cancel_button = dpg.add_button(label="Cancel", user_data=on_cancel)
+    confirm_popup, visible_handler, buttons = create_popup(text=text, buttons=["Confirm", "Cancel"], title=title, width=width, always_center=always_center)
+    confirm_button = buttons[0]
+    cancel_button = buttons[1]
 
-        visible_handler = None
-        if always_center:
-            with dpg.item_handler_registry() as visible_handler:
-                dpg.add_item_visible_handler(callback=center_window_handler_callback, user_data=confirm_popup)
-            dpg.bind_item_handler_registry(confirm_popup, visible_handler)
-    
-    #Create the popups selection handler
+    #Create the button callbacks
     def __on_selection(sender, app_data, user_data):
         callback = user_data
 
@@ -121,5 +160,7 @@ def create_confirm_popup(text: str = "", on_cancel: Callable = None, on_confirm:
             callback()
     
     #Bind the selection handler
+    dpg.set_item_user_data(confirm_button, on_confirm)
+    dpg.set_item_user_data(cancel_button, on_cancel)
     dpg.set_item_callback(confirm_button, __on_selection)
     dpg.set_item_callback(cancel_button, __on_selection)
