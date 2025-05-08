@@ -4,7 +4,7 @@ settings that are required for interpreting raw data or the
 results of reading the data.
 """
 
-from yostlabs.tss3.api import ThreespaceHeaderInfo, ThreespaceCmdResult, ThreespaceHeader
+from yostlabs.tss3.api import ThreespaceHeaderInfo, ThreespaceCmdResult, ThreespaceHeader, StreamableCommands
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingOption, get_stream_options_from_str, stream_options_to_command
 from yostlabs.tss3.utils.parser import ThreespaceBinaryParser
 import yostlabs.math.vector as yl_vec
@@ -12,6 +12,9 @@ import yostlabs.math.vector as yl_vec
 from pathlib import Path
 import dataclasses
 from typing import Any
+
+import bisect
+import struct
 
 def validate_axis_order(order: str):
     valid_chars = set("-xyz")
@@ -164,14 +167,28 @@ def cast_via_struct_char(value: str, format):
         value = float(value)
     return value
 
+from enum import Enum
 @dataclasses.dataclass
 class TssDataFile:
+    class TimeSource(Enum):
+        NONE = 0
+        CMD = 1
+        HEADER = 2
+        MONO = 3
+
     path: Path
 
     settings: TssDataFileSettings = dataclasses.field(default_factory=TssDataFileSettings)
 
     def __post_init__(self):
         self.data: list[ThreespaceCmdResult] = []
+        
+        #A list of timestamps that indices match self.data,
+        #but the time starts at 0, may be in seconds (if requested), and does not wrap.
+        #This is a helper for many things that use data_files and want timestamps but don't
+        #want to handle sourcing seperately from command/header or handling wrapping.
+        #NOTE: This is OPTIONAL and will not be populated unless compute_monotime is called first
+        self.monotime: list[float] = []
 
     def load_data(self):
         self.settings.update_slot_cache() #Allows faster lookup of values
@@ -187,12 +204,16 @@ class TssDataFile:
         command = stream_options_to_command(self.settings.stream_slots) #Get the command object to figure out the data types
         
         command_out_formats = [cmd.out_format.strip('<') for cmd in command.commands if cmd is not None]
-        ascii_header_format = self.settings.header.format.strip('<') 
+        ascii_header_format = self.settings.header.format.strip('<')
+        total_format = ''.join(command_out_formats) + ascii_header_format
+        total_columns = len(struct.unpack(total_format, b'\0' * struct.calcsize(total_format))) #Get num of elements in format by parsing a string that is same length as the formats size
         #Not going to use anything like pandas to load this. That would be excessive
         with self.path.open('r') as fp:
             fp.readline() #Skip the header line
             for line in fp:
                 data = line.strip().split(',')
+                if len(data) != total_columns:
+                    raise Exception(f"Column Mismatch: {len(data)} != {total_columns}")
 
                 #Get the header
                 header_data = []
@@ -241,6 +262,57 @@ class TssDataFile:
 
     def get_header(self, index):
         return self[index].header
+
+    def compute_monotime(self, divider=1, start_at_zero=True):
+        """
+        Must be called before get_monotime
+        """
+        self.monotime.clear()
+        time_cmd = ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None)
+        if time_cmd in self.settings.stream_slots:
+            source = TssDataFile.TimeSource.CMD 
+        elif self.settings.header.timestamp_enabled:
+            source = TssDataFile.TimeSource.HEADER
+        else:
+            return
+        
+        offset = 0
+        last_base_time = 0
+        if start_at_zero:
+            offset = -self.get_time(0, source)
+        for i in range(len(self.data)):
+            base_time = self.get_time(i, source)
+            if base_time < last_base_time:
+                if last_base_time < 0xFFFFFFFF:
+                    offset += 0xFFFFFFFF #U32 Header wrapping
+                else:
+                    offset += 0xFFFFFFFFFFFFFFFF #U64 Cmd wrapping
+            final_time = base_time + offset
+            if divider != 1: #The reason for the check is to prevent converting to a float in the default scenario
+                final_time /= divider 
+            self.monotime.append(final_time)
+            last_base_time = base_time
+        
+    def get_monotime(self, index):
+        return self.monotime[index]
+    
+    @property
+    def has_monotime(self):
+        return len(self.monotime) > 0
+
+    def monotime_to_index(self, time: float|int, low=0, high=None):
+        if high is None:
+            high = len(self.monotime)
+        return bisect.bisect_right(self.monotime, time, low, high) - 1
+
+    def get_time(self, index: int, source: "TssDataFile.TimeSource"):
+        if source == TssDataFile.TimeSource.CMD:
+            return self.get_value(index, ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None))
+        elif source == TssDataFile.TimeSource.HEADER:
+            return self[index].header.timestamp
+        elif source == TssDataFile.TimeSource.MONO:
+            return self.get_monotime(index)
+        return None
 
     def __len__(self):
         return len(self.data)
