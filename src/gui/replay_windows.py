@@ -21,6 +21,8 @@ from data_file import TssDataFile, TssDataFileSettings, validate_axis_order, Thr
 from data_log.log_settings import LogSettings
 
 from pathlib import Path
+import time
+import math
 
 TIME_BASED_INDEX = 0
 TIME_BASED_HEADER = 1
@@ -44,6 +46,10 @@ class OrientationReplayWindow(StagedView):
         self.quat = [0, 0, 0, 1]
         self.axis_info = parse_axis_string_info("xyz")
 
+        self.auto_play = False
+        self.last_auto_play_update_time = 0
+        self.auto_play_elapsed_time = 0
+
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
                 self.grid = dpg_grid.Grid(1, 2, dpg.last_container(), rect_getter=dpg_ext.get_global_rect)
@@ -63,10 +69,11 @@ class OrientationReplayWindow(StagedView):
                                                                  min_value=1, max_value=2000*16,
                                                                  show=not self.playback_time_based, speed=0.05, default_value=200)
                         dpg.add_child_window(border=False, width=-115, height=1)
-                        dpg.add_button(label="Pause")
-                        dpg.add_button(label="Play")
-                    self.timeline_slider = dpg.add_slider_int(width=-1, format="%d/0", max_value=0, min_value=0, clamped=True, default_value=0, callback=self.__timeline_callback)
-                    dpg.bind_item_theme(self.timeline_slider, theme_lib.round_theme)
+                        dpg.add_button(label="Pause", callback=self.stop_autoplay)
+                        dpg.add_button(label="Play", callback=self.start_autoplay)
+                    self.timeline_slider_hz = dpg.add_slider_int(width=-1, format="%d/0", max_value=0, min_value=0, clamped=True, default_value=0, callback=self.__timeline_callback)
+                    self.timeline_slider_time = dpg.add_slider_float(width=-1, format="%f/0", max_value=0, min_value=0, clamped=True, default_value=0, callback=self.__timeline_callback)
+                    dpg.bind_item_theme(self.timeline_slider_hz, theme_lib.round_theme)
                 self.grid.push(self.timeline_window, 0, 1)
             
         with dpg.item_handler_registry() as self.visible_handler:
@@ -81,16 +88,16 @@ class OrientationReplayWindow(StagedView):
     def set_index(self, index: int):
         if self.data_file is None or self.orientation_source is None: return
         self.quat = self.data_file.get_value(index, self.orientation_source)
-        print("Setting quat:", self.quat)
         self.queue_render()
 
-        dpg.set_value(self.timeline_slider, index+1)
+        dpg.set_value(self.timeline_slider_hz, index+1)
 
     def set_default(self):
         """
         Must be called from main thread
         """
-        dpg.configure_item(self.timeline_slider, max_value=0, default_value=0)
+        self.stop_autoplay()
+        dpg.configure_item(self.timeline_slider_hz, max_value=0, default_value=0)
         self.quat = [0, 0, 0, 1]
         self.axis_info = parse_axis_string_info("xyz")
         self.queue_render()
@@ -122,7 +129,7 @@ class OrientationReplayWindow(StagedView):
         
         self.axis_info = self.data_file.settings.axis_order_info
 
-        dpg.configure_item(self.timeline_slider, min_value=1, max_value=len(data_file), format=f"%d/{len(data_file)}")
+        dpg.configure_item(self.timeline_slider_hz, min_value=1, max_value=len(data_file), format=f"%d/{len(data_file)}")
         self.set_index(0)
 
     def set_time_source(self, source: int):
@@ -144,6 +151,39 @@ class OrientationReplayWindow(StagedView):
     def render_image(self):
         self.orientation_viewer.render_image(self.quat, self.axis_info)
 
+    def start_autoplay(self):
+        self.auto_play = True
+        self.auto_play_elapsed_time = 0
+        self.last_auto_play_update_time = time.perf_counter()
+
+    def stop_autoplay(self):
+        self.auto_play = False
+        self.auto_play_elapsed_time = 0
+        self.last_auto_play_update_time = 0
+
+    def autoplay_update(self):
+        if not self.auto_play or self.data_file is None: return
+        cur_time = time.perf_counter()
+        self.auto_play_elapsed_time += cur_time - self.last_auto_play_update_time
+        if self.playback_time_source == TIME_BASED_INDEX:
+            rate = dpg.get_value(self.playback_hz_drag)
+            advance = self.auto_play_elapsed_time * rate
+            old_index = dpg.get_value(self.timeline_slider_hz)
+            new_index = old_index + math.trunc(advance)
+            new_index = min(new_index, len(self.data_file))
+            if old_index != new_index:
+                self.set_index(new_index - 1)
+                if new_index == len(self.data_file):
+                    self.stop_autoplay()
+                    return
+            #Get the left over time
+            remainder = (advance - math.trunc(advance)) / rate
+            self.auto_play_elapsed_time = remainder
+        else:
+            pass
+    
+        self.last_auto_play_update_time = cur_time
+
     def __render_image_queue(self):
         self.render_queued = False
         self.render_image()
@@ -157,6 +197,7 @@ class OrientationReplayWindow(StagedView):
     def __on_visible(self, sender, app_data):
         self.grid()
         self.orientation_viewer.update_image()
+        self.autoplay_update()
 
     def __on_resize(self, sender, app_data):
         self.queue_render()

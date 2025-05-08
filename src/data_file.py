@@ -216,10 +216,6 @@ class TssDataFile:
                     else:
                         command_data.append(converted_data)
                 self.data.append(ThreespaceCmdResult(command_data, header))
-        
-        print("Loaded Ascii Data:")
-        print(self.data)
-
 
     def __load_binary(self):
         #Create the parser and load the data
