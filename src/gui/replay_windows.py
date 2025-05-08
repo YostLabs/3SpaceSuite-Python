@@ -24,6 +24,8 @@ from pathlib import Path
 import time
 import math
 
+import threading
+
 TARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetTaredOrientation, None)
 UNTARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetUntaredOrientation, None)
 
@@ -296,6 +298,18 @@ class OrientationReplayWindow(StagedView):
         self.orientation_viewer.delete()
         return super().delete()
     
+def load_data_file_thread(data_file: TssDataFile, return_list: list):
+    try:
+        data_file.load_data()
+    except Exception as e:
+        return_list.append(e)
+        return
+
+    #Insert Monotonic Time data if time is included. This is to avoid having to source time from different
+    #sources, as well as to handle any wrapping. If the user set the timestamp back to 0 during the data gathering,
+    #well things are going to get awkward then.
+    data_file.compute_monotime(divider=1_000_000, start_at_zero=True)
+
 class ReplayConfigWindow(StagedView):
 
     VALID_DATA_FILE_EXTENSIONS = (".csv", ".bin")
@@ -390,29 +404,39 @@ class ReplayConfigWindow(StagedView):
         if not data_path.exists() or data_path.suffix not in self.VALID_DATA_FILE_EXTENSIONS:
             dpg_ext.create_popup_message("Invalid data path supplied.", title="Error")
             return
-        
+    
         settings = self.get_settings()
-        if settings is None:
+        if settings is None:          
             dpg_ext.create_popup_message("Invalid settings supplied.", title="Error")
             return
         
         data_file = TssDataFile(data_path, settings)
-        try:
-            data_file.load_data()
-        except Exception as e:
-            dpg_ext.create_popup_message(f"Failed to load data\n{e}", title="Error")
+        delete_func = dpg_ext.create_popup_circle_loading_indicator(title="Loading data...")
+
+        output = []
+        thread = threading.Thread(target=load_data_file_thread, args=(data_file, output), daemon=True)
+        thread.start()
+        while thread.is_alive():
+            dpg.render_dearpygui_frame()
+        thread.join() #Should finish instantly
+
+        if len(output) > 0:
+            delete_func()
+            dpg.render_dearpygui_frame()
+            dpg_ext.create_popup_message(f"Failed to load data\n{output[0]}", title="Error")
             return
-        
+    
         if len(data_file) == 0:
+            delete_func()
+            dpg.render_dearpygui_frame()         
             dpg_ext.create_popup_message(f"No data loaded. Check for accurate config settings.", title="Error")
             return
 
-        #Insert Monotonic Time data if time is included. This is to avoid having to source time from different
-        #sources, as well as to handle any wrapping. If the user set the timestamp back to 0 during the data gathering,
-        #well things are going to get awkward then.
-        data_file.compute_monotime(divider=1_000_000, start_at_zero=True)
-
         self.orient_window.set_data_file(data_file)
+
+        delete_func()
+        dpg.render_dearpygui_frame()
+        dpg_ext.create_popup_message(f"Finished loading file.", title="Done")
 
     def set_settings_from_obj(self, settings: TssDataFileSettings):
         #Set all possible settings based on the loaded settings

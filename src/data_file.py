@@ -267,6 +267,7 @@ class TssDataFile:
         """
         Must be called before get_monotime
         """
+        if len(self.data) == 0: return
         self.monotime.clear()
         time_cmd = ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None)
         if time_cmd in self.settings.stream_slots:

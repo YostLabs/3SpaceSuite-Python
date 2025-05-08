@@ -98,15 +98,16 @@ class PopupButton:
     
 
 def create_popup(text: str = "", buttons: list[str] = [], title: str = "Confirmation", width=350,
-                    always_center: bool = True):
+                    always_center: bool = True, no_close=False):
     """
     Creates a modal window with supplied text a button for each string provided.
     Returns a tuple of: (window, visible_handler, buttons)
     """
     return_buttons = []
 
-    with dpg.window(label=title, modal=True, no_resize=True, show=True, width=width, no_move=always_center) as popup:
-        dpg.add_text(text, wrap=width)
+    with dpg.window(label=title, modal=True, no_resize=True, show=True, width=width, no_move=always_center, no_close=no_close) as popup:
+        if text != "":
+            dpg.add_text(text, wrap=width)
         if len(buttons) > 0:
             with dpg.group(horizontal=True):
                 for label in buttons:
@@ -126,6 +127,30 @@ def create_popup(text: str = "", buttons: list[str] = [], title: str = "Confirma
     dpg.configure_item(popup, on_close=__on_close)
 
     return popup, visible_handler, return_buttons
+
+def create_popup_circle_loading_indicator(text: str = "", title: str = "", width=350, always_center: bool = True):
+    """
+    Creates a window with a loading indicator in it, returns a function to call to cleanup the window when done.
+    """
+    window, handler, buttons = create_popup(text=text, buttons=[], title=title, width=width, always_center=always_center, no_close=True)
+
+    #Add the loading indicator to the window
+    dpg.push_container_stack(window)
+    with dpg.table(header_row=False):
+        dpg.add_table_column()
+        dpg.add_table_column()
+        dpg.add_table_column()
+        with dpg.table_row():
+            dpg.add_table_cell()
+            dpg.add_loading_indicator()
+    dpg.pop_container_stack()
+
+    def delete():
+        dpg.delete_item(window)
+        if handler is not None:
+            dpg.delete_item(handler)
+
+    return delete
 
 def create_popup_message(text: str = "", title: str = "", width=350, always_center: bool = True):
     window, handler, buttons = create_popup(text=text, buttons=["Ok"], title=title, width=width, always_center=always_center)
