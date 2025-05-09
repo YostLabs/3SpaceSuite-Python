@@ -111,20 +111,16 @@ class TssDataFileSettings:
                 from_logging = False
                 break
         
-        print(f"{from_logging=}")
-        #HeaderC:\Users\YostLabs\Documents\NewTestLogLocation\2025-05-05_16-24-06\COM69
+        #Header
         load_header = not from_logging
         if from_logging:
             if not "log_header_enabled" in cfg:
-                print("Not available")
                 load_header = False
                 settings.header = None
             else:
                 load_header = int(cfg["log_header_enabled"])
-                print("Available?", load_header)
 
         if load_header:
-            print("Loading header")
             header_keys = ["header_status", "header_timestamp", "header_echo", "header_checksum", "header_serial", "header_length"]
             if any(k not in cfg for k in header_keys):
                 settings.header = None
@@ -253,9 +249,6 @@ class TssDataFile:
         while result is not None:
             self.data.append(result)
             result = parser.parse_message()
-        
-        print("Loaded Data:")
-        print(self.data)
     
     def get_value(self, index, option: ThreespaceStreamingOption):
         return self[index].data[self.settings.option_to_index[option]]
