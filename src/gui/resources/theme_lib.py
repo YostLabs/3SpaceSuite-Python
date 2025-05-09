@@ -22,6 +22,7 @@ plot_w_line_theme = None
 plot_indicator_theme = None
 
 connect_button_theme = None
+load_data_button_theme = None
 
 hyperlink_theme = None
 
@@ -29,8 +30,10 @@ red_button_theme = None
 
 round_theme = None
 
+
 def init():
-    global plot_x_line_theme, plot_y_line_theme, plot_z_line_theme, plot_w_line_theme, plot_indicator_theme, connect_button_theme, hyperlink_theme, red_button_theme, round_theme
+    global plot_x_line_theme, plot_y_line_theme, plot_z_line_theme, plot_w_line_theme, plot_indicator_theme, \
+    connect_button_theme, hyperlink_theme, red_button_theme, round_theme, load_data_button_theme
 
     with dpg.theme(label="plot_x_line_theme") as plot_x_line_theme:
         with dpg.theme_component(dpg.mvLineSeries):
@@ -57,6 +60,14 @@ def init():
             dpg.add_theme_color(dpg.mvThemeCol_Button, (127, 255, 0, 200))
             dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (127, 255, 0, 160))
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (127, 255, 0, 180))
+
+    with dpg.theme(label="loada_button_theme") as load_data_button_theme:
+        with dpg.theme_component(dpg.mvButton):
+            #color = (127, 255, 0)
+            color = (32, 143, 29)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (*color, 200))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (*color, 160))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (*color, 180))            
 
     with dpg.theme(label="red_button_theme") as red_button_theme:
         with dpg.theme_component(dpg.mvButton):

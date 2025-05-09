@@ -288,6 +288,9 @@ class OrientationReplayWindow(StagedView):
     def notify_opened(self):
         MainLoopEventQueue.queue_sync_event(self.render_image)
 
+    def notify_closed(self):
+        self.timeline.stop_autoplay()    
+
     def __on_visible(self, sender, app_data):
         self.grid()
         self.orientation_viewer.update_image()
@@ -333,6 +336,7 @@ class ReplayConfigWindow(StagedView):
                     dpg.add_button(label="Select", callback=self.__start_data_file_select)
                 dpg.add_spacer(height=20)
                 dpg.add_button(label="Load Data", callback=self.load_data)
+                dpg.bind_item_theme(dpg.last_item(), theme_lib.load_data_button_theme)
 
                 dpg.add_separator()
                 dpg.add_text("Loaded Settings:")
