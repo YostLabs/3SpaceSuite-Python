@@ -146,3 +146,7 @@ __bounds_dict = {
 
 def get_min_bounds_for_command(cmd: StreamableCommands):
     return __bounds_dict.get(cmd, (None, None))
+
+def get_min_bounds_for_option(option: StreamOption):
+    if option is None: return (None, None)
+    return get_min_bounds_for_command(option.cmd)

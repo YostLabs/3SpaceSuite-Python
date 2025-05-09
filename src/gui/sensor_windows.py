@@ -659,278 +659,7 @@ class SensorOrientationWindow(StagedView):
 
 
 import data_charts
-class SensorDataWindow:
-
-    MAX_POINTS_PER_AXIS = 500
-    THEMES = None
-
-    def __init__(self, options: dict[str,data_charts.StreamOption], device: ThreespaceDevice,  default_value=None):
-        if SensorDataWindow.THEMES is None:
-            SensorDataWindow.THEMES = [theme_lib.plot_x_line_theme, theme_lib.plot_y_line_theme, theme_lib.plot_z_line_theme, theme_lib.plot_w_line_theme]
-        self.device = device
-
-        self.options = options
-        self.keys = list(options.keys())
-
-        self.cur_axis = default_value or self.keys[0]
-        self.cur_option = self.options[self.cur_axis]
-        self.bounds_y = (None, None) if self.cur_option is None else data_charts.get_min_bounds_for_command(self.cur_option.cmd)
-        self.cur_command_param = None
-
-        self.streaming_hz = 100
-        self.streaming = False
-        self.opened = False
-
-        self.paused = False
-        self.vertical_line_pos = None
-
-        #Used for speed optimization with the parent window
-        self.__delay_registration = False
-
-        self.pad_percent = 0.05
-
-        self.text = []
-        self.series = []
-        self.y_data: list[list] = [] #One set per series
-        self.x_data: list[int] = [] #Shared x axis across all series
-        with dpg.child_window() as self.window:
-            self.dropdown = FilteredDropdown(items=self.keys, default_item=self.cur_axis, 
-                                        width=-1, allow_custom_options=False, allow_empty=False, 
-                                        callback=self.__on_stream_command_changed)
-            self.dropdown.submit()
-            with dpg.group(horizontal=True):
-                self.text.append(dpg.add_text("0.00000", color=theme_lib.color_x, show=False))
-                self.text.append(dpg.add_text("0.00000", color=theme_lib.color_y, show=False))
-                self.text.append(dpg.add_text("0.00000", color=theme_lib.color_z, show=False))
-                self.text.append(dpg.add_text("0.00000", color=theme_lib.color_w, show=False))
-                self.param_dropdown = dpg.add_combo(items=[], default_value="", show=False, callback=self.__on_stream_param_changed, width=-1)
-            with dpg.plot(width=-1, height=-1) as self.plot:
-                self.x_axis = dpg.add_plot_axis(dpg.mvXAxis, )
-                with dpg.plot_axis(dpg.mvYAxis) as self.y_axis:
-                    self.vertical_line = dpg.add_inf_line_series(x=[])
-                    dpg.bind_item_theme(self.vertical_line, theme_lib.plot_indicator_theme)
-        
-        self.build_stream_window()
-        self.build_param_window()
-
-    def set_vline_pos(self, x: float):
-        if x is None: #Remove the line
-            if self.vertical_line_pos is not None:
-                self.vertical_line_pos = None
-                dpg.configure_item(self.vertical_line, x=[])
-                self.set_current_text_values()
-        else:
-            if x < dpg.get_axis_limits(self.x_axis)[0]: #Only add the line if in range of the current data
-                self.set_vline_pos(None)
-                return
-            self.vertical_line_pos = x
-            dpg.configure_item(self.vertical_line, x=[x])
-            self.set_text_values_by_x(x)
-
-    def set_text_values_by_x(self, x):
-        if len(self.series) == 0: return
-        min_index = None
-        max_index = None
-        x_data = dpg.get_value(self.series[0])[0] #Gotta used the cache X data because if paused, the x data still updates but want to do based on what is graphed
-        for i in range(len(x_data)-1):
-            if x_data[i] <= x <= x_data[i+1]:
-                min_index = i
-                max_index = i + 1
-                break
-        
-        if min_index is None:
-            return
-        
-        min_x = x_data[min_index]
-        max_x = x_data[max_index]
-        percent = (x - min_x) / (max_x - min_x)
-
-
-        num_axes = min(len(self.text), len(self.y_data))
-        for i in range(num_axes):
-            y_data = dpg.get_value(self.series[i])[1]
-            min_y = y_data[min_index]
-            max_y = y_data[max_index]
-            y = min_y + percent * (max_y - min_y)
-            dpg.set_value(self.text[i], f"{y: .05f}")
-
-    def set_current_text_values(self):
-        if len(self.series) == 0: return
-        x_data = dpg.get_value(self.series[0])[0]
-        if len(x_data) == 0: return
-        self.set_text_values_by_x(x_data[-1])
-
-    def __on_stream_command_changed(self, sender, app_data):
-        if app_data == self.cur_axis: return #It didn't change
-        self.stop_data_chart()
-        self.cur_axis = app_data
-        self.cur_option = self.options[self.cur_axis]
-        if self.cur_option is None:
-            self.bounds_y = (None, None)
-        else:
-            self.bounds_y = data_charts.get_min_bounds_for_command(self.cur_option.cmd)
-        self.cur_command_param = None
-        if self.cur_option is not None and self.cur_option.valid_params is not None and len(self.cur_option.valid_params) > 0:
-            self.cur_command_param = self.cur_option.valid_params[0]
-        self.build_param_window()
-        self.build_stream_window()
-        self.start_data_chart()
-    
-    def __on_stream_param_changed(self, sender, app_data):
-        self.cur_command_param = int(app_data)
-        self.stop_data_chart()
-        self.start_data_chart()
-
-    def set_pause_state(self, paused: bool):
-        self.paused = paused
-
-    def build_param_window(self):
-        if self.cur_option is None or self.cur_option.valid_params is None:
-            dpg.hide_item(self.param_dropdown)
-            return
-        else:
-            valid_params = self.cur_option.valid_params
-            dpg.configure_item(self.param_dropdown, items=valid_params, show=True)
-            dpg.set_value(self.param_dropdown, self.cur_command_param)
-
-    def streaming_callback(self, status: ThreespaceStreamingStatus):
-        if status == ThreespaceStreamingStatus.Data:
-            timestamp = self.device.get_streaming_value(StreamableCommands.GetTimestamp)
-            self.x_data.append(timestamp / 1000000) #Convert from microseconds to seconds
-            if len(self.x_data) > SensorDataWindow.MAX_POINTS_PER_AXIS:
-                self.x_data.pop(0)
-            data = self.device.get_streaming_value(self.cur_option.cmd, self.cur_command_param)
-            if not isinstance(data, list):
-                data = [data]
-            for i, v in enumerate(data):
-                self.y_data[i].append(v)
-                if len(self.y_data[i]) > SensorDataWindow.MAX_POINTS_PER_AXIS:
-                    self.y_data[i].pop(0)
-        elif status == ThreespaceStreamingStatus.DataEnd: #Only update the graph after this update of the streaming is done
-            if self.paused: return #Pause only pauses the display, not the collection
-            for i, series in enumerate(self.series):
-                dpg.configure_item(series, x=self.x_data, y=self.y_data[i])
-                if i < len(self.text): #Set text to the last number
-                    dpg.set_value(self.text[i], f"{self.y_data[i][-1]: .05f}")
-                
-            #Calculate new y bounds
-            max_y = max(max(data) for data in self.y_data)
-            min_y = min(min(data) for data in self.y_data)
-            y_range = max_y - min_y
-            if not any(v is None for v in self.bounds_y):
-                y_range = max(y_range, self.bounds_y[1] - self.bounds_y[0])
-            padding = y_range * self.pad_percent
-            min_y -= padding
-            max_y += padding
-            if self.bounds_y[1] is not None:
-                max_y = max(self.bounds_y[1], max_y)
-            if self.bounds_y[0] is not None:
-                min_y = min(self.bounds_y[0], min_y)
-
-            dpg.fit_axis_data(self.x_axis)
-            dpg.set_axis_limits(self.y_axis, min_y, max_y)     
-            if len(self.x_data) == SensorDataWindow.MAX_POINTS_PER_AXIS:
-                #Only take over the labels once it fills the graph. This prevents DPG sometimes auto flashing between whole second and half second intervals
-                min_x = self.x_data[0]
-                if self.vertical_line_pos is not None and min_x > self.vertical_line_pos:
-                    self.set_vline_pos(None)
-                min_x = int(self.x_data[0])
-                max_x = int(self.x_data[-1])
-                axis_ticks = list(range(min_x, max_x + 1))
-                axis_ticks = tuple([(str(v), v) for v in axis_ticks])
-                dpg.set_axis_ticks(self.x_axis, axis_ticks)   
-            else:
-                dpg.reset_axis_ticks(self.x_axis)
-        elif status == ThreespaceStreamingStatus.Reset:
-            self.stop_data_chart()
-
-    def build_stream_window(self):
-        """Using current state, rebuild the plot window to be for the current state"""
-        num_out = 0 if self.cur_option is None else self.cur_option.info.num_out_params
-
-        #Show up to 4 text objects for the graph
-        for i, text in enumerate(self.text):
-            if i < num_out:
-                dpg.show_item(text)
-                dpg.set_value(text, f"{0: .05f}")
-            else:
-                dpg.hide_item(text)
-        
-        #Add the line series
-        dpg.delete_item(self.y_axis, children_only=True)
-        self.series.clear()
-        self.x_data.clear()
-        self.y_data.clear()
-        dpg.push_container_stack(self.y_axis)
-        self.vertical_line = dpg.add_inf_line_series(x=[])
-        dpg.bind_item_theme(self.vertical_line, theme_lib.plot_indicator_theme)
-        for i in range(num_out):
-            self.y_data.append([])
-            self.series.append(dpg.add_line_series(self.x_data, self.y_data[i], label=f"{i}"))
-            if i < len(SensorDataWindow.THEMES):
-                dpg.bind_item_theme(self.series[-1], SensorDataWindow.THEMES[i])
-        dpg.pop_container_stack()
-
-    def clear_chart(self):
-        self.x_data.clear()
-        for i, series in enumerate(self.series):
-            self.y_data[i].clear()
-            dpg.configure_item(series, x=self.x_data, y=self.y_data[i])
-
-    def start_data_chart(self):
-        if self.streaming or self.cur_option is None: return #Already streaming or nothing to stream
-        if not self.visible: return #The window isn't available for streaming
-        try:
-            self.streaming = self.device.register_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
-            if not self.streaming: return
-            self.streaming = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration) #Used for the X axis
-            if not self.streaming:
-                #Immediate update is false here because no update will have occurred if the previous command failed, so no need to update streaming
-                #slots here either. Eventually streaming manager should be changed to handle this type of situation itself.
-                self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
-                return
-            self.clear_chart()
-            self.device.register_streaming_callback(self.streaming_callback, hz=self.streaming_hz)
-        except Exception as e:
-            self.streaming = False
-            self.device.report_error(e)
-        
-    def stop_data_chart(self):
-        if not self.streaming: return
-        try:
-            self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
-            self.device.unregister_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration)
-            self.device.unregister_streaming_callback(self.streaming_callback)
-        except Exception as e:
-            self.device.report_error(e)
-        self.streaming = False
-
-    def delay_streaming_registration(self, delay):
-        self.__delay_registration = delay
-
-    def notify_open(self):
-        self.opened = True
-        self.start_data_chart()
-
-    def notify_closed(self):
-        self.stop_data_chart()
-        
-    def hide(self):
-        dpg.hide_item(self.window)
-        self.stop_data_chart()
-
-    def show(self):
-        dpg.show_item(self.window)
-        self.start_data_chart()
-
-    @property
-    def visible(self):
-        return self.opened and dpg.is_item_shown(self.window)
-
-    def destroy(self):
-        self.stop_data_chart()
-        self.dropdown.delete()
-        dpg.delete_item(self.window)
+from gui.datachart_view import SensorDataWindowAsync
 
 class SensorDataChartsWindow(StagedView):
 
@@ -940,16 +669,9 @@ class SensorDataChartsWindow(StagedView):
         self.max_cols = 3
         self.rows = 2
         self.cols = 2
-        self.data_windows: list[list[SensorDataWindow]] = []
+        self.data_windows: list[list[SensorDataWindowAsync]] = []
 
         self.options = data_charts.get_all_options_from_device(device)
-
-        #Change key to the display name
-        self.options = {o.display_name : o for o in self.options}
-        #Add in the None option
-        new_options = {"None": None}
-        new_options.update(self.options)
-        self.options = new_options
 
         self.paused = False
 
@@ -980,7 +702,7 @@ class SensorDataChartsWindow(StagedView):
                 for col in range(self.max_cols): #Build all the windows
                     self.data_windows.append([])
                     for row in range(self.max_rows):
-                        window = SensorDataWindow(self.options, device, default_value=default_charts[row][col])
+                        window = SensorDataWindowAsync(device, self.options, default_value=default_charts[row][col])
                         self.data_windows[col].append(window)
                         if row < self.rows and col < self.cols:
                             self.grid.push(window.window, col, row)
@@ -1051,7 +773,7 @@ class SensorDataChartsWindow(StagedView):
         if new_cols < self.cols:
             for col in range(self.cols-1, new_cols-1, -1):
                 for row in range(self.rows):
-                    window: SensorDataWindow = self.data_windows[col][row]
+                    window: SensorDataWindowAsync = self.data_windows[col][row]
                     window.delay_streaming_registration(True)
                     window.hide()
                     window.delay_streaming_registration(False)
@@ -1060,7 +782,7 @@ class SensorDataChartsWindow(StagedView):
         if new_rows < self.rows:
             for row in range(self.rows-1, new_rows-1, -1):
                 for col in range(self.cols):
-                    window: SensorDataWindow = self.data_windows[col][row]
+                    window: SensorDataWindowAsync = self.data_windows[col][row]
                     window.delay_streaming_registration(True)
                     window.hide()
                     window.delay_streaming_registration(False)
@@ -1071,7 +793,7 @@ class SensorDataChartsWindow(StagedView):
         if new_cols > self.cols:
             for col in range(self.cols, new_cols):
                 for row in range(self.rows):
-                    window: SensorDataWindow = self.data_windows[col][row]
+                    window: SensorDataWindowAsync = self.data_windows[col][row]
                     window.delay_streaming_registration(True)
                     window.show()
                     window.delay_streaming_registration(False)
@@ -1081,7 +803,7 @@ class SensorDataChartsWindow(StagedView):
         if new_rows > self.rows:
             for row in range(self.rows, new_rows):
                 for col in range(self.cols):
-                    window: SensorDataWindow = self.data_windows[col][row]
+                    window: SensorDataWindowAsync = self.data_windows[col][row]
                     window.delay_streaming_registration(True)
                     window.show()
                     window.delay_streaming_registration(False)
