@@ -3,66 +3,76 @@ Includes utility for working with data charts and configuration information
 for how some data will show up
 """
 from dataclasses import dataclass, field
-from devices import ThreespaceDevice, StreamableCommands, threespaceCommandGetInfo, ThreespaceCommandInfo
+from devices import ThreespaceDevice, StreamableCommands, threespaceCommandGetInfo, ThreespaceCommandInfo, ThreespaceStreamingOption
 import re
 
 @dataclass
 class StreamOption:
     display_name: str
 
-    cmd_enum: StreamableCommands = None
-    cmd: ThreespaceCommandInfo = None
+    cmd: StreamableCommands = None
+    info: ThreespaceCommandInfo = None
 
     param_type: type = None
     valid_params: list = None
 
-def __get_options(streamable_commands: list[StreamableCommands]):
-    options: list[StreamOption] = []
-    for command in streamable_commands:
-        cmd = threespaceCommandGetInfo(command.value)
-        display_name = ' '.join(re.findall(r'[A-Z][a-z]*', command.name)[1:])
-        options.append(StreamOption(display_name, command, cmd, get_command_param_type(command)))
+
+#--------------------------Retrieving options in various ways------------------------------------
+def get_option(streamable_command: StreamableCommands):
+    cmd = threespaceCommandGetInfo(streamable_command.value)
+    display_name = ' '.join(re.findall(r'[A-Z][a-z]*', streamable_command.name)[1:])
+    return StreamOption(display_name, streamable_command, cmd, get_param_type(streamable_command))
+
+def get_options_from_list(streamable_commands: list[StreamableCommands]):
+    return [get_option(v) for v in streamable_commands]
+
+def get_all_options():
+    return get_options_from_list(list(StreamableCommands))
+
+def get_all_options_from_device(sensor: ThreespaceDevice):
+    streamable_commands = sensor.get_streamable_commands()
+    options = get_options_from_list(streamable_commands)
+    for option in options: #Load valid params from the sensor
+        option.valid_params = get_valid_params(option.cmd, sensor)
     return options
 
-def get_all_stream_options():
-    return __get_options(list(StreamableCommands))
+def get_options_from_slots(slots: list[ThreespaceStreamingOption]):
+    #Creates an option list and also loads valid params based on the options supplied
+    options: dict[StreamableCommands, StreamOption] = { }
+    for slot in slots:
+        if slot.cmd in options: #Already present, only handle updating the valid params
+            if slot.param is not None:
+                if options[slot.cmd].valid_params is None:
+                    options[slot.cmd].valid_params = []
+                options[slot.cmd].valid_params.append(slot.param)
+            continue
 
-def load_sensor_options(sensor: ThreespaceDevice):
-    streamable_commands = sensor.get_streamable_commands()
-    options = __get_options(streamable_commands)
-    load_valid_params(options, sensor)
-    return options
+        #Create the option and add it to the dict
+        option = get_option(slot.cmd)
+        if slot.param is not None:
+            option.valid_params = [slot.param]
+        options[slot.cmd] = option
+    
+    return list(options.values())
 
-def load_valid_params(options: list[StreamOption], sensor: ThreespaceDevice):
-    for option in options:
-        option.valid_params = get_valid_params(option.cmd_enum, sensor)
+#-------------------------------METADATA HELPERS-----------------------------------------
 
-@dataclass
-class DataChartAxisOption:
-    display_name: str
+__param_type_dict = {
+    StreamableCommands.GetBarometerAltitudeById: int,
+    StreamableCommands.GetBarometerPressureById: int,
+    StreamableCommands.GetRawAccelVec: int,
+    StreamableCommands.GetCorrectedAccelVec: int,
+    StreamableCommands.GetNormalizedAccelVec: int,
+    StreamableCommands.GetRawGyroRate: int,
+    StreamableCommands.GetCorrectedGyroRate: int,
+    StreamableCommands.GetNormalizedGyroRate: int,
+    StreamableCommands.GetRawMagVec: int,
+    StreamableCommands.GetCorrectedMagVec: int,
+    StreamableCommands.GetNormalizedMagVec: int,
+}
 
-    cmd_enum: StreamableCommands = None
-    cmd: ThreespaceCommandInfo = None
-
-    valid_params: list = None
-
-    #The minimum values for the top and bottom of the chart bounds. The chart can grow outside this range, but never less then it.
-    #If None, then that bound is purely automated
-    bounds_y = (None, None) #Min and max bound 
-
-def get_all_data_chart_axis_options(sensor: ThreespaceDevice):
-    streamable_commands = sensor.get_streamable_commands()
-    return build_all_data_chart_axis_options(streamable_commands, sensor)
-
-def get_command_param_type(command: StreamableCommands):
-    if command in (StreamableCommands.GetBarometerAltitudeById, StreamableCommands.GetBarometerPressureById):
-        return int
-    elif command in (StreamableCommands.GetRawAccelVec, StreamableCommands.GetCorrectedAccelVec, StreamableCommands.GetNormalizedAccelVec):
-        return int
-    elif command in (StreamableCommands.GetRawGyroRate, StreamableCommands.GetCorrectedGyroRate, StreamableCommands.GetNormalizedGyroRate):
-        return int
-    elif command in (StreamableCommands.GetRawMagVec, StreamableCommands.GetCorrectedMagVec, StreamableCommands.GetNormalizedMagVec):
-        return int
+def get_param_type(streamable_command: StreamableCommands):
+    if streamable_command in __param_type_dict: return __param_type_dict[streamable_command]
     return None
 
 def get_valid_params(streamable_command: StreamableCommands, sensor: ThreespaceDevice):
@@ -76,16 +86,9 @@ def get_valid_params(streamable_command: StreamableCommands, sensor: ThreespaceD
         return sensor.get_available_mags()
     return None
 
-def build_all_data_chart_axis_options(streamable_commands: list[StreamableCommands], sensor: ThreespaceDevice):
-    options: dict[StreamableCommands,DataChartAxisOption] = {}
-    for cmd_enum in streamable_commands:
-        cmd = threespaceCommandGetInfo(cmd_enum.value)
-        display_name = ' '.join(re.findall(r'[A-Z][a-z]*', cmd_enum.name)[1:])
-        option = DataChartAxisOption(display_name, cmd_enum=cmd_enum, cmd=cmd)
-        option.valid_params = get_valid_params(cmd_enum, sensor)
-        options[cmd_enum] = option
-    return options
+#--------------------------------------------------Config information specific to data charts-------------------------------------------
 
+#The minimum upper and lower bounds to show on a graph
 __bounds_dict = {
     StreamableCommands.GetTaredOrientation : (-1, 1),
     StreamableCommands.GetTaredOrientationAsEuler : (-3.14, 3.14),
@@ -141,23 +144,5 @@ __bounds_dict = {
     StreamableCommands.GetButtonState : (0, 1),
 }
 
-def modify_options(options: dict[StreamableCommands,DataChartAxisOption]):
-    for cmd, axis in options.items():
-        axis.bounds_y = __bounds_dict[cmd]
-    
-
-if __name__ == "__main__":
-    from yostlabs.tss3.api import ThreespaceSensor
-    sensor = ThreespaceSensor()
-    port = sensor.ser.port
-    sensor.cleanup()
-    device = ThreespaceDevice(port)
-    options = get_all_data_chart_axis_options(device)
-
-    for option in options.values():
-        print(option)
-
-    new_options = {"None": None}
-    new_options.update(options)
-
-    #print(new_options)
+def get_min_bounds_for_command(cmd: StreamableCommands):
+    return __bounds_dict.get(cmd, (None, None))

@@ -658,14 +658,13 @@ class SensorOrientationWindow(StagedView):
         return super().delete()
 
 
-from data_charts import DataChartAxisOption
 import data_charts
 class SensorDataWindow:
 
     MAX_POINTS_PER_AXIS = 500
     THEMES = None
 
-    def __init__(self, options: dict[str,DataChartAxisOption], device: ThreespaceDevice,  default_value=None):
+    def __init__(self, options: dict[str,data_charts.StreamOption], device: ThreespaceDevice,  default_value=None):
         if SensorDataWindow.THEMES is None:
             SensorDataWindow.THEMES = [theme_lib.plot_x_line_theme, theme_lib.plot_y_line_theme, theme_lib.plot_z_line_theme, theme_lib.plot_w_line_theme]
         self.device = device
@@ -675,6 +674,7 @@ class SensorDataWindow:
 
         self.cur_axis = default_value or self.keys[0]
         self.cur_option = self.options[self.cur_axis]
+        self.bounds_y = (None, None) if self.cur_option is None else data_charts.get_min_bounds_for_command(self.cur_option.cmd)
         self.cur_command_param = None
 
         self.streaming_hz = 100
@@ -765,6 +765,10 @@ class SensorDataWindow:
         self.stop_data_chart()
         self.cur_axis = app_data
         self.cur_option = self.options[self.cur_axis]
+        if self.cur_option is None:
+            self.bounds_y = (None, None)
+        else:
+            self.bounds_y = data_charts.get_min_bounds_for_command(self.cur_option.cmd)
         self.cur_command_param = None
         if self.cur_option is not None and self.cur_option.valid_params is not None and len(self.cur_option.valid_params) > 0:
             self.cur_command_param = self.cur_option.valid_params[0]
@@ -795,7 +799,7 @@ class SensorDataWindow:
             self.x_data.append(timestamp / 1000000) #Convert from microseconds to seconds
             if len(self.x_data) > SensorDataWindow.MAX_POINTS_PER_AXIS:
                 self.x_data.pop(0)
-            data = self.device.get_streaming_value(self.cur_option.cmd_enum, self.cur_command_param)
+            data = self.device.get_streaming_value(self.cur_option.cmd, self.cur_command_param)
             if not isinstance(data, list):
                 data = [data]
             for i, v in enumerate(data):
@@ -813,15 +817,15 @@ class SensorDataWindow:
             max_y = max(max(data) for data in self.y_data)
             min_y = min(min(data) for data in self.y_data)
             y_range = max_y - min_y
-            if not any(v is None for v in self.cur_option.bounds_y):
-                y_range = max(y_range, self.cur_option.bounds_y[1] - self.cur_option.bounds_y[0])
+            if not any(v is None for v in self.bounds_y):
+                y_range = max(y_range, self.bounds_y[1] - self.bounds_y[0])
             padding = y_range * self.pad_percent
             min_y -= padding
             max_y += padding
-            if self.cur_option.bounds_y[1] is not None:
-                max_y = max(self.cur_option.bounds_y[1], max_y)
-            if self.cur_option.bounds_y[0] is not None:
-                min_y = min(self.cur_option.bounds_y[0], min_y)
+            if self.bounds_y[1] is not None:
+                max_y = max(self.bounds_y[1], max_y)
+            if self.bounds_y[0] is not None:
+                min_y = min(self.bounds_y[0], min_y)
 
             dpg.fit_axis_data(self.x_axis)
             dpg.set_axis_limits(self.y_axis, min_y, max_y)     
@@ -842,7 +846,7 @@ class SensorDataWindow:
 
     def build_stream_window(self):
         """Using current state, rebuild the plot window to be for the current state"""
-        num_out = 0 if self.cur_option is None else self.cur_option.cmd.num_out_params
+        num_out = 0 if self.cur_option is None else self.cur_option.info.num_out_params
 
         #Show up to 4 text objects for the graph
         for i, text in enumerate(self.text):
@@ -877,13 +881,13 @@ class SensorDataWindow:
         if self.streaming or self.cur_option is None: return #Already streaming or nothing to stream
         if not self.visible: return #The window isn't available for streaming
         try:
-            self.streaming = self.device.register_streaming_command(self, self.cur_option.cmd_enum, self.cur_command_param, immediate_update=not self.__delay_registration)
+            self.streaming = self.device.register_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
             if not self.streaming: return
             self.streaming = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration) #Used for the X axis
             if not self.streaming:
                 #Immediate update is false here because no update will have occurred if the previous command failed, so no need to update streaming
                 #slots here either. Eventually streaming manager should be changed to handle this type of situation itself.
-                self.device.unregister_streaming_command(self, self.cur_option.cmd_enum, self.cur_command_param, immediate_update=not self.__delay_registration)
+                self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
                 return
             self.clear_chart()
             self.device.register_streaming_callback(self.streaming_callback, hz=self.streaming_hz)
@@ -894,7 +898,7 @@ class SensorDataWindow:
     def stop_data_chart(self):
         if not self.streaming: return
         try:
-            self.device.unregister_streaming_command(self, self.cur_option.cmd_enum, self.cur_command_param, immediate_update=not self.__delay_registration)
+            self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
             self.device.unregister_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration)
             self.device.unregister_streaming_callback(self.streaming_callback)
         except Exception as e:
@@ -938,11 +942,10 @@ class SensorDataChartsWindow(StagedView):
         self.cols = 2
         self.data_windows: list[list[SensorDataWindow]] = []
 
-        self.options = data_charts.get_all_data_chart_axis_options(device)
-        data_charts.modify_options(self.options) #Adds in bounds and stuff
+        self.options = data_charts.get_all_options_from_device(device)
 
         #Change key to the display name
-        self.options = {o.display_name : o for o in self.options.values()}
+        self.options = {o.display_name : o for o in self.options}
         #Add in the None option
         new_options = {"None": None}
         new_options.update(self.options)

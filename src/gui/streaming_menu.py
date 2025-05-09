@@ -16,9 +16,9 @@ class StreamingOptionSelectionMenu:
         self.callback = on_modified_callback
         
         if sensor is not None:
-            self.valid_options = data_charts.load_sensor_options(sensor)
+            self.valid_options = data_charts.get_all_options_from_device(sensor)
         else:
-            self.valid_options = data_charts.get_all_stream_options()
+            self.valid_options = data_charts.get_all_options()
 
         self.options: list[StreamingOptionMenu] = []
         with dpg.child_window(border=False, auto_resize_y=True) as self.window:
@@ -112,7 +112,7 @@ class StreamingOptionMenu:
         self.callback = callback
 
         #Modify these dicts just to make it easier to access by key/enum
-        self.enum_options = {o.cmd_enum : o for o in self.valid_options}
+        self.enum_options = {o.cmd : o for o in self.valid_options}
         self.options = {o.display_name : o for o in self.valid_options}
         new_options = {"None": None}
         new_options.update(self.options)
@@ -206,7 +206,7 @@ class StreamingOptionMenu:
         option = self.options[self.dropdown.get_value()]
         if option is None:
             return ThreespaceStreamingOption(None, None)
-        cmd = option.cmd_enum
+        cmd = option.cmd
         param = None
         if self.current_param_selector is not None:
             param = dpg.get_value(self.current_param_selector)

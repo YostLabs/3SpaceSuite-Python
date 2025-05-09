@@ -17,7 +17,7 @@ class LogSettings(PropertyDict):
 
     DEFAULT_OUTPUT_DIRECTORY = PLATFORM_FOLDERS.user_documents_path / "TSS_Suite" / "log_data"
 
-    slot_configuration: dict[str,list] = dataclasses.field(default_factory=lambda: {"general": []})
+    slot_configuration: dict[str,list[ThreespaceStreamingOption]] = dataclasses.field(default_factory=lambda: {"general": []})
     output_directory: pathlib.Path = DEFAULT_OUTPUT_DIRECTORY
     
     def __post_init__(self):
