@@ -6,7 +6,7 @@ from graphics.objloader import OBJ
 from managers.settings_manager import SettingsManager
 from yostlabs.tss3.consts import *
 
-__YLDEFAULTMODELPATH = "DataLogger/DL3_standard v1.obj"
+__YLDEFAULTMODELPATH = "DataLogger/DL3.obj"
 
 __YLModelPathDict: dict[str|int,dict[str|int,str]] = None
 __YLModelDescDict: dict[str,dict] = None
@@ -37,19 +37,21 @@ def getModelName(family: str|int, variation: int):
     
     return variation_specific
 
-import time
+def getModelNameFromSerialNumber(sn: int):
+    if sn is None:
+        return getModelName(None, None)
+    family_number = (sn & THREESPACE_SN_FAMILY_MSK) >> THREESPACE_SN_FAMILY_POS
+    variation = hex((sn & THREESPACE_SN_VARIATION_MSK) >> THREESPACE_SN_VARIATION_POS).lower()
+    family = THREESPACE_SN_FAMILY_TO_NAME.get(family_number, family_number)
+    return getModelName(family, variation)
 
 def getObjFromSerialNumber(sn: int):
     global __YLModelDict
+    modelname = getModelNameFromSerialNumber(sn)
+    return getObjFromName(modelname)
 
-    if sn is None:
-        modelname = getModelName(None, None)
-    else:
-        family_number = (sn & THREESPACE_SN_FAMILY_MSK) >> THREESPACE_SN_FAMILY_POS
-        variation = hex((sn & THREESPACE_SN_VARIATION_MSK) >> THREESPACE_SN_VARIATION_POS).lower()
-        family = THREESPACE_SN_FAMILY_TO_NAME.get(family_number, family_number)
-        modelname = getModelName(family, variation)
-    
+import time
+def getObjFromName(modelname: str):
     if modelname in __YLModelDict:
         return __YLModelDict[modelname]
 
@@ -70,4 +72,10 @@ def getObjFromSerialNumber(sn: int):
     __YLModelDict[modelname] = obj
 
     return obj
+
+def getAvailableModelNames():
+    return list(__YLModelDescDict.keys())
+
+def getDefaultModelName():
+    return __YLModelPathDict["Default"]
 

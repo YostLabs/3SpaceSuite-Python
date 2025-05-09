@@ -10,6 +10,7 @@ from gui.core_ui import StagedView
 from gui.orientation_view import OrientationView
 from gui.streaming_menu import StreamingOptionSelectionMenu
 
+from graphics.objloader import OBJ
 import gui.resources.obj_lib as obj_lib
 import gui.resources.theme_lib as theme_lib
 
@@ -262,6 +263,9 @@ class OrientationReplayWindow(StagedView):
             self.timeline.set_timeline_value(1)
             self.timeline.set_playback_speed(data_file.settings.data_hz)
     
+    def set_model(self, model: OBJ):
+        self.orientation_viewer.set_model(model)
+
     #This should almost always be used over render_image
     def queue_render(self):
         if self.render_queued: return
@@ -349,7 +353,7 @@ class ReplayConfigWindow(StagedView):
                                 self.length_box = dpg.add_checkbox(label="Length")
                 with dpg.tree_node(label="Orientation", default_open=True):
                     self.axis_order_input = dpg.add_input_text(label="Axis Order", width=200)
-                    self.model_combo = dpg.add_combo(["DL", "MDI"], label="Model", width=200)
+                    self.model_combo = dpg.add_combo(obj_lib.getAvailableModelNames(), label="Model", width=200)
                 
                 with dpg.tree_node(label="Data Gathering", default_open=True):
                     self.data_hz_input = dpg.add_input_float(label="Hz", width=200)
@@ -371,7 +375,12 @@ class ReplayConfigWindow(StagedView):
         dpg.set_value(self.length_box, False)
 
         self.set_axis_order("XYZ")
-        dpg.set_value(self.model_combo, "DL") #TODO: CHANGE ME
+
+        modelnames = obj_lib.getAvailableModelNames()
+        default_model = obj_lib.getDefaultModelName()
+        if default_model not in modelnames:
+            default_model = modelnames[0]
+        dpg.set_value(self.model_combo, default_model)
 
         dpg.set_value(self.data_hz_input, 200)
         self.stream_slots_menu.overwrite_options([])
@@ -429,6 +438,7 @@ class ReplayConfigWindow(StagedView):
             return
 
         self.orient_window.set_data_file(data_file)
+        self.orient_window.set_model(obj_lib.getObjFromName(dpg.get_value(self.model_combo)))
         
         popup.set_message_box(f"Finished loading file.", title="Done")
 
@@ -453,7 +463,8 @@ class ReplayConfigWindow(StagedView):
         if settings.serial_no is None:
             errors.append("Model")
         else:
-            print("IMPLEMENT MODEL SELECTION NAME FROM SN")
+            name = obj_lib.getModelNameFromSerialNumber(settings.serial_no)
+            dpg.set_value(self.model_combo, name)
         
         if settings.data_hz is None:
             errors.append("Data Hz")

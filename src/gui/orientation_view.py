@@ -59,6 +59,9 @@ class OrientationView:
         else:
             self.image = dpg.add_image(self.texture)
 
+    def set_model(self, model: OBJ):
+        self.viewer.set_model(model)
+
     def render_image(self, quat: list[float], axis_info: list[list[int],list[int],bool], hide_sensor=False, hide_arrows=False):
         """
         Params

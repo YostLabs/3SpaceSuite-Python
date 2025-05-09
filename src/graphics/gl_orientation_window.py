@@ -65,7 +65,7 @@ class GlOrientationViewer:
 
         self.data_type = "quat"
         self.orientation = np.array([0, 0, 0, 1], dtype=np.float32)
-    
+
     def set_orientation_quat(self, quat: list[float]):
         self.data_type = "quat"
         self.orientation = quat
@@ -75,6 +75,9 @@ class GlOrientationViewer:
         if len(matrix) == 9:
             matrix = np.array(matrix).reshape((3, 3))
         self.orientation = matrix
+
+    def set_model(self, model: OBJ):
+        self.model = model
 
     def set_model_visible(self, visible: bool):
         self.model_visible = visible
