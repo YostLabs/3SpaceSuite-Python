@@ -411,7 +411,7 @@ class ReplayConfigWindow(StagedView):
             return
         
         data_file = TssDataFile(data_path, settings)
-        delete_func = dpg_ext.create_popup_circle_loading_indicator(title="Loading data...")
+        popup = dpg_ext.create_popup_circle_loading_indicator(title="Loading data...")
 
         output = []
         thread = threading.Thread(target=load_data_file_thread, args=(data_file, output), daemon=True)
@@ -421,22 +421,16 @@ class ReplayConfigWindow(StagedView):
         thread.join() #Should finish instantly
 
         if len(output) > 0:
-            delete_func()
-            dpg.render_dearpygui_frame()
-            dpg_ext.create_popup_message(f"Failed to load data\n{output[0]}", title="Error")
+            popup.set_message_box(f"Failed to load data\n{output[0]}", title="Error")
             return
     
         if len(data_file) == 0:
-            delete_func()
-            dpg.render_dearpygui_frame()         
-            dpg_ext.create_popup_message(f"No data loaded. Check for accurate config settings.", title="Error")
+            popup.set_message_box(f"No data loaded. Check for accurate config settings.", title="Error")       
             return
 
         self.orient_window.set_data_file(data_file)
-
-        delete_func()
-        dpg.render_dearpygui_frame()
-        dpg_ext.create_popup_message(f"Finished loading file.", title="Done")
+        
+        popup.set_message_box(f"Finished loading file.", title="Done")
 
     def set_settings_from_obj(self, settings: TssDataFileSettings):
         #Set all possible settings based on the loaded settings
