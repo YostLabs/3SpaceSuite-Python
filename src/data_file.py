@@ -164,6 +164,7 @@ def cast_via_struct_char(value: str, format):
     return value
 
 from enum import Enum
+import numpy as np
 @dataclasses.dataclass
 class TssDataFile:
     class TimeSource(Enum):
@@ -177,7 +178,8 @@ class TssDataFile:
     settings: TssDataFileSettings = dataclasses.field(default_factory=TssDataFileSettings)
 
     def __post_init__(self):
-        self.data: list[ThreespaceCmdResult] = []
+        self.data: dict[ThreespaceStreamingOption,np.ndarray[Any]] = {}
+        self.headers: list[ThreespaceHeader] = []
         
         #A list of timestamps that indices match self.data,
         #but the time starts at 0, may be in seconds (if requested), and does not wrap.
@@ -188,6 +190,8 @@ class TssDataFile:
 
     def load_data(self):
         self.settings.update_slot_cache() #Allows faster lookup of values
+        for option in self.settings.stream_slots: #Initialize the dict
+            self.data[option] = []
 
         if self.path.suffix == ".csv":
             self.__load_ascii()
@@ -195,6 +199,10 @@ class TssDataFile:
             self.__load_binary()
         else:
             raise ValueError("Unknown file type")
+        
+        #Now convert the data lists to numpy arrays for efficency
+        for key in self.data:
+            self.data[key] = np.array(self.data[key])
 
     def __load_ascii(self):
         command = stream_options_to_command(self.settings.stream_slots) #Get the command object to figure out the data types
@@ -232,7 +240,7 @@ class TssDataFile:
                         command_data.append(converted_data[0])
                     else:
                         command_data.append(converted_data)
-                self.data.append(ThreespaceCmdResult(command_data, header))
+                self.__add_data(ThreespaceCmdResult(command_data, header))
 
     def __load_binary(self):
         #Create the parser and load the data
@@ -247,20 +255,25 @@ class TssDataFile:
         #Get all the responses
         result = parser.parse_message()
         while result is not None:
-            self.data.append(result)
+            self.__add_data(result)
             result = parser.parse_message()
     
+    def __add_data(self, data: ThreespaceCmdResult):
+        self.headers.append(data.header)
+        for option, data in zip(self.settings.stream_slots, data.data):
+            self.data[option].append(data)
+    
     def get_value(self, index, option: ThreespaceStreamingOption):
-        return self[index].data[self.settings.option_to_index[option]]
+        return self.data[option][index]
 
     def get_header(self, index):
-        return self[index].header
+        return self.headers[index]
 
     def compute_monotime(self, divider=1, start_at_zero=True):
         """
         Must be called before get_monotime
         """
-        if len(self.data) == 0: return
+        if len(self) == 0: return
         self.monotime.clear()
         time_cmd = ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None)
         if time_cmd in self.settings.stream_slots:
@@ -274,7 +287,7 @@ class TssDataFile:
         last_base_time = 0
         if start_at_zero:
             offset = -self.get_time(0, source)
-        for i in range(len(self.data)):
+        for i in range(len(self)):
             base_time = self.get_time(i, source)
             if base_time < last_base_time:
                 if last_base_time < 0xFFFFFFFF:
@@ -286,6 +299,9 @@ class TssDataFile:
                 final_time /= divider 
             self.monotime.append(final_time)
             last_base_time = base_time
+        
+        #For efficency
+        self.monotime = np.array(self.monotime)
         
     def get_monotime(self, index):
         return self.monotime[index]
@@ -303,17 +319,13 @@ class TssDataFile:
         if source == TssDataFile.TimeSource.CMD:
             return self.get_value(index, ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None))
         elif source == TssDataFile.TimeSource.HEADER:
-            return self[index].header.timestamp
+            return  self.headers[index].timestamp
         elif source == TssDataFile.TimeSource.MONO:
             return self.get_monotime(index)
         return None
 
     def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, key) -> ThreespaceCmdResult:
-        return self.data[key]
-
+        return len(self.headers)
 
 if __name__ == "__main__":
     path = Path(r"C:\Users\YostLabs\Documents\NewTestLogLocation\2025-05-06_17-42-08\COM69\settings.cfg")

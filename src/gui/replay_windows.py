@@ -308,6 +308,7 @@ class OrientationReplayWindow(StagedView):
         self.orientation_viewer.delete()
         return super().delete()
 
+import numpy as np
 class DataChartReplayWindow(StagedView):
 
     def __init__(self):
@@ -323,6 +324,7 @@ class DataChartReplayWindow(StagedView):
         self.data_windows: list[list[SensorDataWindow]] = []
         self.active_windows: list[SensorDataWindow] = []
         self.options: list[StreamOption] = []
+        self.render_queued = False #For preventing multiple renders per frame
 
         self.data_file: TssDataFile = None
 
@@ -384,15 +386,22 @@ class DataChartReplayWindow(StagedView):
         self.timeline.set_timeline_value_no_callback(0)
         self.set_index(0)
 
-    def set_index(self, index: int, windows: list[SensorDataWindow] = None):
+    def set_index(self, index: int):
+        self.cur_index = index
+        self.queue_render()
+
+    def render_current_index(self, windows: list[SensorDataWindow] = None):
         if self.data_file is None: return
         if windows is None: windows = self.active_windows
+
+        index = self.cur_index
+
         #Compute the X Axis that is shared for all the windows
         min_index = max(0, index - self.max_points + 1)
         index_range = range(min_index, index+1)
         time_based = self.data_file.has_monotime
         if time_based:
-            x_axis = [self.data_file.get_monotime(i) for i in index_range]
+            x_axis = self.data_file.monotime[min_index:index+1]
         else:
             x_axis = list(index_range)
 
@@ -401,14 +410,20 @@ class DataChartReplayWindow(StagedView):
             option, param = window.get_option()
             if option is None: continue
             option = ThreespaceStreamingOption(option.cmd, param)
-            y_data = [self.data_file.get_value(i, option) for i in index_range]
-            if isinstance(y_data[0], list):
-                y_data = list(zip(*y_data)) #Unpack into lists for each element
+            y_data = self.data_file.data[option][min_index:index+1]
+            
+            y_data = np.ascontiguousarray(y_data.T)
             window.set_axes(x_axis, y_data)
-            window.update(fix_ticks=time_based)
-        
-        self.cur_index = index
+            window.update(fix_ticks=False)
 
+    def queue_render(self):
+        if self.render_queued: return
+        self.render_queued = True
+        MainLoopEventQueue.queue_sync_event(self.__render_plots_queue)
+
+    def __render_plots_queue(self):
+        self.render_current_index()
+        self.render_queued = False
 
     def set_data_file(self, data_file: TssDataFile):
         """
@@ -461,7 +476,7 @@ class DataChartReplayWindow(StagedView):
                 window.set_max_points(max_points)
 
     def __on_datachart_option_changed(self, window: SensorDataWindow):
-        self.set_index(self.cur_index, windows=[window]) #Set index but only for the modified window
+        self.render_current_index(windows=[window]) #Render for only the modified window
 
     def __timeline_callback_time(self, sender, new_time):
         self.set_index(self.data_file.monotime_to_index(new_time))
@@ -516,8 +531,9 @@ class DataChartReplayWindow(StagedView):
 
         #Update the grid to actually show the new info
         self.chart_grid.configure(cols=self.cols, rows=self.rows)
+
         #Update the charts
-        self.set_index(self.cur_index)
+        self.queue_render()
 
     def __build_active_window_list(self):
         self.active_windows.clear()
@@ -663,6 +679,7 @@ class ReplayConfigWindow(StagedView):
 
         if len(output) > 0:
             popup.set_message_box(f"Failed to load data\n{output[0]}", title="Error")
+            print(f"Failed to load data\n{output[0]}")
             return
     
         if len(data_file) == 0:

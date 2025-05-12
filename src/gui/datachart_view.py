@@ -7,6 +7,7 @@ import data_charts
 from data_charts import StreamOption
 
 from typing import Callable
+import numpy as np
 
 class SensorDataWindow:
 
@@ -91,6 +92,7 @@ class SensorDataWindow:
         """
         Must be called for visual updates to actually occur.
         """
+
         #Update Series and Display Numbers
         for i, series in enumerate(self.series):
             dpg.configure_item(series, x=self.x_data, y=self.y_data[i]) #Set the axis info
@@ -247,8 +249,12 @@ class SensorDataWindow:
         dpg.pop_container_stack()
 
     def __update_bounds(self):
-        max_y = max(max(data) for data in self.y_data)
-        min_y = min(min(data) for data in self.y_data)
+        if isinstance(self.y_data, np.ndarray):
+            max_y = np.max(self.y_data)
+            min_y = np.min(self.y_data)
+        else:
+            max_y = max(max(data) for data in self.y_data)
+            min_y = min(min(data) for data in self.y_data)
         
         #Clamp the max and min range
         if self.bounds_y[1] is not None:
