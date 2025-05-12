@@ -466,7 +466,9 @@ class DataChartReplayWindow(StagedView):
             self.timeline.set_timeline_value(1)
             self.timeline.set_playback_speed(data_file.settings.data_hz)  
 
-        self.set_max_points(int(self.data_file.settings.data_hz * self.x_time_size))
+        max_points = int(self.data_file.settings.data_hz * self.x_time_size)
+        max_points = max(max_points, 10) #Will cap at aleast 10 points. If 0 this is bad
+        self.set_max_points(max_points)
         self.set_index(0)
 
     def set_max_points(self, max_points: int):
