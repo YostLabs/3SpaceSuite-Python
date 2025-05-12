@@ -256,7 +256,7 @@ class DataLogConfigWindow(StagedView):
                         with dpg.group(horizontal=True):
                             #Max value of 1 Week. It can go much higher then that, but capping at that for now since this is meant more as a testing suite
                             #then an incredibly robust logging system that will reliably have no errors for an extremely long period of time.
-                            dpg.add_input_float(label="Duration", source=self.log_settings._value_log_duration, step=1, min_value=0, max_value=604800)
+                            dpg.add_input_float(label="Duration", source=self.log_settings._value_log_duration, step=1, min_value=0, max_value=604800, min_clamped=True, max_clamped=True)
                             dpg.add_text("?", color=theme_lib.color_tooltip)
                             with dpg.tooltip(dpg.last_item()):
                                 dpg.add_text("A duration of 0 logs forever")
