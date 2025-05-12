@@ -96,7 +96,7 @@ class SensorDataWindow:
         #Update Series and Display Numbers
         for i, series in enumerate(self.series):
             dpg.configure_item(series, x=self.x_data, y=self.y_data[i]) #Set the axis info
-            if i < len(self.text): #Set the text above up to the last number
+            if i < len(self.text) and len(self.y_data[i] > 0): #Set the text above up to the last number
                 dpg.set_value(self.text[i], f"{self.y_data[i][-1]: .05f}")
         
         self.__update_bounds()
@@ -236,8 +236,8 @@ class SensorDataWindow:
         #Add the line series
         dpg.delete_item(self.y_axis, children_only=True)
         self.series.clear()
-        self.x_data.clear()
-        self.y_data.clear()
+        self.x_data = [] #Doing this instead of clear to allow working with numpy arrays when set_axes is used
+        self.y_data = []
         dpg.push_container_stack(self.y_axis)
         self.vertical_line = dpg.add_inf_line_series(x=[])
         dpg.bind_item_theme(self.vertical_line, theme_lib.plot_indicator_theme)
@@ -307,9 +307,9 @@ class SensorDataWindow:
             self.option_modfied_callback(self)
 
     def clear_chart(self):
-        self.x_data.clear()
+        self.x_data = []
         for i, series in enumerate(self.series):
-            self.y_data[i].clear()
+            self.y_data[i] = []
             dpg.configure_item(series, x=self.x_data, y=self.y_data[i])
 
     def notify_open(self):
