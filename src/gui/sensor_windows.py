@@ -697,7 +697,7 @@ class SensorDataChartsWindow(StagedView):
                     self.pause_button.add_button("pause", pause_button, active=True, default=True)
                     self.pause_button.add_button("resume", resume_button)
                     dpg.add_menu_item(label="Popout")
-                self.grid = dpg_grid.Grid(self.cols, self.rows, target=dpg.top_container_stack(), overlay=False, rect_getter=dpg_ext.get_global_rect)
+                self.grid = dpg_grid.Grid(self.cols, self.rows, target=self.window, overlay=False, rect_getter=dpg_ext.get_global_rect)
                 self.grid.offsets = [0, 20, 0, 8] #Make space for the menu bar
                 for col in range(self.max_cols): #Build all the windows
                     self.data_windows.append([])

@@ -9,6 +9,9 @@ from third_party.file_dialog.fdialog import FileDialog
 from gui.core_ui import StagedView
 from gui.orientation_view import OrientationView
 from gui.streaming_menu import StreamingOptionSelectionMenu
+from gui.datachart_view import SensorDataWindow
+import data_charts
+from data_charts import StreamOption
 
 from graphics.objloader import OBJ
 import gui.resources.obj_lib as obj_lib
@@ -69,8 +72,8 @@ class Timeline:
                                                         min_value=1, max_value=2000*16,
                                                         show=not self.time_based, speed=0.05, default_value=200)
             dpg.add_child_window(border=False, width=-115, height=1)
-            dpg.add_button(label="Pause", callback=self.stop_autoplay)
-            dpg.add_button(label="Play", callback=self.start_autoplay)
+            self.pause_button = dpg.add_button(label="Pause", callback=self.stop_autoplay)
+            self.play_button = dpg.add_button(label="Play", callback=self.start_autoplay)
         self.timeline_slider_hz = dpg.add_slider_int(width=-1, format="%d / 0", max_value=0, min_value=0, clamped=True, 
                                                      default_value=0, callback=self.__hz_slider_callback, show=not self.time_based)
         self.timeline_slider_time = dpg.add_slider_float(width=-1, format="%.0f / 0", max_value=0, min_value=0, clamped=True, 
@@ -197,9 +200,9 @@ class OrientationReplayWindow(StagedView):
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
-                self.grid = dpg_grid.Grid(1, 2, dpg.last_container(), rect_getter=dpg_ext.get_global_rect)
-                self.grid.rows[1].configure(size=56)
+                self.grid = dpg_grid.Grid(1, 2, dpg.last_container(), rect_getter=dpg_ext.get_global_rect, overlay=False)
                 self.grid.offsets = 8, 8, 8, 8
+                self.grid.rows[1].configure(size=56)
 
                 self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(None), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
                 self.grid.push(self.orientation_viewer.image, 0, 0)
@@ -239,9 +242,9 @@ class OrientationReplayWindow(StagedView):
         """
         Must be called from main thread
         """
-        self.set_default()
         self.data_file = data_file
-        if len(data_file) == 0: return
+        self.set_default()
+        if self.data_file is None or len(data_file) == 0: return
 
         if TARED_ORIENTATION_SOURCE in data_file.settings.stream_slots:
             self.orientation_source = TARED_ORIENTATION_SOURCE
@@ -304,7 +307,231 @@ class OrientationReplayWindow(StagedView):
         self.grid.clear()
         self.orientation_viewer.delete()
         return super().delete()
-    
+
+class DataChartReplayWindow(StagedView):
+
+    def __init__(self):
+        self.max_rows = 3
+        self.max_cols = 3
+        self.rows = 2
+        self.cols = 2
+
+        self.x_time_size = 5 #In seconds, how long will be displayed at once on each graph
+        self.max_points = self.x_time_size * 100
+        self.cur_index = 0
+
+        self.data_windows: list[list[SensorDataWindow]] = []
+        self.active_windows: list[SensorDataWindow] = []
+        self.options: list[StreamOption] = []
+
+        self.data_file: TssDataFile = None
+
+        with dpg.stage() as self._stage_id:
+            #Configuration Menu
+            with dpg.child_window(width=-1, height=-1, menubar=True) as self.window:
+                #------------------------MENU------------------------------
+                with dpg.menu_bar() as menu_bar:
+                    with dpg.menu(label="Configure") as configure_menu:
+                        self.num_rows_slider = dpg.add_slider_int(label="#Rows", default_value=self.rows, 
+                                                                    max_value=self.max_rows, min_value=1, clamped=True, width=50,
+                                                                    callback=self.__on_layout_changed)
+                        self.num_cols_slider = dpg.add_slider_int(label="#Cols", default_value=self.cols, 
+                                                                    max_value=self.max_cols, min_value=1, clamped=True, width=50,
+                                                                    callback=self.__on_layout_changed)
+                
+                #-----------------------CORE UI------------------------------------------
+                self.base_grid = dpg_grid.Grid(1, 2, self.window, rect_getter=dpg_ext.get_global_rect, overlay=False)
+                self.base_grid.rows[1].configure(size=56)
+                self.base_grid.offsets = [0, 20, 0, 8]
+
+                #Create the Chart Area
+                with dpg.child_window(border=False) as chart_window:
+                    pass
+                self.base_grid.push(chart_window, 0, 0)
+                self.chart_grid = dpg_grid.Grid(self.cols, self.rows, target=chart_window, rect_getter=dpg_ext.get_global_rect, overlay=False)
+
+                #Create charts
+                dpg.push_container_stack(chart_window)
+                for col in range(self.max_cols):
+                    self.data_windows.append([])
+                    for row in range(self.max_rows):
+                        window = SensorDataWindow(self.options, max_points=self.max_points, on_option_modified=self.__on_datachart_option_changed)
+                        self.data_windows[col].append(window)
+                        if row < self.rows and col < self.cols:
+                            self.chart_grid.push(window.window, col, row)
+                        else:
+                            window.hide()
+                dpg.pop_container_stack()
+
+                #Create the timeline
+                with dpg.child_window(border=False) as self.timeline_window:
+                    dpg.add_spacer()
+                    self.timeline = Timeline(lambda s, a: None, time_format=seconds_to_display_time)
+                self.base_grid.push(self.timeline_window, 0, 1, padding=(8, 0, 8, 0))
+        
+        with dpg.item_handler_registry(label="Replay Charts Visible") as self.visible_handler:
+            dpg.add_item_visible_handler(callback=self.__on_visible)
+        dpg.bind_item_handler_registry(self.data_windows[0][0].plot, self.visible_handler)
+
+        self.__build_active_window_list()
+
+    def set_default(self):
+        """
+        Must be called from main thread
+        """
+        self.timeline.stop_autoplay()
+        self.timeline.configure(True, 0, 0)
+        self.timeline.set_timeline_value_no_callback(0)
+        self.set_index(0)
+
+    def set_index(self, index: int, windows: list[SensorDataWindow] = None):
+        if self.data_file is None: return
+        if windows is None: windows = self.active_windows
+        #Compute the X Axis that is shared for all the windows
+        min_index = max(0, index - self.max_points + 1)
+        index_range = range(min_index, index+1)
+        time_based = self.data_file.has_monotime
+        if time_based:
+            x_axis = [self.data_file.get_monotime(i) for i in index_range]
+        else:
+            x_axis = list(index_range)
+
+        #Compute and set the axis for all the windows
+        for window in windows:
+            option, param = window.get_option()
+            if option is None: continue
+            option = ThreespaceStreamingOption(option.cmd, param)
+            y_data = [self.data_file.get_value(i, option) for i in index_range]
+            if isinstance(y_data[0], list):
+                y_data = list(zip(*y_data)) #Unpack into lists for each element
+            window.set_axes(x_axis, y_data)
+            window.update(fix_ticks=time_based)
+        
+        self.cur_index = index
+
+
+    def set_data_file(self, data_file: TssDataFile):
+        """
+        Must be called from main thread
+        """
+        self.data_file = data_file
+        self.set_default()
+        if self.data_file is None or len(data_file) == 0: return
+
+
+        self.options = data_charts.get_options_from_slots(data_file.settings.stream_slots)
+        for col in self.data_windows:
+            for window in col:
+                window.set_options(self.options)
+
+        active_index = 0
+        #Set the initial windows configs
+        for option in self.options:
+            #Not going to chart timestamp by default
+            if option.cmd == StreamableCommands.GetTimestamp: continue
+            if option.valid_params is not None:
+                for param in option.valid_params: 
+                    self.active_windows[active_index].set_option(option, param)
+                    active_index += 1
+                    if active_index >= len(self.active_windows):
+                        break
+            else:
+                self.active_windows[active_index].set_option(option)
+                active_index += 1
+            if active_index >= len(self.active_windows):
+                break      
+
+        #Set the time source and load the initial position
+        if data_file.has_monotime:
+            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1), callback=self.__timeline_callback_time)
+            self.timeline.set_timeline_value(0)            
+            self.timeline.set_playback_speed(1)
+        else:
+            self.timeline.configure(False, min_value=1, max_value=len(data_file), callback=self.__timeline_callback_hz)
+            self.timeline.set_timeline_value(1)
+            self.timeline.set_playback_speed(data_file.settings.data_hz)  
+
+        self.set_max_points(int(self.data_file.settings.data_hz * self.x_time_size))
+        self.set_index(0)
+
+    def set_max_points(self, max_points: int):
+        self.max_points = max_points
+        for col in self.data_windows:
+            for window in col:
+                window.set_max_points(max_points)
+
+    def __on_datachart_option_changed(self, window: SensorDataWindow):
+        self.set_index(self.cur_index, windows=[window]) #Set index but only for the modified window
+
+    def __timeline_callback_time(self, sender, new_time):
+        self.set_index(self.data_file.monotime_to_index(new_time))
+
+    def __timeline_callback_hz(self, sender, new_index):
+        self.set_index(new_index-1)
+
+    def __on_visible(self):
+        self.base_grid()
+        self.chart_grid()
+        self.timeline.autoplay_update()
+
+    def __on_layout_changed(self, sender, app_data, user_data):
+        new_rows = dpg.get_value(self.num_rows_slider)
+        new_cols = dpg.get_value(self.num_cols_slider)
+
+        #Remove any removed columns first
+        if new_cols < self.cols:
+            for col in range(self.cols-1, new_cols-1, -1):
+                for row in range(self.rows):
+                    window = self.data_windows[col][row]
+                    window.hide()
+                    self.chart_grid.pop(window.window)
+            self.cols = new_cols
+        if new_rows < self.rows:
+            for row in range(self.rows-1, new_rows-1, -1):
+                for col in range(self.cols):
+                    window = self.data_windows[col][row]
+                    window.hide()
+                    self.chart_grid.pop(window.window)
+            self.rows = new_rows
+        
+        #Then add back in any new cols or rows
+        if new_cols > self.cols:
+            for col in range(self.cols, new_cols):
+                for row in range(self.rows):
+                    window = self.data_windows[col][row]
+                    window.show()
+                    self.chart_grid.push(window.window, col, row)
+            self.cols = new_cols
+
+        if new_rows > self.rows:
+            for row in range(self.rows, new_rows):
+                for col in range(self.cols):
+                    window = self.data_windows[col][row]
+                    window.show()
+                    self.chart_grid.push(window.window, col, row)
+            self.rows = new_rows
+        
+        #Rebuild the active windows list in the order elements should be displayed
+        self.__build_active_window_list()
+
+        #Update the grid to actually show the new info
+        self.chart_grid.configure(cols=self.cols, rows=self.rows)
+        #Update the charts
+        self.set_index(self.cur_index)
+
+    def __build_active_window_list(self):
+        self.active_windows.clear()
+        for row in range(self.rows):
+            for col in range(self.cols):
+                self.active_windows.append(self.data_windows[col][row])
+
+    def delete(self):
+        dpg.delete_item(self.visible_handler)
+        self.base_grid.clear()
+        self.chart_grid.clear()
+        return super().delete()
+            
+
 def load_data_file_thread(data_file: TssDataFile, return_list: list):
     try:
         data_file.load_data()
@@ -321,9 +548,10 @@ class ReplayConfigWindow(StagedView):
 
     VALID_DATA_FILE_EXTENSIONS = (".csv", ".bin")
 
-    def __init__(self, orient_window: OrientationReplayWindow, log_settings: LogSettings):
+    def __init__(self, orient_window: OrientationReplayWindow, data_window: DataChartReplayWindow, log_settings: LogSettings):
         self.log_settings = log_settings #Used for the default directory to load when file exploring
         self.orient_window = orient_window
+        self.data_window = data_window
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window():
@@ -443,6 +671,7 @@ class ReplayConfigWindow(StagedView):
 
         self.orient_window.set_data_file(data_file)
         self.orient_window.set_model(obj_lib.getObjFromName(dpg.get_value(self.model_combo)))
+        self.data_window.set_data_file(data_file)
         
         popup.set_message_box(f"Finished loading file.", title="Done")
 

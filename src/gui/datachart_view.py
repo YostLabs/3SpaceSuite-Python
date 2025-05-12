@@ -6,23 +6,19 @@ from gui.resources import theme_lib
 import data_charts
 from data_charts import StreamOption
 
+from typing import Callable
+
 class SensorDataWindow:
 
     THEMES = None
 
-    def __init__(self, options: list[StreamOption],  default_value: str=None, max_points=500):
+    def __init__(self, options: list[StreamOption] = None,  default_value: str=None, max_points=500, on_option_modified: Callable[["SensorDataWindow"],None] = None):
         if SensorDataWindow.THEMES is None:
             SensorDataWindow.THEMES = [theme_lib.plot_x_line_theme, theme_lib.plot_y_line_theme, theme_lib.plot_z_line_theme, theme_lib.plot_w_line_theme]
 
         #Options to select from for the chart
-        self.options = {"None": None}
-        self.options |= { o.display_name: o for o in options }
-        self.keys: list[str] = list(self.options.keys())
-
-        #Selection info
-        self.cur_axis: str = default_value or self.keys[0]
-        self.cur_option: StreamOption = self.options[self.cur_axis]
-        self.cur_command_param: int = None
+        self.set_options(options, default_value=default_value, update_window=False)
+        self.option_modfied_callback = on_option_modified
 
         #Helper variables
         self.opened = False
@@ -84,7 +80,14 @@ class SensorDataWindow:
             for axis in self.y_data:
                 axis.pop(0)
 
-    def update(self):
+    def set_axes(self, x_axis: list, y_axis: list):
+        self.x_data = x_axis
+        self.y_data = y_axis
+
+    def set_max_points(self, max_points: int):
+        self.max_points = max_points
+
+    def update(self, fix_ticks=True):
         """
         Must be called for visual updates to actually occur.
         """
@@ -95,7 +98,8 @@ class SensorDataWindow:
                 dpg.set_value(self.text[i], f"{self.y_data[i][-1]: .05f}")
         
         self.__update_bounds()
-        self.__fix_ticks()
+        if fix_ticks:
+            self.__fix_ticks()
 
     def set_vline_pos(self, x: float):
         if self.vertical_line_pos == x: return
@@ -159,6 +163,40 @@ class SensorDataWindow:
         x_data = dpg.get_value(self.series[0])[0]
         if len(x_data) == 0: return
         self.set_text_values_at_x(x_data[-1])      
+
+    def set_options(self, options: list[StreamOption], default_value: str = None, update_window: bool = True):
+        self.options = {"None": None}
+        if options is not None:
+            self.options |= { o.display_name: o for o in options }
+        self.keys: list[str] = list(self.options.keys())
+
+        cur_axis = default_value or self.keys[0]
+        if update_window:
+            self.dropdown.clear_all_items()
+            for key in self.keys:
+                self.dropdown.add_item(key)
+        self.set_option(self.options[cur_axis], update_window=update_window)
+
+    def set_option(self, option: StreamOption, param: int = None, update_window=True):
+        if option is None:
+            self.cur_axis = "None"
+        else:
+            self.cur_axis = option.display_name
+        self.cur_option = option
+        self.cur_command_param = param
+        self.bounds_y = data_charts.get_min_bounds_for_option(self.cur_option)
+
+        #Don't allow a None parameter for an option that requires a parameter
+        if self.cur_option is not None and self.cur_option.valid_params is not None and len(self.cur_option.valid_params) > 0:
+            self.cur_command_param = self.cur_option.valid_params[0]
+
+        if update_window:
+            self.dropdown.set_value(self.cur_axis)
+            self.__build_param_window()
+            self.__build_stream_window()
+
+    def get_option(self):
+        return self.cur_option, self.cur_command_param  
 
     def hide(self):
         dpg.hide_item(self.window)
@@ -234,7 +272,6 @@ class SensorDataWindow:
         if len(self.x_data) != self.max_points:
             dpg.reset_axis_ticks(self.x_axis) #Allow ticks to be automatically handled when not at max points
             return
-        
         #Once at max points, sometimes DPG will flash between using whole and half second intervals. To avoid this, control the ticks manually.
         #This makes the ticks only show in full seconds
         min_x_tick = int(self.x_data[0]) #Exclusive
@@ -246,6 +283,8 @@ class SensorDataWindow:
     #--------------------------Events-------------------------------------
     def _on_stream_param_changed(self, sender, app_data):
         self.cur_command_param = int(app_data)
+        if self.option_modfied_callback:
+            self.option_modfied_callback(self)
 
     def _on_stream_command_changed(self, sender, app_data):
         if app_data == self.cur_axis: return #It didn't change
@@ -257,6 +296,9 @@ class SensorDataWindow:
             self.cur_command_param = self.cur_option.valid_params[0]
         self.__build_param_window()
         self.__build_stream_window()
+
+        if self.option_modfied_callback:
+            self.option_modfied_callback(self)
 
     def clear_chart(self):
         self.x_data.clear()

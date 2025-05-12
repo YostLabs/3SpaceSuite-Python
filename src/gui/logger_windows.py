@@ -28,7 +28,7 @@ from gui.streaming_menu import StreamingOptionSelectionMenu
 class LoggerBanner(SelectableButton): ...
 
 from data_log.log_data import DataLogger
-from gui.replay_windows import OrientationReplayWindow, ReplayConfigWindow
+from gui.replay_windows import OrientationReplayWindow, DataChartReplayWindow, ReplayConfigWindow
 
 class LoggerMasterWindow(StagedTabManager):
 
@@ -45,9 +45,10 @@ class LoggerMasterWindow(StagedTabManager):
                     self.orient_window = OrientationReplayWindow()
                     self.add_tab(self.orient_window.submit())
                 with dpg.tab(label="Data Charts"):
-                    self.add_tab(OrientationReplayWindow().submit())
+                    self.data_window = DataChartReplayWindow()
+                    self.add_tab(self.data_window.submit())
                 with dpg.tab(label="Replay Config"):
-                    self.add_tab(ReplayConfigWindow(self.orient_window, log_settings).submit())                                        
+                    self.add_tab(ReplayConfigWindow(self.orient_window, self.data_window, log_settings).submit())                                        
         
         self.set_open_tab(self.logging_tab)
 

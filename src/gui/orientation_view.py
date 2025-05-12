@@ -49,8 +49,6 @@ class OrientationView:
             self.base_texture = OrientationView.REGISTERED_TEXTURES[self.size][BASE_TEXTURE]
             OrientationView.REGISTERED_TEXTURES[self.size][REGISTRATION_COUNT] += 1
         
-        print(f"{OrientationView.REGISTERED_TEXTURES=}")
-        
         with dpg.texture_registry() as self.texture_registry:
             self.texture = dpg.add_raw_texture(width=texture_width, height=texture_height, default_value=self.base_texture, format=dpg.mvFormat_Float_rgba)
         
