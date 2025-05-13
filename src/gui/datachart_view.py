@@ -96,7 +96,7 @@ class SensorDataWindow:
         #Update Series and Display Numbers
         for i, series in enumerate(self.series):
             dpg.configure_item(series, x=self.x_data, y=self.y_data[i]) #Set the axis info
-            if i < len(self.text) and len(self.y_data[i] > 0): #Set the text above up to the last number
+            if i < len(self.text) and len(self.y_data[i]) > 0: #Set the text above up to the last number
                 dpg.set_value(self.text[i], f"{self.y_data[i][-1]: .05f}")
         
         self.__update_bounds()
