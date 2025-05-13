@@ -19,7 +19,7 @@ import gui.resources.theme_lib as theme_lib
 
 from yostlabs.math.vector import parse_axis_string_info
 from yostlabs.tss3.api import StreamableCommands
-from utility import MainLoopEventQueue, Logger
+from utility import MainLoopEventQueue, Logger, Callback
 
 from data_file import TssDataFile, TssDataFileSettings, validate_axis_order, ThreespaceStreamingOption
 from data_log.log_settings import LogSettings
@@ -51,46 +51,44 @@ def seconds_to_display_time(seconds: float):
     else:
         return f"{seconds:.2f}"
 
-class Timeline:
+class TimelineUI:
 
-    def __init__(self, slider_callback: Callable[[int, int],None], time_format: Callable[[float],None] = None):
-        self.time_based = True
-        self.slider_callback = slider_callback
+    def __init__(self, time_format: Callable[[float],None] = seconds_to_display_time):
         self.time_format = time_format
+        self.max_string = ""
 
-        #Auto play control
-        self.auto_play = False
-        self.auto_play_elapsed_time = 0
-        self.last_auto_play_update_time = 0
-
+        #Speed selector + Pause/Play buttons
         with dpg.group(horizontal=True):
             #Which drag gets used will be based on whether the loaded data has timestamps in it or not
             self.playback_time_drag = dpg.add_drag_float(label="Playback Speed", format="%0.01fx", width=80, 
                                                             default_value=1, speed=0.01, 
-                                                            max_value=16, min_value=0.1, show=self.time_based)
+                                                            max_value=16, min_value=0.1)
             self.playback_hz_drag = dpg.add_drag_int(label="Playback Speed", format="%d Hz", width=100, 
                                                         min_value=1, max_value=2000*16,
-                                                        show=not self.time_based, speed=0.05, default_value=200)
-            dpg.add_child_window(border=False, width=-115, height=1)
-            self.pause_button = dpg.add_button(label="Pause", callback=self.stop_autoplay)
-            self.play_button = dpg.add_button(label="Play", callback=self.start_autoplay)
+                                                        speed=0.05, default_value=200)
+            dpg.add_child_window(border=False, width=-115, height=1) #Used for spacing
+            self.pause_button = dpg.add_button(label="Pause")
+            self.play_button = dpg.add_button(label="Play")
+
+        #Timeline sliders for index based and time based
         self.timeline_slider_hz = dpg.add_slider_int(width=-1, format="%d / 0", max_value=0, min_value=0, clamped=True, 
-                                                     default_value=0, callback=self.__hz_slider_callback, show=not self.time_based)
+                                                     default_value=0)
         self.timeline_slider_time = dpg.add_slider_float(width=-1, format="%.0f / 0", max_value=0, min_value=0, clamped=True, 
-                                                         default_value=0, callback=self.__time_slider_callback, show=self.time_based)
+                                                         default_value=0)
         dpg.bind_item_theme(self.timeline_slider_hz, theme_lib.round_theme)
         dpg.bind_item_theme(self.timeline_slider_time, theme_lib.round_theme)
 
+        #Logical grouping for time/index based
         self.__time_group = PlaybackGroup(self.timeline_slider_time, self.playback_time_drag)
         self.__hz_group = PlaybackGroup(self.timeline_slider_hz, self.playback_hz_drag)
-        self.__active_group = self.__time_group if self.time_based else self.__hz_group
-        self.__inactive_group = self.__time_group if not self.time_based else self.__hz_group
+        self.__active_group = None
+        self.__inactive_group = None
 
-        self.max_value = 0
-        self.max_string = ""
+        #Default configuration
+        self.configure(True, 0, 0)
     
-    def configure(self, time_based: bool, min_value: float|int, max_value: float|int, step=None, callback: Callable[[int, int],None] = None):
-        self.time_based = time_based
+    def configure(self, time_based: bool, min_value: float|int, max_value: float|int):
+        #Configure selected group
         if time_based:
             self.__active_group = self.__time_group
             self.__inactive_group = self.__hz_group
@@ -98,51 +96,77 @@ class Timeline:
             self.__active_group = self.__hz_group
             self.__inactive_group = self.__time_group
         
+        #Show/Hide Selected/Unselected Group
         dpg.show_item(self.__active_group.slider)
         dpg.show_item(self.__active_group.drag)
         dpg.hide_item(self.__inactive_group.slider)
         dpg.hide_item(self.__inactive_group.drag)
 
-        self.max_value = max_value
+        #Update format for display on timeline based on new configuration
         if self.__active_group is self.__time_group:
-            if self.time_format is not None:
-                #This is done because for some reason settings the format to a float with a limited number of decimal places also sets the step of the slider
-                self.max_string = self.time_format(max_value)
-                form = f"{self.time_format(0)} / {self.max_string}"
-            else:
-                self.max_string = f"{max_value:.3f}"
-                form = f"%.3f / {self.max_string}"
+            self.max_string = self.time_format(max_value)
+            form = f"{self.time_format(0)} / {self.max_string}"
         else:
             self.max_string = str(max_value)
-            form = f"%d / {self.max_string}"
+            form = f"%d / {self.max_string}"            
+        
         dpg.configure_item(self.__active_group.slider, min_value=min_value, max_value=max_value, format=form)
 
-        if callback is not None:
-            self.slider_callback = callback
+    def set_value(self, value: int|float):
+        dpg.set_value(self.__active_group.slider, value)
+        if self.__active_group is self.__time_group:
+            dpg.configure_item(self.timeline_slider_time, format=f"{self.time_format(value)} / {self.max_string}")
+
+    def set_rate(self, rate: int|float):
+        dpg.set_value(self.__active_group.drag, rate)
+
+
+class Timeline:
+
+    def __init__(self):
+        #Whether time or index controlled, and its associated rate.
+        #When swapping between Time and Index based, will always require reinitializing the
+        #asscoiated controls (rate/value) anyways, so those can be stored just once
+        self.time_based = True
+        self.rate = 1
+        self.value = 0
+
+        #Auto play control
+        self.auto_play = False
+        self.auto_play_elapsed_time = 0
+        self.last_auto_play_update_time = 0
+
+        self.max_value = 0
+        self.min_value = 0
+
+        self.on_value_changed: Callback[[Timeline, int|float],None] = Callback()
+
+        self.registered_uis: set[TimelineUI] = set()
+
+    def configure(self, time_based: bool, min_value: float|int, max_value: float|int):
+        self.time_based = time_based
+        self.max_value = max_value
+        self.min_value = min_value
+
+        for ui in self.registered_uis:
+            ui.configure(time_based, min_value, max_value)
 
     def set_timeline_value(self, value: int|float):
         self.set_timeline_value_no_callback(value)
-        self.slider_callback(None, value)
+        self.on_value_changed._notify(self, value)
     
     def set_timeline_value_no_callback(self, value: int|float):
-        dpg.set_value(self.__active_group.slider, value)
-        self.__set_time_string(value)
+        self.value = value
+        for ui in self.registered_uis:
+            ui.set_value(value)
 
     def set_playback_speed(self, value: int|float):
-        dpg.set_value(self.__active_group.drag, value)
-
-    def __hz_slider_callback(self, sender, app_data):
-        self.slider_callback(sender, app_data)
-
-    def __time_slider_callback(self, sender, app_data):
-        self.__set_time_string(app_data)
-        self.slider_callback(sender, app_data)
-
-    def __set_time_string(self, value):
-        if self.time_format is None: return
-        dpg.configure_item(self.timeline_slider_time, format=f"{self.time_format(value)} / {self.max_string}")
+        self.rate = value
+        for ui in self.registered_uis:
+            ui.set_rate(value)
 
     def start_autoplay(self):
+        if self.value >= self.max_value: return
         self.auto_play = True
         self.auto_play_elapsed_time = 0
         self.last_auto_play_update_time = time.perf_counter()
@@ -158,8 +182,7 @@ class Timeline:
         cur_time = time.perf_counter()
         elapsed_time = cur_time - self.last_auto_play_update_time
         if self.time_based:
-            rate = dpg.get_value(self.playback_time_drag)
-            new_time = dpg.get_value(self.timeline_slider_time) + (elapsed_time * rate)
+            new_time = self.value + (elapsed_time * self.rate)
             new_time = min(new_time, self.max_value)
             self.set_timeline_value(new_time)
             if new_time == self.max_value:
@@ -167,22 +190,55 @@ class Timeline:
                 return
         else:
             self.auto_play_elapsed_time += elapsed_time
-            rate = dpg.get_value(self.playback_hz_drag)
-            advance = self.auto_play_elapsed_time * rate
-            old_index = dpg.get_value(self.timeline_slider_hz)
-            new_index = old_index + math.trunc(advance)
+            advance = self.auto_play_elapsed_time * self.rate
+            new_index = self.value + math.trunc(advance)
             new_index = min(new_index, self.max_value)
-            if old_index != new_index:
+            if self.value != new_index:
                 self.set_timeline_value(new_index)
                 if new_index == self.max_value:
                     self.stop_autoplay()
                     return
 
             #Get the left over time
-            remainder = (advance - math.trunc(advance)) / rate
+            remainder = (advance - math.trunc(advance)) / self.rate
             self.auto_play_elapsed_time = remainder
 
         self.last_auto_play_update_time = cur_time
+    
+    def __on_ui_value_changed(self, sender, new_value):
+        self.set_timeline_value(new_value)
+    
+    def __on_ui_rate_changed(self, sender, new_rate):
+        self.set_playback_speed(new_rate)
+
+    def bind_ui(self, ui: TimelineUI):
+        self.registered_uis.add(ui)
+
+        dpg.set_item_callback(ui.pause_button, self.stop_autoplay)
+        dpg.set_item_callback(ui.play_button, self.start_autoplay)
+        
+        dpg.set_item_callback(ui.timeline_slider_time, self.__on_ui_value_changed)
+        dpg.set_item_callback(ui.timeline_slider_hz, self.__on_ui_value_changed)
+
+        dpg.set_item_callback(ui.playback_time_drag, self.__on_ui_rate_changed)
+        dpg.set_item_callback(ui.playback_hz_drag, self.__on_ui_rate_changed)
+
+        ui.configure(self.time_based, self.min_value, self.max_value)
+        ui.set_value(self.value)
+        ui.set_rate(self.rate)
+
+    def unbind_ui(self, ui: TimelineUI):
+        self.registered_uis.remove(ui)
+
+        dpg.set_item_callback(ui.pause_button, None)
+        dpg.set_item_callback(ui.play_button, None)
+
+        dpg.set_item_callback(ui.playback_time_drag, None)
+        dpg.set_item_callback(ui.playback_hz_drag, None)
+
+        dpg.set_item_callback(ui.playback_time_drag, None)
+        dpg.set_item_callback(ui.playback_hz_drag, None)
+
 
 class OrientationReplayWindow(StagedView):
 
@@ -198,6 +254,8 @@ class OrientationReplayWindow(StagedView):
         self.quat = [0, 0, 0, 1]
         self.axis_info = parse_axis_string_info("xyz")
 
+        self.timeline = Timeline()
+
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
                 self.grid = dpg_grid.Grid(1, 2, dpg.last_container(), rect_getter=dpg_ext.get_global_rect, overlay=False)
@@ -208,7 +266,7 @@ class OrientationReplayWindow(StagedView):
                 self.grid.push(self.orientation_viewer.image, 0, 0)
                 with dpg.child_window(border=False) as self.timeline_window:
                     dpg.add_spacer()
-                    self.timeline = Timeline(lambda s, a: None, time_format=seconds_to_display_time)
+                    self.timeline_ui = TimelineUI()
                 self.grid.push(self.timeline_window, 0, 1)
             
         with dpg.item_handler_registry() as self.visible_handler:
@@ -216,6 +274,8 @@ class OrientationReplayWindow(StagedView):
             dpg.add_item_resize_handler(callback=self.__on_resize)
         dpg.bind_item_handler_registry(self.orientation_viewer.image, self.visible_handler)
 
+        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.timeline.configure(True, 0, 0)
 
     #Handles updating the slider as well
@@ -258,11 +318,11 @@ class OrientationReplayWindow(StagedView):
 
         #Set the time source and load the initial position
         if data_file.has_monotime:
-            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1), callback=self.__timeline_callback_time)
+            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
             self.timeline.set_timeline_value(0)            
             self.timeline.set_playback_speed(1)
         else:
-            self.timeline.configure(False, min_value=1, max_value=len(data_file), callback=self.__timeline_callback_hz)
+            self.timeline.configure(False, min_value=1, max_value=len(data_file))
             self.timeline.set_timeline_value(1)
             self.timeline.set_playback_speed(data_file.settings.data_hz)
     
@@ -282,11 +342,12 @@ class OrientationReplayWindow(StagedView):
         self.render_queued = False
         self.render_image()
 
-    def __timeline_callback_hz(self, sender, value: int):
-        self.render_index(value-1)
-
-    def __timeline_callback_time(self, sender, time: float):
-        self.render_index(self.data_file.monotime_to_index(time))
+    def __timeline_callback(self, timeline: Timeline, value: int|float):
+        if timeline.time_based:
+            if self.data_file is None: return
+            self.render_index(self.data_file.monotime_to_index(value))
+        else:
+            self.render_index(value-1)
 
     def notify_opened(self):
         MainLoopEventQueue.queue_sync_event(self.render_image)
@@ -306,6 +367,8 @@ class OrientationReplayWindow(StagedView):
         dpg.delete_item(self.visible_handler)
         self.grid.clear()
         self.orientation_viewer.delete()
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
         return super().delete()
 
 import numpy as np
@@ -327,6 +390,7 @@ class DataChartReplayWindow(StagedView):
         self.render_queued = False #For preventing multiple renders per frame
 
         self.data_file: TssDataFile = None
+        self.timeline = Timeline()
 
         with dpg.stage() as self._stage_id:
             #Configuration Menu
@@ -368,7 +432,7 @@ class DataChartReplayWindow(StagedView):
                 #Create the timeline
                 with dpg.child_window(border=False) as self.timeline_window:
                     dpg.add_spacer()
-                    self.timeline = Timeline(lambda s, a: None, time_format=seconds_to_display_time)
+                    self.timeline_ui = TimelineUI()
                 self.base_grid.push(self.timeline_window, 0, 1, padding=(8, 0, 8, 0))
         
         with dpg.item_handler_registry(label="Replay Charts Visible") as self.visible_handler:
@@ -376,6 +440,9 @@ class DataChartReplayWindow(StagedView):
         dpg.bind_item_handler_registry(self.data_windows[0][0].plot, self.visible_handler)
 
         self.__build_active_window_list()
+        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
+        self.set_default()
 
     def set_default(self):
         """
@@ -464,11 +531,11 @@ class DataChartReplayWindow(StagedView):
 
         #Set the time source and load the initial position
         if data_file.has_monotime:
-            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1), callback=self.__timeline_callback_time)
+            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
             self.timeline.set_timeline_value(0)            
             self.timeline.set_playback_speed(1)
         else:
-            self.timeline.configure(False, min_value=1, max_value=len(data_file), callback=self.__timeline_callback_hz)
+            self.timeline.configure(False, min_value=1, max_value=len(data_file))
             self.timeline.set_timeline_value(1)
             self.timeline.set_playback_speed(data_file.settings.data_hz)  
 
@@ -486,11 +553,12 @@ class DataChartReplayWindow(StagedView):
     def __on_datachart_option_changed(self, window: SensorDataWindow):
         self.render_current_index(windows=[window]) #Render for only the modified window
 
-    def __timeline_callback_time(self, sender, new_time):
-        self.set_index(self.data_file.monotime_to_index(new_time))
-
-    def __timeline_callback_hz(self, sender, new_index):
-        self.set_index(new_index-1)
+    def __timeline_callback(self, timeline: Timeline, value: int|float):
+        if timeline.time_based:
+            if self.data_file is None: return
+            self.set_index(self.data_file.monotime_to_index(value))
+        else:
+            self.set_index(value-1)
 
     def __on_visible(self):
         self.base_grid()
@@ -553,6 +621,8 @@ class DataChartReplayWindow(StagedView):
         dpg.delete_item(self.visible_handler)
         self.base_grid.clear()
         self.chart_grid.clear()
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
         return super().delete()
             
 

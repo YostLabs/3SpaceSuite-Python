@@ -203,13 +203,17 @@ class GpsUtility:
         pos_mode: ClassVar[int] = 12
         checksum: ClassVar[int] = 13
 
-class Callback:
+from typing import TypeVar, Generic, SupportsAbs, Callable, ParamSpec
+P = ParamSpec('P')
+T = TypeVar('T', bound=SupportsAbs[Callable])
+
+class Callback(Generic[P, T]):
 
     def __init__(self):
-        self.callbacks = []
+        self.callbacks: list[Callable[P, T]] = []
         self.enabled = True
 
-    def subscribe(self, cb, front=False):
+    def subscribe(self, cb: Callable[P, T], front=False):
         """
         Allows specifying order the callback should be inserted.
         This makes sense for things that logically should be resolved in the order they are created.
@@ -221,7 +225,7 @@ class Callback:
         else:
             self.callbacks.append(cb)
     
-    def unsubscribe(self, cb):
+    def unsubscribe(self, cb: Callable[P, T]):
         if cb in self.callbacks:
             self.callbacks.remove(cb)
 
