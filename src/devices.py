@@ -63,6 +63,8 @@ class ThreespaceDevice:
         self.stream_mode = None
         self.stream_owner = None
         self.stream_stolen_callback = None
+        self.reregister_stream_callback = Callback()
+
 
         self.disconnected = False
         self.metadata = None
@@ -188,6 +190,12 @@ class ThreespaceDevice:
 
     def force_reset_streaming(self) -> bool:
         return self.streaming_manager.reset()
+    
+    def allow_streaming_reregistration(self):
+        #Called after an item is done with force_reset_streaming to allow other
+        #streaming based operations to attempt to reregister/restart their streaming
+        #operations
+        self.reregister_stream_callback._notify()
 
     def lock_streaming_modifications(self, owner: object) -> bool:
         return self.streaming_manager.lock_modifications(owner)

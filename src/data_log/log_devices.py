@@ -145,9 +145,11 @@ class ThreeSpaceLogDevice(LoggableDevice):
             self.cleanup()
             self.add_error(LogError(ErrorLevels.MAJOR, f"Failed to setup device {self.device.name}"))
             Logger.log_critical(f"{self.device.name}: {str(e)}")
+            return False
         
         #Prevent modifications of streaming slots/timing while data logging is active...
         self.device.lock_streaming_modifications(self) 
+        self.device.allow_streaming_reregistration()
         return True
 
     def synchronize(self):

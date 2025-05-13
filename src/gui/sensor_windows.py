@@ -471,6 +471,8 @@ class SensorOrientationWindow(StagedView):
         self.quat = [0, 0, 0, 1]
         self.hide_sensor = False
         self.hide_arrows = False
+
+        self.opened = False
         
         with dpg.stage(label="Orientation Stage") as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
@@ -553,6 +555,8 @@ class SensorOrientationWindow(StagedView):
         self.pixels_dirty = False
         self.pixels = None
 
+        self.device.reregister_stream_callback.subscribe(self.__restart_viewer)
+
     def enable_component(self, sender, app_data, user_data):
         enabled = app_data
         component_func = user_data
@@ -610,10 +614,14 @@ class SensorOrientationWindow(StagedView):
         elif status == ThreespaceStreamingStatus.Reset:
             self.__stop_viewer()
 
+    def __restart_viewer(self):
+        if not self.opened:
+            return
+        self.__start_viewer()
+
     def __start_viewer(self):
         if self.streaming_enabled:
             return
-        
         try:
             self.streaming_enabled = self.device.register_streaming_command(self, StreamableCommands.GetTaredOrientation)
             if self.streaming_enabled:
@@ -621,7 +629,9 @@ class SensorOrientationWindow(StagedView):
                 hertz = self.streaming_hz
                 self.device.register_streaming_callback(self.__on_orientation_updated, hz=hertz, only_newest=True)
         except Exception as e:
+            print("Exception:", e)
             self.device.report_error(e)
+
 
     def __stop_viewer(self):
         if self.streaming_enabled:
@@ -645,9 +655,11 @@ class SensorOrientationWindow(StagedView):
     def notify_opened(self):
         self.reload_dynamic_settings() #Just better to do this before starting streaming
         self.__start_viewer()
+        self.opened = True
 
     def notify_closed(self):
         self.__stop_viewer()
+        self.opened = False
 
     def delete(self):
         dpg.delete_item(self.edited_handler)
@@ -655,6 +667,7 @@ class SensorOrientationWindow(StagedView):
         self.grid.clear()
         self.grid2.clear()
         self.orientation_viewer.delete()
+        self.device.reregister_stream_callback.unsubscribe(self.__start_viewer)
         return super().delete()
 
 
@@ -717,6 +730,8 @@ class SensorDataChartsWindow(StagedView):
         dpg.bind_item_handler_registry(pause_button, self.visible_handler) #This is awkward but it works
         dpg.bind_item_handler_registry(resume_button, self.visible_handler)
 
+        self.device.reregister_stream_callback.subscribe(self.__restart_charts)
+
     def __on_pause_button(self, sender, app_data, user_data):
         self.pause_button.set_button("resume")
         for col in self.data_windows:
@@ -739,6 +754,20 @@ class SensorDataChartsWindow(StagedView):
             for col in self.data_windows:
                 for window in col:
                     window.set_vline_pos(x)
+
+    def __restart_charts(self):
+        if not self.data_windows[0][0].visible:
+            return
+        
+        for row in self.data_windows:
+            for window in row:
+                window.delay_streaming_registration(True)
+                window.start_data_chart()
+                window.delay_streaming_registration(False)
+        try:
+            self.device.update_streaming_settings()
+        except Exception as e:
+            self.device.report_error(e)
 
     #Note: Because of mass opening and closing, the registration is delayed and force updated at the end of this function
     #so only one call has to happen to the actual sensor. This improves speed for opening this window
@@ -824,6 +853,7 @@ class SensorDataChartsWindow(StagedView):
         dpg.delete_item(self.visible_handler)
         self.pause_button.delete()
         self.grid.clear()
+        self.device.reregister_stream_callback.unsubscribe(self.__restart_charts)
         return super().delete()
 
 
