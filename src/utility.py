@@ -251,6 +251,9 @@ class Callback(Generic[P, T]):
                 print("Calling:", callback)
             callback(*args)
 
+    def clear(self):
+        self.callbacks.clear()
+
 from queue import Queue
 from types import FunctionType
 class MainLoopEventQueue:

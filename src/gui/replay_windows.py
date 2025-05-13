@@ -239,6 +239,12 @@ class Timeline:
         dpg.set_item_callback(ui.playback_time_drag, None)
         dpg.set_item_callback(ui.playback_hz_drag, None)
 
+    def clean(self):
+        uis = list(self.registered_uis)
+        for ui in uis:
+            self.unbind_ui(ui)
+        self.on_value_changed.clear()
+
 
 class OrientationReplayWindow(StagedView):
 
@@ -252,9 +258,8 @@ class OrientationReplayWindow(StagedView):
 
         self.data_file: TssDataFile = None
         self.quat = [0, 0, 0, 1]
+        self.dirty = False
         self.axis_info = parse_axis_string_info("xyz")
-
-        self.timeline = Timeline()
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
@@ -274,6 +279,8 @@ class OrientationReplayWindow(StagedView):
             dpg.add_item_resize_handler(callback=self.__on_resize)
         dpg.bind_item_handler_registry(self.orientation_viewer.image, self.visible_handler)
 
+        self.timeline = Timeline()
+        self.timeline_shared = False
         self.timeline.bind_ui(self.timeline_ui)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.timeline.configure(True, 0, 0)
@@ -285,15 +292,26 @@ class OrientationReplayWindow(StagedView):
         """
         if self.data_file is None or self.orientation_source is None: return
         self.quat = self.data_file.get_value(index, self.orientation_source)
+        self.dirty = True
+        if not dpg.is_item_visible(self.orientation_viewer.image): return
         self.queue_render()
+
+    def set_timeline(self, timeline: Timeline, shared=False):
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
+        self.timeline = timeline
+        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
+        self.timeline_shared = shared
 
     def set_default(self):
         """
         Must be called from main thread
         """
-        self.timeline.stop_autoplay()
-        self.timeline.configure(True, 0, 0)
-        self.timeline.set_timeline_value(0)
+        if not self.timeline_shared:
+            self.timeline.stop_autoplay()
+            self.timeline.configure(True, 0, 0)
+            self.timeline.set_timeline_value(0)
         self.quat = [0, 0, 0, 1]
         self.axis_info = parse_axis_string_info("xyz")
         self.queue_render()
@@ -317,14 +335,15 @@ class OrientationReplayWindow(StagedView):
         self.axis_info = self.data_file.settings.axis_order_info
 
         #Set the time source and load the initial position
-        if data_file.has_monotime:
-            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
-            self.timeline.set_timeline_value(0)            
-            self.timeline.set_playback_speed(1)
-        else:
-            self.timeline.configure(False, min_value=1, max_value=len(data_file))
-            self.timeline.set_timeline_value(1)
-            self.timeline.set_playback_speed(data_file.settings.data_hz)
+        if not self.timeline_shared:
+            if data_file.has_monotime:
+                self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
+                self.timeline.set_timeline_value(0)            
+                self.timeline.set_playback_speed(1)
+            else:
+                self.timeline.configure(False, min_value=1, max_value=len(data_file))
+                self.timeline.set_timeline_value(1)
+                self.timeline.set_playback_speed(data_file.settings.data_hz)
     
     def set_model(self, model: OBJ):
         self.orientation_viewer.set_model(model)
@@ -337,6 +356,7 @@ class OrientationReplayWindow(StagedView):
 
     def render_image(self):
         self.orientation_viewer.render_image(self.quat, self.axis_info)
+        self.dirty = False
 
     def __render_image_queue(self):
         self.render_queued = False
@@ -357,6 +377,8 @@ class OrientationReplayWindow(StagedView):
 
     def __on_visible(self, sender, app_data):
         self.grid()
+        if self.dirty:
+            self.queue_render()
         self.orientation_viewer.update_image()
         self.timeline.autoplay_update()
 
@@ -383,6 +405,7 @@ class DataChartReplayWindow(StagedView):
         self.x_time_size = 5 #In seconds, how long will be displayed at once on each graph
         self.max_points = self.x_time_size * 100
         self.cur_index = 0
+        self.dirty = False
 
         self.data_windows: list[list[SensorDataWindow]] = []
         self.active_windows: list[SensorDataWindow] = []
@@ -390,7 +413,6 @@ class DataChartReplayWindow(StagedView):
         self.render_queued = False #For preventing multiple renders per frame
 
         self.data_file: TssDataFile = None
-        self.timeline = Timeline()
 
         with dpg.stage() as self._stage_id:
             #Configuration Menu
@@ -440,27 +462,42 @@ class DataChartReplayWindow(StagedView):
         dpg.bind_item_handler_registry(self.data_windows[0][0].plot, self.visible_handler)
 
         self.__build_active_window_list()
+
+        self.timeline = Timeline()
+        self.timeline_shared = False
         self.timeline.bind_ui(self.timeline_ui)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.set_default()
+
+    def set_timeline(self, timeline: Timeline, shared=False):
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
+        self.timeline = timeline
+        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
+        self.timeline_shared = shared
 
     def set_default(self):
         """
         Must be called from main thread
         """
-        self.timeline.stop_autoplay()
-        self.timeline.configure(True, 0, 0)
-        self.timeline.set_timeline_value_no_callback(0)
+        if not self.timeline_shared:
+            self.timeline.stop_autoplay()
+            self.timeline.configure(True, 0, 0)
+            self.timeline.set_timeline_value_no_callback(0)
         self.set_index(0)
 
     def set_index(self, index: int):
         self.cur_index = index
+        self.dirty = True
+        if self.data_windows[0][0].opened: return
         self.queue_render()
 
     def render_current_index(self, windows: list[SensorDataWindow] = None):
         if self.data_file is None: return
         if windows is None: windows = self.active_windows
-
+        self.dirty = False
+        
         index = self.cur_index
 
         #Compute the X Axis that is shared for all the windows
@@ -530,14 +567,15 @@ class DataChartReplayWindow(StagedView):
                 break      
 
         #Set the time source and load the initial position
-        if data_file.has_monotime:
-            self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
-            self.timeline.set_timeline_value(0)            
-            self.timeline.set_playback_speed(1)
-        else:
-            self.timeline.configure(False, min_value=1, max_value=len(data_file))
-            self.timeline.set_timeline_value(1)
-            self.timeline.set_playback_speed(data_file.settings.data_hz)  
+        if not self.timeline_shared:
+            if data_file.has_monotime:
+                self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
+                self.timeline.set_timeline_value(0)            
+                self.timeline.set_playback_speed(1)
+            else:
+                self.timeline.configure(False, min_value=1, max_value=len(data_file))
+                self.timeline.set_timeline_value(1)
+                self.timeline.set_playback_speed(data_file.settings.data_hz)  
 
         max_points = int(self.data_file.settings.data_hz * self.x_time_size)
         max_points = max(max_points, 10) #Will cap at aleast 10 points. If 0 this is bad
@@ -646,6 +684,10 @@ class ReplayConfigWindow(StagedView):
         self.log_settings = log_settings #Used for the default directory to load when file exploring
         self.orient_window = orient_window
         self.data_window = data_window
+
+        self.shared_timeline = Timeline()
+        orient_window.set_timeline(self.shared_timeline, shared=True)
+        data_window.set_timeline(self.shared_timeline, shared=True)
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window():
@@ -768,6 +810,16 @@ class ReplayConfigWindow(StagedView):
         self.orient_window.set_model(obj_lib.getObjFromName(dpg.get_value(self.model_combo)))
         self.data_window.set_data_file(data_file)
         
+        #Set the shared timelines values
+        if data_file.has_monotime:
+            self.shared_timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
+            self.shared_timeline.set_timeline_value(0)            
+            self.shared_timeline.set_playback_speed(1)
+        else:
+            self.shared_timeline.configure(False, min_value=1, max_value=len(data_file))
+            self.shared_timeline.set_timeline_value(1)
+            self.shared_timeline.set_playback_speed(data_file.settings.data_hz)  
+
         popup.set_message_box(f"Finished loading file.", title="Done")
 
     def set_settings_from_obj(self, settings: TssDataFileSettings):
