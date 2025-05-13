@@ -315,6 +315,9 @@ class SensorDataWindow:
     def notify_open(self):
         self.opened = True
 
+    def notify_closed(self):
+        self.opened = False
+
     def destroy(self):
         self.dropdown.delete()
         dpg.delete_item(self.window)
@@ -413,6 +416,7 @@ class SensorDataWindowAsync(SensorDataWindow):
         self.start_data_chart()
     
     def notify_closed(self):
+        super().notify_closed()
         self.stop_data_chart()
 
     def destroy(self):
