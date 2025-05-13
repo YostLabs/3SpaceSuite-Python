@@ -411,7 +411,13 @@ class DataChartReplayWindow(StagedView):
             if option is None: continue
             option = ThreespaceStreamingOption(option.cmd, param)
             y_data = self.data_file.data[option][min_index:index+1]
-            
+
+            #Format for DPG
+            if y_data.dtype == np.int64: #Int64 type does not play nice with DPG
+                y_data = y_data.astype(np.float64)
+            if len(y_data.shape) == 1: #The input needs to be an array of vectors. Single Elements (like timestamp) aren't vectors by default
+                y_data = np.expand_dims(y_data, 1)
+
             y_data = np.ascontiguousarray(y_data.T)
             window.set_axes(x_axis, y_data)
             window.update(fix_ticks=False)
