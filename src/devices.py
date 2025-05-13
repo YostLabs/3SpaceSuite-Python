@@ -223,7 +223,7 @@ class ThreespaceDevice:
                                        header_serial=serial_number, header_length=data_len)
 
     def get_cached_header(self):
-        return self.__api.header_info.bitfield
+        return self.__api.header_info
 
     def get_metadata_dict(self):
         return self.metadata

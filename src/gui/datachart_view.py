@@ -100,8 +100,7 @@ class SensorDataWindow:
                 dpg.set_value(self.text[i], f"{self.y_data[i][-1]: .05f}")
         
         self.__update_bounds()
-        if fix_ticks:
-            self.__fix_ticks()
+        self.__fix_ticks(no_fix=not fix_ticks)
 
     def set_vline_pos(self, x: float):
         if self.vertical_line_pos == x: return
@@ -274,8 +273,8 @@ class SensorDataWindow:
         if self.vertical_line_pos is not None and min_x > self.vertical_line_pos:
             self.set_vline_pos(None)  
 
-    def __fix_ticks(self):
-        if len(self.x_data) != self.max_points:
+    def __fix_ticks(self, no_fix=False):
+        if len(self.x_data) != self.max_points or no_fix:
             dpg.reset_axis_ticks(self.x_axis) #Allow ticks to be automatically handled when not at max points
             return
         #Once at max points, sometimes DPG will flash between using whole and half second intervals. To avoid this, control the ticks manually.
@@ -327,6 +326,10 @@ class SensorDataWindow:
 from devices import ThreespaceDevice, ThreespaceStreamingStatus, StreamableCommands
 class SensorDataWindowAsync(SensorDataWindow):
 
+    X_SOURCE_TIMESTAMP = 0
+    X_SOURCE_HEADER_TIMESTAMP = 1
+    X_SOURCE_INDEX = 2
+
     def __init__(self, device: ThreespaceDevice, options: list[StreamOption] = None,  default_value: str=None, max_points=500):
         if options is None:
             options = data_charts.get_all_options_from_device(device)
@@ -338,6 +341,14 @@ class SensorDataWindowAsync(SensorDataWindow):
         self.streaming_hz = 100
         self.streaming = False
         self.paused = False
+
+        #For keeping the timestamp from wrapping and controlling its source
+        self.x_source = self.X_SOURCE_TIMESTAMP
+        self.last_timestamp = None
+        self.timestamp_offset = 0
+
+        #Index based X Axis
+        self.cur_index = 0
 
         #Used for speed optimization by the parent window
         self.__delay_registration = False
@@ -351,19 +362,29 @@ class SensorDataWindowAsync(SensorDataWindow):
     def start_data_chart(self):
         if self.streaming or self.cur_option is None: return #Already streaming or nothing to stream
         if not self.visible: return #The window isn't available for streaming
+
         try:
-            self.streaming = self.device.register_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=False)
-            if not self.streaming: return
-            self.streaming = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=False) #Used for the X axis
-            if not self.streaming:
-                #Immediate update is false here because no update will have occurred if the previous command failed, so no need to update streaming
-                #slots here either. Eventually streaming manager should be changed to handle this type of situation itself.
-                self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=False)
-                return
+            #Y Source
+            success = self.device.register_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=False)
+            if not success: return
+
+            #X Source
+            success = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=False) #Used for the X axis
+            if success:
+                self.x_source = self.X_SOURCE_TIMESTAMP
+            elif self.device.get_cached_header().timestamp_enabled:
+                self.x_source = self.X_SOURCE_HEADER_TIMESTAMP
+            else:
+                self.x_source = self.X_SOURCE_INDEX
+
             self.clear_chart()
             if not self.__delay_registration:
                 self.device.update_streaming_settings()
             self.device.register_streaming_callback(self.streaming_callback, hz=self.streaming_hz)
+            self.streaming = True
+            self.last_timestamp = None
+            self.timestamp_offset = 0
+            self.cur_index = 0
         except Exception as e:
             self.streaming = False
             self.device.report_error(e)
@@ -372,15 +393,16 @@ class SensorDataWindowAsync(SensorDataWindow):
         if not self.streaming: return
         try:
             self.device.unregister_streaming_command(self, self.cur_option.cmd, self.cur_command_param, immediate_update=not self.__delay_registration)
-            self.device.unregister_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration)
+            if self.x_source == self.X_SOURCE_TIMESTAMP:
+                self.device.unregister_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=not self.__delay_registration)
             self.device.unregister_streaming_callback(self.streaming_callback)
         except Exception as e:
             self.device.report_error(e)
         self.streaming = False
 
-    def update(self):
+    def update(self, fix_ticks=True):
         if self.paused: return
-        return super().update()
+        return super().update(fix_ticks=fix_ticks)
     
     def hide(self):
         super().hide()
@@ -392,11 +414,35 @@ class SensorDataWindowAsync(SensorDataWindow):
 
     def streaming_callback(self, status: ThreespaceStreamingStatus):
         if status == ThreespaceStreamingStatus.Data:
-            timestamp = self.device.get_streaming_value(StreamableCommands.GetTimestamp)
+            if not self.streaming: return
             data = self.device.get_streaming_value(self.cur_option.cmd, self.cur_command_param)
-            self.add_point(timestamp / 1_000_000, data)
+
+            #Get X from dynamic timestamp source
+            if self.x_source in (self.X_SOURCE_HEADER_TIMESTAMP, self.X_SOURCE_TIMESTAMP):
+                if self.x_source == self.X_SOURCE_TIMESTAMP:
+                    timestamp = self.device.get_streaming_value(StreamableCommands.GetTimestamp)
+                else:
+                    timestamp = self.device.get_streaming_last_response().header.timestamp
+                    if timestamp is None: #Something disabled the header timestamp without notifying the data charts
+                        self.stop_data_chart()
+                        return
+        
+                #Handle Wrapping of timestamp
+                if self.last_timestamp is not None and timestamp < self.last_timestamp:
+                    if self.last_timestamp < 0xFFFFFFFF:
+                        self.timestamp_offset += 0xFFFFFFFF #U32 timestamp wrap
+                    else:
+                        self.timestamp_offset += 0xFFFFFFFFFFFFFFFF #U64 timestamp wrap
+                self.last_timestamp = timestamp
+                timestamp += self.timestamp_offset
+                x = timestamp / 1_000_000
+            else:
+                x = self.cur_index
+                self.cur_index += 1
+
+            self.add_point(x, data)
         elif status == ThreespaceStreamingStatus.DataEnd:
-            self.update()
+            self.update(fix_ticks=self.x_source != self.X_SOURCE_INDEX)
         elif status == ThreespaceStreamingStatus.Reset:
             self.stop_data_chart()
 
