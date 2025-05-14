@@ -37,6 +37,7 @@ class FileDialog:
     """
 
     IMAGE_ROOT = "images/"
+    BASE_WORKING_DIRECTORY = None
 
     def __init__(
         self,
@@ -98,6 +99,10 @@ class FileDialog:
         #For helping with selection operations
         self.fileinfo_to_row: dict[str,int] = {}
         self.row_to_fileinfo: dict[int,str] = {}
+
+
+        if FileDialog.BASE_WORKING_DIRECTORY is None:
+            FileDialog.BASE_WORKING_DIRECTORY = os.getcwd()
 
         # file dialog theme
 
@@ -350,6 +355,7 @@ class FileDialog:
             if self.on_select is None:
                 pass
             else:
+                os.chdir(FileDialog.BASE_WORKING_DIRECTORY)
                 self.on_select(selected)
         
         def on_cancel():
@@ -358,6 +364,7 @@ class FileDialog:
             if self.on_cancel is None:
                 pass
             else:
+                os.chdir(FileDialog.BASE_WORKING_DIRECTORY)
                 self.on_cancel()
 
         def open_drive(sender, app_data, user_data):
@@ -934,6 +941,7 @@ class FileDialog:
         self.on_cancel = callback     
 
     def destroy(self):
+        os.chdir(FileDialog.BASE_WORKING_DIRECTORY)
         dpg.delete_item(self.window)
         dpg.delete_item(self.selec_alignt)
         dpg.delete_item(self.size_alignt)
