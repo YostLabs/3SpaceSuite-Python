@@ -314,7 +314,7 @@ class SensorDataWindow:
     def notify_open(self):
         self.opened = True
 
-    def notify_closed(self):
+    def notify_closed(self, *args):
         self.opened = False
 
     def destroy(self):
@@ -461,8 +461,8 @@ class SensorDataWindowAsync(SensorDataWindow):
         super().notify_open()
         self.start_data_chart()
     
-    def notify_closed(self):
-        super().notify_closed()
+    def notify_closed(self, *args):
+        super().notify_closed(*args)
         self.stop_data_chart()
 
     def destroy(self):

@@ -269,8 +269,8 @@ class DataLogConfigWindow(StagedView):
     def __mode_radio_callback(self, sender, app_data, user_data):
         self.log_settings.binary_mode = app_data == "Binary"
 
-    def notify_opened(self):
-        self.slots_window.notify_opened()
+    def notify_opened(self, old_view: StagedView):
+        self.slots_window.notify_opened(old_view)
 
     def delete(self):
         self.slots_window.delete()
@@ -310,7 +310,7 @@ class LoggingSlotsConfigWindow(StagedView):
 
         self.__on_device_selected(None, self.default_item)
 
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         #Reload available devices
         self.devices = [d for d in self.device_manager.threespace_manager.get_devices() if d.is_open and not d.in_bootloader]
         self.keys = [d.name for d in self.devices]

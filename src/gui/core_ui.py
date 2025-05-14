@@ -122,10 +122,10 @@ class DynamicViewport(StagedView):
     def set_view(self, staged_view: StagedView):
         if self.current_view is not None:
             dpg.delete_item(self.viewport, children_only=True)
-            self.current_view.notify_closed()
+            self.current_view.notify_closed(staged_view)
         if staged_view is not None:
             staged_view.submit(self.viewport)
-            staged_view.notify_opened()
+            staged_view.notify_opened(self.current_view)
         self.current_view = staged_view
 
 #Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
@@ -145,11 +145,11 @@ class DpgWizard:
 
     def set_window(self, window: StagedView):
         if self.cur_window is not None:
-            self.cur_window.notify_closed()
+            self.cur_window.notify_closed(window)
             dpg.delete_item(self.modal, children_only=True)
         if window is not None:
             window.submit(self.modal)
-            window.notify_opened()
+            window.notify_opened(self.cur_window)
         self.cur_window = window
     
     def delete(self):

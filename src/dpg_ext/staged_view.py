@@ -26,12 +26,12 @@ class StagedView:
     This does NOT actually remove the stage from view, it is up to the caller to do that.
     This is purely to notify the stage it is being closed so windows can have close events.
     """
-    def notify_closed(self): ...
+    def notify_closed(self, new_view: "StagedView"): ...
 
     """
     Same as close but for opening
     """
-    def notify_opened(self): ...
+    def notify_opened(self, old_view: "StagedView"): ...
 
     def delete(self):
         with dpg_lock():
@@ -70,20 +70,22 @@ class StagedTabManager(StagedView):
         self.tab_bar = tab_bar
         dpg.set_item_callback(tab_bar, self.__tab_callback)
 
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         if self.deleted or self.staged_view_dict is None: return
-        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_opened()
+        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_opened(old_view)
 
-    def notify_closed(self):
+    def notify_closed(self, new_view: StagedView):
         if self.deleted or self.staged_view_dict is None: return
-        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_closed()
+        self.staged_view_dict[dpg.get_value(self.tab_bar)].notify_closed(new_view)
 
     def __tab_callback(self, sender, app_data, user_data):
         if self.deleted: return
+        new_view = self.staged_view_dict[app_data]
+        old_view = self.staged_view_dict[self.open_tab]
         if self.open_tab is not None and self.open_tab != app_data:
-            self.staged_view_dict[self.open_tab].notify_closed()
+            self.staged_view_dict[self.open_tab].notify_closed(new_view)
         self.open_tab = app_data
-        self.staged_view_dict[app_data].notify_opened()
+        self.staged_view_dict[app_data].notify_opened(old_view)
     
     def delete(self):
         if self.staged_view_dict is not None:

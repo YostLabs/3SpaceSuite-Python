@@ -141,7 +141,13 @@ class Timeline:
 
         self.on_value_changed: Callback[[Timeline, int|float],None] = Callback()
 
-        self.registered_uis: set[TimelineUI] = set()
+        #Track its parent as well so can determine when to pause if swapping windows
+        self.registered_uis: dict[TimelineUI,StagedView] = {}
+
+    def swapping_window(self, new_window: StagedView):
+        #Stop auto play if swapping to a window that is not managed by this timeline
+        if new_window is None or new_window not in self.registered_uis.values():
+            self.stop_autoplay()
 
     def configure(self, time_based: bool, min_value: float|int, max_value: float|int):
         self.time_based = time_based
@@ -211,8 +217,9 @@ class Timeline:
     def __on_ui_rate_changed(self, sender, new_rate):
         self.set_playback_speed(new_rate)
 
-    def bind_ui(self, ui: TimelineUI):
-        self.registered_uis.add(ui)
+    def bind_ui(self, ui: TimelineUI, parent: StagedView = None):
+        if ui in self.registered_uis: return
+        self.registered_uis[ui] = parent
 
         dpg.set_item_callback(ui.pause_button, self.stop_autoplay)
         dpg.set_item_callback(ui.play_button, self.start_autoplay)
@@ -228,7 +235,8 @@ class Timeline:
         ui.set_rate(self.rate)
 
     def unbind_ui(self, ui: TimelineUI):
-        self.registered_uis.remove(ui)
+        if ui not in self.registered_uis: return
+        del self.registered_uis[ui]
 
         dpg.set_item_callback(ui.pause_button, None)
         dpg.set_item_callback(ui.play_button, None)
@@ -240,7 +248,7 @@ class Timeline:
         dpg.set_item_callback(ui.playback_hz_drag, None)
 
     def clean(self):
-        uis = list(self.registered_uis)
+        uis = list(self.registered_uis.keys())
         for ui in uis:
             self.unbind_ui(ui)
         self.on_value_changed.clear()
@@ -281,7 +289,7 @@ class OrientationReplayWindow(StagedView):
 
         self.timeline = Timeline()
         self.timeline_shared = False
-        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.timeline.configure(True, 0, 0)
 
@@ -300,7 +308,7 @@ class OrientationReplayWindow(StagedView):
         self.timeline.unbind_ui(self.timeline_ui)
         self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
         self.timeline = timeline
-        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.timeline_shared = shared
 
@@ -369,11 +377,11 @@ class OrientationReplayWindow(StagedView):
         else:
             self.render_index(value-1)
 
-    def notify_opened(self):
-        MainLoopEventQueue.queue_sync_event(self.render_image)
+    def notify_opened(self, old_view: StagedView):
+        self.queue_render()
 
-    def notify_closed(self):
-        self.timeline.stop_autoplay()    
+    def notify_closed(self, new_view: StagedView):
+        self.timeline.swapping_window(new_view)
 
     def __on_visible(self, sender, app_data):
         self.grid()
@@ -465,7 +473,7 @@ class DataChartReplayWindow(StagedView):
 
         self.timeline = Timeline()
         self.timeline_shared = False
-        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.set_default()
 
@@ -473,7 +481,7 @@ class DataChartReplayWindow(StagedView):
         self.timeline.unbind_ui(self.timeline_ui)
         self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
         self.timeline = timeline
-        self.timeline.bind_ui(self.timeline_ui)
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
         self.timeline.on_value_changed.subscribe(self.__timeline_callback)
         self.timeline_shared = shared
 
@@ -497,7 +505,7 @@ class DataChartReplayWindow(StagedView):
         if self.data_file is None: return
         if windows is None: windows = self.active_windows
         self.dirty = False
-        
+
         index = self.cur_index
 
         #Compute the X Axis that is shared for all the windows
@@ -654,6 +662,10 @@ class DataChartReplayWindow(StagedView):
         for row in range(self.rows):
             for col in range(self.cols):
                 self.active_windows.append(self.data_windows[col][row])
+
+    def notify_closed(self, new_view):
+        self.timeline.swapping_window(new_view)
+        return super().notify_closed(new_view)
 
     def delete(self):
         dpg.delete_item(self.visible_handler)

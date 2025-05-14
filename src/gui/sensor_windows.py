@@ -108,7 +108,7 @@ class SensorMasterWindow(StagedTabManager):
         dpg.pop_container_stack()
 
         self.set_open_tab(self.main_tab)
-        self.notify_opened()
+        self.notify_opened(self)
 
     def load_bootloader_windows(self):
         dpg.push_container_stack(self.child_window)
@@ -125,7 +125,7 @@ class SensorMasterWindow(StagedTabManager):
         dpg.pop_container_stack()
 
         self.set_open_tab(self.main_tab)
-        self.notify_opened()
+        self.notify_opened(self)
 
     def on_sensor_opened(self):
         self.connection_window.delete()
@@ -299,10 +299,10 @@ class SensorTerminalWindow(StagedView):
         self.macro_manager.on_modified.subscribe(self.__on_macros_modified)
         self.macro_config_window = None
 
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         self.streaming_paused = False
 
-    def notify_closed(self):
+    def notify_closed(self, new_view: StagedView):
         try:
             self.device.resume_streaming(self)
             self.streaming_paused = False
@@ -652,12 +652,12 @@ class SensorOrientationWindow(StagedView):
         except Exception as e:
             self.device.report_error(e)
 
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         self.reload_dynamic_settings() #Just better to do this before starting streaming
         self.__start_viewer()
         self.opened = True
 
-    def notify_closed(self):
+    def notify_closed(self, new_view: StagedView):
         self.__stop_viewer()
         self.opened = False
 
@@ -771,7 +771,7 @@ class SensorDataChartsWindow(StagedView):
 
     #Note: Because of mass opening and closing, the registration is delayed and force updated at the end of this function
     #so only one call has to happen to the actual sensor. This improves speed for opening this window
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         self.grid()
         for row in self.data_windows:
             for window in row:
@@ -783,7 +783,7 @@ class SensorDataChartsWindow(StagedView):
         except Exception as e:
             self.device.report_error(e)
     
-    def notify_closed(self):
+    def notify_closed(self, new_view: StagedView):
         for row in self.data_windows:
             for window in row:
                 window.delay_streaming_registration(True)
@@ -1266,7 +1266,7 @@ class SensorCalibrationWindow(StagedView):
         self.update_gyro_calib()
         self.update_mag_calib()
 
-    def notify_opened(self):
+    def notify_opened(self, old_view: StagedView):
         self.update_properties()
 
     def calib_to_matrix(self, calib: list[float]):
