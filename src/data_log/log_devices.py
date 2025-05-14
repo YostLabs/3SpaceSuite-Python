@@ -82,7 +82,8 @@ class LoggableDevice:
 
 class ThreeSpaceLogDevice(LoggableDevice):
 
-    def __init__(self, device: ThreespaceDevice, log_options: list[ThreespaceStreamingOption], data_rate: float, binary:bool=False, sync_timestamp=True):
+    def __init__(self, device: ThreespaceDevice, log_options: list[ThreespaceStreamingOption], header_bitfield: int, 
+                 data_rate: float, binary:bool=False, sync_timestamp=True):
         self.device = device
 
         self.log_options = log_options
@@ -97,6 +98,7 @@ class ThreeSpaceLogDevice(LoggableDevice):
 
         #This header value needs reformatted when enabled to match ASCII formatting. So cache this
         #one time to avoid repeated calls to get_index(serial)
+        self.header_bitfield = header_bitfield
         self.header_cached = False
         self.serial_index = None
 
@@ -117,6 +119,7 @@ class ThreeSpaceLogDevice(LoggableDevice):
     def setup(self):
         #Ensure that nothing else is streaming. All streaming will be dedicated to logging
         success = self.device.force_reset_streaming()
+        self.device.set_response_header_bitfield(self.header_bitfield) #Must be done after streaming is stopped
         if not success:
             self.add_error(LogError(ErrorLevels.MAJOR, f"Failed to acquire stream lock for {self.device.name}"))
             return False

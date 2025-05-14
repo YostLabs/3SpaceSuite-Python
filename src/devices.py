@@ -6,7 +6,9 @@ Also has some abstract devices, such as LoggerDevice
 
 #from Threespace.USB_ExampleClass import UsbCom
 #from Threespace.ThreeSpaceAPI import ThreeSpaceSensor, Streamable, STREAM_CONTINUOUSLY
-from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, ThreespaceCommandInfo, threespaceCommandGetInfo, ThreespaceCmdResult
+from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, \
+    ThreespaceCommandInfo, threespaceCommandGetInfo, ThreespaceCmdResult, \
+    ThreespaceHeaderInfo
 from yostlabs.communication.ble import ThreespaceBLEComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
 from yostlabs.tss3.utils.version import ThreespaceFirmwareUploader
@@ -221,6 +223,19 @@ class ThreespaceDevice:
         return self.__api.set_settings(header_status=success_fail, header_timestamp=timestamp, 
                                        header_echo=echo, header_checksum=checksum, 
                                        header_serial=serial_number, header_length=data_len)
+
+    def set_response_header_bitfield(self, bitfield: int):
+        return self.__api.set_settings(header=bitfield)
+
+    def build_header_bitfield(self, success_fail=False, timestamp=False, echo=False, checksum=False, serial_number=False, data_len=False):
+        header = ThreespaceHeaderInfo()
+        header.status_enabled = success_fail
+        header.timestamp_enabled = timestamp
+        header.echo_enabled = echo
+        header.checksum_enabled = checksum
+        header.serial_enabled = serial_number
+        header.length_enabled = data_len
+        return header.bitfield
 
     def get_cached_header(self):
         return self.__api.header_info

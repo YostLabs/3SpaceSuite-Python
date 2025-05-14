@@ -59,11 +59,11 @@ def start_logging(data_logger: DataLogger, device_manager: DeviceManager, log_se
     groups = []
     for device in device_manager.threespace_manager.get_devices():
         if not device.is_open or device.in_bootloader: continue 
-        device.set_response_header(success_fail=log_settings.header_status, timestamp=log_settings.header_timestamp, 
+        header = device.build_header_bitfield(success_fail=log_settings.header_status, timestamp=log_settings.header_timestamp, 
                                     echo=log_settings.header_echo, checksum=log_settings.header_checksum, 
                                     serial_number=log_settings.header_serial, data_len=log_settings.header_length)
         stream_options = log_settings.get_slots_for_serial(device.cached_serial_number)
-        log_device = ThreeSpaceLogDevice(device, stream_options, 
+        log_device = ThreeSpaceLogDevice(device, stream_options, header,
                                             log_settings.hz, binary=log_settings.binary_mode,
                                             sync_timestamp=log_settings.synchronize_timestamp)
         groups.append(DefaultLogGroup([log_device], device.name, csv=not log_settings.binary_mode))
