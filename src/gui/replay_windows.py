@@ -120,6 +120,10 @@ class TimelineUI:
     def set_rate(self, rate: int|float):
         dpg.set_value(self.__active_group.drag, rate)
 
+    @property
+    def visible(self):
+        return dpg.is_item_visible(self.pause_button)
+
 
 class Timeline:
 
@@ -246,6 +250,10 @@ class Timeline:
 
         dpg.set_item_callback(ui.playback_time_drag, None)
         dpg.set_item_callback(ui.playback_hz_drag, None)
+
+    @property
+    def visible(self):
+        return any(ui.visible for ui in self.registered_uis)
 
     def clean(self):
         uis = list(self.registered_uis.keys())
@@ -701,6 +709,8 @@ class ReplayConfigWindow(StagedView):
         orient_window.set_timeline(self.shared_timeline, shared=True)
         data_window.set_timeline(self.shared_timeline, shared=True)
 
+        self.data_file: TssDataFile = None
+
         with dpg.stage() as self._stage_id:
             with dpg.child_window():
                 dpg.add_text("File Loading:")
@@ -743,6 +753,10 @@ class ReplayConfigWindow(StagedView):
         with dpg.item_handler_registry() as self.edited_handler:
             dpg.add_item_deactivated_after_edit_handler(callback=self.__axis_order_edited)
         dpg.bind_item_handler_registry(self.axis_order_input, self.edited_handler)
+
+        with dpg.handler_registry() as self.keyboard_handler:
+            dpg.add_key_press_handler(dpg.mvKey_Left, callback=self.__keyboard_callback)
+            dpg.add_key_press_handler(dpg.mvKey_Right, callback=self.__keyboard_callback)
 
         self.default_settings()
 
@@ -832,6 +846,7 @@ class ReplayConfigWindow(StagedView):
             self.shared_timeline.set_timeline_value(1)
             self.shared_timeline.set_playback_speed(data_file.settings.data_hz)  
 
+        self.data_file = data_file
         popup.set_message_box(f"Finished loading file.", title="Done")
 
     def set_settings_from_obj(self, settings: TssDataFileSettings):
@@ -996,7 +1011,33 @@ class ReplayConfigWindow(StagedView):
         else:
             self.axis_order = new_order
 
+    def __keyboard_callback(self, sender, app_data):
+        if self.data_file is None or not self.shared_timeline.visible: return
+        if self.shared_timeline.auto_play: return #Don't allow while autoplaying
+        #Get direction
+        mod = 1
+        if app_data == dpg.mvKey_Left:
+            mod = -1
+        
+        #Convert current value to base index
+        self.shared_timeline.value
+        if not self.shared_timeline.time_based:
+            index = self.shared_timeline.value - 1
+        else:
+            index = self.data_file.monotime_to_index(self.shared_timeline.value)
+
+        #Compute New Index
+        new_index = index + mod
+        new_index = max(0, min(len(self.data_file) - 1, new_index))
+
+        #Assign new value
+        if not self.shared_timeline.time_based:
+            self.shared_timeline.set_timeline_value(new_index + 1)
+        else:
+            self.shared_timeline.set_timeline_value(self.data_file.get_monotime(new_index))
+
     def delete(self):
+        dpg.delete_item(self.keyboard_handler)
         dpg.delete_item(self.edited_handler)
         self.stream_slots_menu.delete()
         return super().delete()
