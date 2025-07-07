@@ -282,6 +282,10 @@ class ThreespaceDevice:
     def set_led_color(self, rgb: list[int, int, int]):
         self.__api.set_settings(led_rgb=f"{rgb[0]/255},{rgb[1]/255},{rgb[2]/255}")
 
+    def get_led_color(self):
+        result = self.__api.get_settings("led_rgb")
+        return [float(v) for v in result.split(',')]
+
     def get_raw_mag(self, id: int):
         return self.__api.getRawMagVec(id).data
     
@@ -454,11 +458,24 @@ class ThreespaceDevice:
         #self.dirty = True
         self.__api.set_cached_settings_dirty()
 
-    def send_ascii_command(self, ascii):
+    def send_ascii_command(self, ascii: str):
         if self.is_api_streaming():
             return False
-        command = f'{ascii}\n'.encode()
-        self.__api.com.write(command)
+
+        #When using a fast interface like USB, sending too much at once may out pace the sensors command processing speed.
+        #Also leaving room for added newline
+        max_packet_size = 2047
+        start = 0
+        while start < len(ascii):
+            end = min(start + max_packet_size, len(ascii))
+            packet = ascii[start:end]
+            if end == len(ascii):
+                packet += "\n"
+            self.__api.com.write(packet.encode())
+            start = end
+            if start < len(ascii):
+                time.sleep(0.001)
+
         self.set_cached_settings_dirty() #May have modified settings, make sure it updates properly next time
         return True
     

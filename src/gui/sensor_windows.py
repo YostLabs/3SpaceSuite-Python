@@ -275,8 +275,7 @@ class SensorTerminalWindow(StagedView):
                 dpg.add_text("Device Name:")
                 dpg.add_input_text(width=200, default_value=threespace_device.name, callback=self.__on_device_name_changed)
             with dpg.group(horizontal=True):
-                self.color = dpg.add_color_edit(display_mode=dpg.mvColorEdit_rgb, no_alpha=True, width=200)
-                dpg.add_button(label="Set LED",callback=self.__on_set_led)
+                self.color = dpg.add_color_edit(display_mode=dpg.mvColorEdit_rgb, no_alpha=True, width=200, callback=self.__on_set_led)
             with dpg.group(horizontal=True):
                 dpg.add_text("Port:")
                 dpg.add_text(str(self.device.com_port))
@@ -294,13 +293,26 @@ class SensorTerminalWindow(StagedView):
             dpg.add_key_press_handler(dpg.mvKey_Up, callback=self.__key_handler)
             dpg.add_key_press_handler(dpg.mvKey_Down, callback=self.__key_handler)
 
+        # with dpg.item_handler_registry() as self.edited_handler:
+        #     dpg.add_item_deactivated_after_edit_handler(callback=self.__on_set_led)
+        # dpg.bind_item_handler_registry(self.color, self.edited_handler)
+
         #Setup macros
         self.__load_macros()
         self.macro_manager.on_modified.subscribe(self.__on_macros_modified)
         self.macro_config_window = None
 
+    def load_dynamic_settings(self):
+        try:
+            color = self.device.get_led_color()
+            color = [int(255 * v) for v in color]
+            dpg.set_value(self.color, color)
+        except Exception as e:
+            self.device.report_error(e)
+
     def notify_opened(self, old_view: StagedView):
         self.streaming_paused = False
+        self.load_dynamic_settings()
 
     def notify_closed(self, new_view: StagedView):
         try:
@@ -336,7 +348,8 @@ class SensorTerminalWindow(StagedView):
     
     def __on_set_led(self, sender, app_data, user_data):
         color = dpg.get_value(self.color)
-        color = [int(color[i]) for i in range(3)]
+        alpha = color[3]
+        color = [int(color[i] * (alpha / 255)) for i in range(3)]
 
         try:
             self.device.set_led_color(color)
