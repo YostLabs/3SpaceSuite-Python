@@ -559,7 +559,6 @@ class DataChartReplayWindow(StagedView):
         self.set_default()
         if self.data_file is None or len(data_file) == 0: return
 
-
         self.options = data_charts.get_options_from_slots(data_file.settings.stream_slots)
         for col in self.data_windows:
             for window in col:
@@ -569,7 +568,7 @@ class DataChartReplayWindow(StagedView):
         #Set the initial windows configs
         for option in self.options:
             #Not going to chart timestamp by default
-            if option.cmd == StreamableCommands.GetTimestamp: continue
+            if option.cmd == StreamableCommands.GetTimestamp or not self.active_windows[active_index].is_valid_option(option): continue
             if option.valid_params is not None:
                 for param in option.valid_params: 
                     self.active_windows[active_index].set_option(option, param)

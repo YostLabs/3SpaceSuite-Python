@@ -166,8 +166,10 @@ class SensorDataWindow:
         self.set_text_values_at_x(x_data[-1])      
 
     def set_options(self, options: list[StreamOption], default_value: str = None, update_window: bool = True):
+        #Remove invalid options (Optiosn that output strings)
         self.options = {"None": None}
         if options is not None:
+            options = [o for o in options if 's' not in o.info.out_format.lower()]
             self.options |= { o.display_name: o for o in options }
         self.keys: list[str] = list(self.options.keys())
 
@@ -198,6 +200,12 @@ class SensorDataWindow:
 
     def get_option(self):
         return self.cur_option, self.cur_command_param  
+
+    def is_valid_option(self, option: StreamOption):
+        for o in self.options.values():
+            if not isinstance(o, StreamOption): continue
+            if o.cmd == option.cmd: return True
+        return False
 
     def hide(self):
         dpg.hide_item(self.window)
@@ -333,6 +341,7 @@ class SensorDataWindowAsync(SensorDataWindow):
     def __init__(self, device: ThreespaceDevice, options: list[StreamOption] = None,  default_value: str=None, max_points=500):
         if options is None:
             options = data_charts.get_all_options_from_device(device)
+
         super().__init__(options, default_value=default_value, max_points=max_points)
 
         self.device = device
