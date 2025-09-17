@@ -20,7 +20,7 @@ class PopupWindow:
     def __init__(self, title=None, width=350, always_center=True, no_close=False, **kwargs):
         with dpg.window(label=title, modal=True, no_resize=True, show=True, 
                         width=width, autosize=True,
-                        no_move=always_center, no_close=no_close, on_close=self.__on_close, 
+                        no_move=always_center, no_close=no_close, on_close=self.__on_close, no_title_bar=not title, 
                         **kwargs) as self.window:
             self.text_group = dpg.add_group()
             self.loading_group = dpg.add_group()
@@ -33,6 +33,12 @@ class PopupWindow:
                 dpg.add_item_visible_handler(callback=center_window_handler_callback, user_data=self.window)
             dpg.bind_item_handler_registry(self.window, self.visible_handler)
     
+    def configure(self, **kwargs):
+        if "height" in kwargs:
+            dpg.set_item_height(self.window, kwargs["height"])
+            del kwargs["height"]
+        dpg.configure_item(self.window, **kwargs)
+
     def add_buttons(self, buttons: list[PopupButton]):
         dpg.push_container_stack(self.button_group)
         with dpg.group(horizontal=True):

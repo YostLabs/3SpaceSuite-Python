@@ -203,18 +203,42 @@ class SensorConnectionWindow(StagedView):
         self.device = device
         self.callback = connected_callback
     
-    def __on_connect_requested(self):
+    def connect_thread(self, result: list):
         try:
             self.device.open()
+            result[0] = 1
         except Exception as e:
+            result[0] = 0
+            result[1] = e
+            return
+
+    def __on_connect_requested(self):
+        result = [0, 0]
+        if self.device.com_type == "BLE":
+            popup = dpg_ext.create_popup_circle_loading_indicator(width=100)
+
+            thread = threading.Thread(target=self.connect_thread, args=(result,), daemon=True)
+            thread.start()
+            while thread.is_alive():
+                dpg.render_dearpygui_frame()
+            thread.join()
+
+            popup.delete()
+        else:
+            self.connect_thread(result)
+
+        if result[0] == 0:
             Logger.log_error(f"Failed to connect to {self.device.name}")
-            Logger.log_error(f"Failed to connect to {str(e)}")
+            Logger.log_error(f"Failed to connect to {str(result[1])}")
             self.display_connection_error()
             return
+
+
 
         Logger.log_info(f"Connected to {self.device.name}")
         if self.callback:
             self.callback()
+
 
     def display_connection_error(self):
         with dpg.window(modal=True, no_resize=True, no_move=True) as popup:
