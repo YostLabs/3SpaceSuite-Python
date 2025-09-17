@@ -901,6 +901,7 @@ DEFAULT_FIRMWARE_KEY = "firmware_folder"
 from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
+from datetime import datetime
 class SensorSettingsWindow(StagedView):
 
     def __init__(self, device: ThreespaceDevice):
@@ -956,9 +957,21 @@ class SensorSettingsWindow(StagedView):
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
+
+                if device.has_datetime():
+                    dpg.add_button(label="Set Date Time", callback=self.__set_date_time)
         
         self.device = device
         self.reload_settings()
+
+    def __set_date_time(self, sender, app_data):
+        now = datetime.now()
+        try:
+            self.device.set_datetime(now.year, now.month, now.day, now.hour, now.minute, now.second)
+        except Exception as e:
+            self.device.report_error(e)
+        else:
+            dpg_ext.create_popup_message(f"Set time to {now.strftime('%Y %m %d, %H:%M:%S')}")
 
     def restart_sensor(self):
         try:

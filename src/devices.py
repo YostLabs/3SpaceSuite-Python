@@ -7,7 +7,7 @@ Also has some abstract devices, such as LoggerDevice
 #from Threespace.USB_ExampleClass import UsbCom
 #from Threespace.ThreeSpaceAPI import ThreeSpaceSensor, Streamable, STREAM_CONTINUOUSLY
 from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, \
-    ThreespaceCommandInfo, threespaceCommandGetInfo, ThreespaceCmdResult, \
+    ThreespaceCommandInfo, threespaceCommandGetInfo, threespaceCommandGetByName, ThreespaceCmdResult, \
     ThreespaceHeaderInfo
 from yostlabs.communication.ble import ThreespaceBLEComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
@@ -218,6 +218,12 @@ class ThreespaceDevice:
     
     def set_timestamp(self, time):
         self.__api.set_settings(timestmap=time)
+
+    def has_datetime(self):
+        return self.__api.has_command(threespaceCommandGetByName("setDateTime"))
+
+    def set_datetime(self, year: int, month: int, day: int, hour: int, minute: int, second: int):
+        self.__api.setDateTime(year, month, day, hour, minute, second)
 
     def set_response_header(self, success_fail=False, timestamp=False, echo=False, checksum=False, id=False, serial_number=False, data_len=False):        
         return self.__api.set_settings(header_status=success_fail, header_timestamp=timestamp, 
