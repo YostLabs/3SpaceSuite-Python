@@ -140,14 +140,18 @@ class TssDataFileSettings:
         if settings.data_hz is not None:
             settings.data_hz = float(settings.data_hz)
         
-        #Stream Slots
-        if not "stream_slots" in cfg:
+        #Slot Config
+        slots_string = None
+        if from_logging and "log_slots" in cfg: #Older versions only have stream_slots, so fall back to that if no log_slots
+            slots_string = cfg["log_slots"]
+        elif "stream_slots" in cfg:
+            slots_string = cfg["stream_slots"]
+
+        if slots_string is None:
             settings.stream_slots = None
         else:
-            stream_string = cfg["stream_slots"]
-
             try:
-                settings.stream_slots = get_stream_options_from_str(stream_string)
+                settings.stream_slots = get_stream_options_from_str(slots_string)
             except:
                 settings.stream_slots = None
         
