@@ -1405,6 +1405,7 @@ class GradientDescentCalibrationWizard:
         
         with dpg.handler_registry() as self.keyboard_handler:
             dpg.add_key_press_handler(dpg.mvKey_Return, callback=self.__on_keyboard_next_pressed)
+            dpg.add_key_press_handler(dpg.mvKey_NumPadEnter, callback=self.__on_keyboard_next_pressed)
             dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=self.__on_keyboard_next_pressed)
 
         with dpg.item_handler_registry(label="Gradient Descent Visible Handler") as self.visible_handler:
