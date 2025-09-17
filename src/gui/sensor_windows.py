@@ -1081,6 +1081,14 @@ class SensorSettingsWindow(StagedView):
         self.firmware_selector.destroy()
         self.firmware_selector = None
 
+    def notify_opened(self, old_view):
+        try:
+            filter_mode = self.device.get_filter_mode()
+        except Exception as e:
+            self.device.report_error(e)
+            return
+        dpg.set_value(self.filter_mode_text, filter_mode)
+
     def delete(self):
         self.close_firmware_selector()
         super().delete()
