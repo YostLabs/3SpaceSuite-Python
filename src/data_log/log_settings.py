@@ -63,7 +63,11 @@ class LogSettings(PropertyDict):
             options[key] = []
             for slot in slots:
                 #options[key].append(ThreespaceStreamingOption(*slot))
-                options[key].append(ThreespaceStreamingOption(StreamableCommands(slot[0]), slot[1]))
+                try:
+                    streamable_command = StreamableCommands(slot[0])
+                except ValueError as e:
+                    continue
+                options[key].append(ThreespaceStreamingOption(streamable_command, slot[1]))
         base.slot_configuration = options
         return base
 
