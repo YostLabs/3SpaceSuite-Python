@@ -1,11 +1,11 @@
-dearpygui>=2.0.0
+dearpygui>=2.1.0
 glfw>=2.8.0
 numpy>=2.2.1
 Pillow>=11.1.0
 PyOpenGL>=3.1.7
 pyserial>=3.5
 typing_extensions>=4.12.2
-yostlabs>=2025.5.14
+yostlabs>=2025.9.17
 psutil>=7.0.0
 freetype-py>=2.5.1
 #Using this fork until the pull request gets implemented into the parent repository
