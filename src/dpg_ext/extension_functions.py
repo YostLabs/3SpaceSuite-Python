@@ -104,9 +104,7 @@ def create_popup_circle_loading_indicator(text: str = "", title: str = "", width
     return popup
 
 def create_popup_message(text: str = "", title: str = "", width=350, always_center: bool = True):
-    popup = PopupWindow(title=title, width=width, always_center=always_center).add_text(text)
-    popup.add_buttons([PopupButton("Ok", callback=popup.delete)])
-    return popup
+    return PopupWindow(title=title, width=width, always_center=always_center).set_message_box(text, title)
 
 def create_confirm_popup(text: str = "", on_cancel: Callable = None, on_confirm: Callable = None, title: str = "Confirmation", width=350,
                             always_center: bool = True):
