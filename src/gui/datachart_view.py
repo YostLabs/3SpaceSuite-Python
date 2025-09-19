@@ -13,12 +13,12 @@ class SensorDataWindow:
 
     THEMES = None
 
-    def __init__(self, options: list[StreamOption] = None,  default_value: str=None, max_points=500, on_option_modified: Callable[["SensorDataWindow"],None] = None):
+    def __init__(self, options: list[StreamOption] = None, default_option: tuple[StreamOption,int]=None, options_selectable: bool = True, default_value: str=None, max_points=500, on_option_modified: Callable[["SensorDataWindow"],None] = None):
         if SensorDataWindow.THEMES is None:
             SensorDataWindow.THEMES = [theme_lib.plot_x_line_theme, theme_lib.plot_y_line_theme, theme_lib.plot_z_line_theme, theme_lib.plot_w_line_theme]
 
         #Options to select from for the chart
-        self.set_options(options, default_value=default_value, update_window=False)
+        self.set_options(options, default_option=default_option, default_value=default_value, update_window=False)
         self.option_modfied_callback = on_option_modified
 
         #Helper variables
@@ -54,6 +54,9 @@ class SensorDataWindow:
                 #Additional option selection information if needed
                 self.param_dropdown = dpg.add_combo(items=[], default_value="", show=False, callback=self._on_stream_param_changed, width=-1)
             
+            if not options_selectable:
+                dpg.disable_item(self.param_dropdown)
+
             #Actual graph
             with dpg.plot(width=-1, height=-1) as self.plot:
                 self.x_axis = dpg.add_plot_axis(dpg.mvXAxis)
@@ -165,20 +168,23 @@ class SensorDataWindow:
         if len(x_data) == 0: return
         self.set_text_values_at_x(x_data[-1])      
 
-    def set_options(self, options: list[StreamOption], default_value: str = None, update_window: bool = True):
-        #Remove invalid options (Optiosn that output strings)
+    def set_options(self, options: list[StreamOption], default_option: tuple[StreamOption,int] = None, default_value: str = None, update_window: bool = True):
+        #Remove invalid options (Options that output strings)
         self.options = {"None": None}
         if options is not None:
             options = [o for o in options if 's' not in o.info.out_format.lower()]
             self.options |= { o.display_name: o for o in options }
         self.keys: list[str] = list(self.options.keys())
-
-        cur_axis = default_value or self.keys[0]
+        
         if update_window:
             self.dropdown.clear_all_items()
             for key in self.keys:
                 self.dropdown.add_item(key)
-        self.set_option(self.options[cur_axis], update_window=update_window)
+        if default_option:
+            self.set_option(*default_option, update_window=update_window)
+        else:
+            cur_axis = default_value or self.keys[0]
+            self.set_option(self.options[cur_axis], update_window=update_window)
 
     def set_option(self, option: StreamOption, param: int = None, update_window=True):
         if option is None:
@@ -190,7 +196,7 @@ class SensorDataWindow:
         self.bounds_y = data_charts.get_min_bounds_for_option(self.cur_option)
 
         #Don't allow a None parameter for an option that requires a parameter
-        if self.cur_option is not None and self.cur_option.valid_params is not None and len(self.cur_option.valid_params) > 0:
+        if param is None and self.cur_option is not None and self.cur_option.valid_params is not None and len(self.cur_option.valid_params) > 0:
             self.cur_command_param = self.cur_option.valid_params[0]
 
         if update_window:
@@ -260,8 +266,12 @@ class SensorDataWindow:
             max_y = np.max(self.y_data)
             min_y = np.min(self.y_data)
         else:
-            max_y = max(max(data) for data in self.y_data)
-            min_y = min(min(data) for data in self.y_data)
+            if len(self.y_data[0]) == 0:
+                max_y = 0
+                min_y = 0
+            else:
+                max_y = max(max(data) for data in self.y_data)
+                min_y = min(min(data) for data in self.y_data)
         
         #Clamp the max and min range
         if self.bounds_y[1] is not None:
@@ -277,7 +287,7 @@ class SensorDataWindow:
         dpg.set_axis_limits(self.y_axis, min_y, max_y)  
 
         #Remove the vertical line if it went out of bounds
-        min_x = self.x_data[0]
+        min_x = self.x_data[0] if len(self.x_data) > 0 else 0
         if self.vertical_line_pos is not None and min_x > self.vertical_line_pos:
             self.set_vline_pos(None)  
 
@@ -477,3 +487,4 @@ class SensorDataWindowAsync(SensorDataWindow):
     def destroy(self):
         self.stop_data_chart()
         return super().destroy()
+    

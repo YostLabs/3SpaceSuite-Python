@@ -22,6 +22,8 @@ class FilteredDropdown(StagedView):
         self.callback = callback
         self.window_height = window_height
 
+        self.modifiable = True
+
         with dpg.stage(label="Filtered Dropdown Input Stage") as self._stage_id:
             self.dropdown_input = dpg.add_input_text(hint=hint, callback=self.__on_enter_pressed, on_enter=True, width=width, auto_select_all=True, **dropdown_args)
         with dpg.item_handler_registry(label="FilteredDropdownInputHandler") as self.dropdown_registry:
@@ -53,6 +55,10 @@ class FilteredDropdown(StagedView):
         #Actual dropdown needs to know when it should close if it has the focus
         with dpg.item_handler_registry(label="FilteredDropdownWindowHandler") as self.dropdown_popup_registry:
             dpg.add_item_visible_handler(callback=self.__dropdown_focus_monitor)
+
+    def modification_enabled(self, enabled):
+        self.modifiable = enabled
+        dpg.configure_item(self.dropdown_input, readonly=not enabled)
 
     def add_item(self, item):
         if item not in self.selectables:
@@ -147,6 +153,7 @@ class FilteredDropdown(StagedView):
         self.__finalize_selection(item_value)
 
     def __on_activated(self, sender, app_data):
+        if not self.modifiable: return
         if self.dropdown_window is None: #It could be not None if focus is returned to the input from the dropdown menu (such as scrolling)
             self.__create_dropdown()
         else:
