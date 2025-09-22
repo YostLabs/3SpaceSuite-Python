@@ -184,6 +184,7 @@ class ThreeSpaceLogDevice(LoggableDevice):
         except Exception as e:
             self.add_error(LogError(ErrorLevels.MINOR, f"Failed to stop device {self.device.name}"))
             Logger.log_critical(f"{self.device.name}: {str(e)}")
+        self.device.allow_streaming_reregistration() #Anything that couldn't register all of its data can retry
         return True
 
     def get_output_names(self) -> list[str]:

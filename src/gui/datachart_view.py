@@ -76,6 +76,8 @@ class SensorDataWindow:
         option is selected in the window. Must call update for added points to
         actually display.
         """
+        if len(self.x_data) > 0 and x < self.x_data[-1]: #New point is in the past, clear the chart before graphing
+            self.clear_chart(False)
         self.x_data.append(x)
         if not isinstance(data, list): #Force data to always be a list for consistency
             data = [data]
@@ -98,7 +100,6 @@ class SensorDataWindow:
         """
         Must be called for visual updates to actually occur.
         """
-
         #Update Series and Display Numbers
         for i, series in enumerate(self.series):
             dpg.configure_item(series, x=self.x_data, y=self.y_data[i]) #Set the axis info
@@ -326,11 +327,12 @@ class SensorDataWindow:
         if self.option_modfied_callback:
             self.option_modfied_callback(self)
 
-    def clear_chart(self):
+    def clear_chart(self, immediate=True):
         self.x_data = []
         for i, series in enumerate(self.series):
             self.y_data[i] = []
-            dpg.configure_item(series, x=self.x_data, y=self.y_data[i])
+            if immediate:
+                dpg.configure_item(series, x=self.x_data, y=self.y_data[i])
 
     def notify_open(self):
         self.opened = True
@@ -405,6 +407,11 @@ class DataChartsWindow:
 
     def set_vline_enabled(self, enabled: bool):
         self.vline_enabled = enabled
+
+    def clear(self):
+        for col in self.data_windows:
+            for window in col:
+                window.clear_chart()
 
     def __on_visible(self):
         self.chart_grid()
@@ -483,6 +490,8 @@ def dataChartPopoutWindow(name: str, default_selections: list[list[tuple[StreamO
                 charts.add_data(*command[1:])
             elif command[0] == "update":
                 charts.update_display(fix_ticks=command[1])
+            elif command[0] == "clear":
+                charts.clear()
         dpg.render_dearpygui_frame()
     dpg.destroy_context()
 

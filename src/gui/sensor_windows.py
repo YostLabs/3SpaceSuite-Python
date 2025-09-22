@@ -795,6 +795,8 @@ class SensorDataChartsWindow(StagedView):
                     window.set_vline_pos(x)
 
     def __restart_charts(self):
+        for popout in self.popout_windows:
+            popout.start_charts()
         if not self.data_windows[0][0].visible:
             return
         
@@ -966,6 +968,15 @@ class DataChartPopoutWindowMain:
             self.send_update()
         elif status == ThreespaceStreamingStatus.Reset:
             self.unregister_streaming()
+
+    def start_charts(self):
+        # try:
+        #     self.conn.send(("clear",))
+        # except BrokenPipeError as e:
+        #     self.delete()
+        #     return
+        # except OSError as e: return
+        self.register_streaming()
 
     def register_streaming(self):
         #Register Y Axis
