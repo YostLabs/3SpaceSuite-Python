@@ -617,6 +617,11 @@ class DataChartReplayWindow(StagedView):
         self.base_grid()
         self.chart_grid()
         self.timeline.autoplay_update()
+        if not self.timeline.auto_play:
+            hovered = any(dpg.is_item_hovered(window.plot) for window in self.active_windows)
+            x = None if not hovered else dpg.get_plot_mouse_pos()[0]
+            for window in self.active_windows:
+                window.set_vline_pos(x)
 
     def __on_layout_changed(self, sender, app_data, user_data):
         new_rows = dpg.get_value(self.num_rows_slider)

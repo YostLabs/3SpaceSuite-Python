@@ -1,4 +1,3 @@
-import multiprocessing.connection
 import dearpygui.dearpygui as dpg
 import dpg_ext.extension_functions as dpg_ext
 from dpg_ext.log_window import MultilineText
@@ -710,228 +709,7 @@ class SensorOrientationWindow(StagedView):
 
 
 import data_charts
-from gui.datachart_view import SensorDataWindowAsync, SensorDataWindow, StreamOption
-import multiprocessing
-
-class DataChartsWindow:
-
-    def __init__(self, options: list[StreamOption] = None, default_selections: list[tuple[StreamOption,int]] = None, num_rows=2, num_cols=2, selectable=True):
-        X_TIME_SIZE = 5 #In seconds
-        MAX_POINTS = X_TIME_SIZE * 100
-
-        self.rows = num_rows
-        self.cols = num_cols
-
-        if default_selections is not None:
-            self.cols = len(default_selections)
-            self.rows = len(default_selections[0])
-
-        self.data_windows: list[list[SensorDataWindow]] = []
-
-        #Create the Chart Area
-        with dpg.child_window(border=False) as chart_window:
-            pass
-
-        self.chart_grid = dpg_grid.Grid(self.cols, self.rows, target=chart_window, rect_getter=dpg_ext.get_global_rect, overlay=False)
-
-        #Create charts
-        dpg.push_container_stack(chart_window)
-        for col in range(self.cols):
-            self.data_windows.append([])
-            for row in range(self.rows):
-                default_option = default_selections[col][row] if default_selections else None
-                #default_option = None
-                window = SensorDataWindow(options, max_points=MAX_POINTS, default_option=default_option, options_selectable=selectable)
-                self.data_windows[col].append(window)
-                self.chart_grid.push(window.window, col, row)
-        dpg.pop_container_stack()
-
-        with dpg.item_handler_registry(label="Data Charts Visible") as self.visible_handler:
-            dpg.add_item_visible_handler(callback=self.__on_visible)
-        dpg.bind_item_handler_registry(self.data_windows[0][0].plot, self.visible_handler)
-
-        #If not running, the grid will not properly size at the start, and because its so small, the plot
-        #won't be visible which will cause the visible handler to not run. So schedule on the first frame after done drawing (frame 2)
-        #to resize the grid to fit the view
-        if not dpg.is_dearpygui_running():
-            dpg.set_frame_callback(2, self.chart_grid)    
-
-    def add_data(self, option: tuple[StreamableCommands,int], x: int|float, y: int|float|list):
-        for col in self.data_windows:
-            for window in col:
-                wo = window.get_option()
-                if wo[0].cmd != option[0] or wo[1] != option[1]: 
-                    continue
-                window.add_point(x, y)
-
-    def update_display(self, fix_ticks=True):
-        for col in self.data_windows:
-            for window in col:
-                window.update(fix_ticks=fix_ticks)
-
-    def __on_visible(self):
-        self.chart_grid()
-
-class PopoutWindow:
-
-    X_SOURCE_TIMESTAMP = 0
-    X_SOURCE_HEADER_TIMESTAMP = 1
-    X_SOURCE_INDEX = 2
-
-    def __init__(self, device: ThreespaceDevice, default_selections: list[list[tuple[StreamOption,int]]]):
-        self.selections = default_selections
-        self.process = None
-        self.device = device
-        self.conn: multiprocessing.connection.Connection = None
-
-        self.deleted = False
-
-        #Store the default selections as objects that can be used for streaming
-        self.streaming_options: list[ThreespaceStreamingOption] = []
-        for col in self.selections:
-            for option, param in col:
-                stream_option = ThreespaceStreamingOption(option.cmd, param)
-                if stream_option not in self.streaming_options:
-                    self.streaming_options.append(stream_option)
-
-    def streaming_callback(self, status: ThreespaceStreamingStatus):
-        if status == ThreespaceStreamingStatus.Data:
-            #Get X from dynamic timestamp source
-            if self.x_source in (self.X_SOURCE_HEADER_TIMESTAMP, self.X_SOURCE_TIMESTAMP):
-                if self.x_source == self.X_SOURCE_TIMESTAMP:
-                    timestamp = self.device.get_streaming_value(StreamableCommands.GetTimestamp)
-                else:
-                    timestamp = self.device.get_streaming_last_response().header.timestamp
-                    if timestamp is None: #Something disabled the header timestamp without notifying the data charts
-                        self.unregister_streaming()
-                        return
-        
-                #Handle Wrapping of timestamp
-                if self.last_timestamp is not None and timestamp < self.last_timestamp:
-                    if self.last_timestamp < 0xFFFFFFFF:
-                        self.timestamp_offset += 0xFFFFFFFF #U32 timestamp wrap
-                    else:
-                        self.timestamp_offset += 0xFFFFFFFFFFFFFFFF #U64 timestamp wrap
-                self.last_timestamp = timestamp
-                timestamp += self.timestamp_offset
-                x = timestamp / 1_000_000
-            else:
-                x = self.cur_index
-                self.cur_index += 1
-
-            for option in self.streaming_options:
-                data = self.device.get_streaming_value(option.cmd, option.param)
-                if data is not None:
-                    self.send_point(option, x, data)
-        elif status == ThreespaceStreamingStatus.DataEnd:
-            #Tell the data window to do the draws
-            self.send_update()
-        elif status == ThreespaceStreamingStatus.Reset:
-            self.unregister_streaming()
-
-    def register_streaming(self):
-        #Register Y Axis
-        try:
-            for option in self.streaming_options:
-                self.device.register_streaming_command(self, option.cmd, option.param, immediate_update=False)
-            
-            #Register X Axis
-            success = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=False)
-            if success:
-                self.x_source = self.X_SOURCE_TIMESTAMP
-            elif self.device.get_cached_header().timestamp_enabled:
-                self.x_source = self.X_SOURCE_HEADER_TIMESTAMP
-            else:
-                self.x_source = self.X_SOURCE_INDEX
-            
-            self.last_timestamp = None
-            self.timestamp_offset = 0
-            self.cur_index = 0
-            self.device.update_streaming_settings()
-            self.device.register_streaming_callback(self.streaming_callback, 100)
-        except Exception as e:
-            self.device.report_error(e)
-            return False
-        return True
-
-    def unregister_streaming(self):
-        try:
-            self.device.unregister_all_streaming_commands_from_owner(self, True)
-            self.device.unregister_streaming_callback(self.streaming_callback)
-        except Exception as e:
-            self.device.report_error(e)
-            return False
-        except OSError as e:
-            return False
-
-        return True
-
-    def send_point(self, option: ThreespaceStreamingOption, x: int|float, y: int|float|list):
-        try:
-            self.conn.send(("point", option, x, y))
-        except BrokenPipeError as e:
-            self.delete()
-        except OSError as e: pass
-
-    def send_update(self):
-        try:
-            self.conn.send(("update", self.x_source != self.X_SOURCE_INDEX))
-        except BrokenPipeError as e:
-            self.delete()
-        except OSError as e: pass
-
-    def spawn(self):
-        parent_conn, child_conn = multiprocessing.Pipe()
-        self.conn = parent_conn
-        self.process = multiprocessing.Process(target=popoutWindow, args=(self.device.name,self.selections,child_conn), daemon=True)
-        self.process.start()
-
-        self.register_streaming()
-
-    def delete(self):
-        if self.deleted:
-            return
-        self.deleted = True
-        self.process.terminate()
-        self.process.join(timeout=1)
-        self.process.close()
-        self.unregister_streaming()
-        if self.conn != None:
-            self.conn.close()
-
-
-def popoutWindow(name: str, default_selections: list[list[tuple[StreamOption,int]]], conn: multiprocessing.connection.Connection):
-
-    import gui.resources.theme_lib as theme_lib
-    from gui.core_ui import FontManager
-    from managers.resource_manager import IMAGE_FOLDER
-
-    dpg.create_context()
-    dpg.create_viewport(title=name, large_icon=(IMAGE_FOLDER / "icon.ico").as_posix())
-
-    theme_lib.init()
-    FontManager.init()
-    dpg.bind_font(FontManager.DEFAULT_FONT)
-
-    with dpg.window() as primary_window:
-        datacharts = DataChartsWindow(default_selections=default_selections, selectable=False)
-        #datacharts = DataChartsWindow()
-
-    dpg.set_primary_window(primary_window, True)
-
-    dpg.setup_dearpygui()
-    dpg.show_viewport()
-    while dpg.is_dearpygui_running():
-        while conn.poll(0):
-            command = conn.recv()
-            if command[0] == "point":
-                datacharts.add_data(*command[1:])
-            elif command[0] == "update":
-                datacharts.update_display(fix_ticks=command[1])
-        dpg.render_dearpygui_frame()
-    dpg.destroy_context()
-
-    conn.close()
+from gui.datachart_view import SensorDataWindowAsync, SensorDataWindow, StreamOption, dataChartPopoutWindow
 
 class SensorDataChartsWindow(StagedView):
 
@@ -945,7 +723,7 @@ class SensorDataChartsWindow(StagedView):
 
         self.options = data_charts.get_all_options_from_device(device)
 
-        self.popout_windows: list[PopoutWindow] = []
+        self.popout_windows: list[DataChartPopoutWindowMain] = []
 
         self.paused = False
 
@@ -1114,7 +892,7 @@ class SensorDataChartsWindow(StagedView):
             selections.append(col_list)
             for row in range(self.rows):
                 col_list.append(self.data_windows[col][row].get_option())
-        popout = PopoutWindow(self.device, selections)
+        popout = DataChartPopoutWindowMain(self.device, selections)
         self.popout_windows.append(popout)
         popout.spawn()
 
@@ -1129,6 +907,135 @@ class SensorDataChartsWindow(StagedView):
         for popout in self.popout_windows:
             popout.delete()
         return super().delete()
+
+import multiprocessing
+import multiprocessing.connection
+
+class DataChartPopoutWindowMain:
+    X_SOURCE_TIMESTAMP = 0
+    X_SOURCE_HEADER_TIMESTAMP = 1
+    X_SOURCE_INDEX = 2
+
+    def __init__(self, device: ThreespaceDevice, default_selections: list[list[tuple[StreamOption,int]]]):
+        self.selections = default_selections
+        self.process = None
+        self.device = device
+        self.conn: multiprocessing.connection.Connection = None
+
+        self.deleted = False
+
+        #Store the default selections as objects that can be used for streaming
+        self.streaming_options: list[ThreespaceStreamingOption] = []
+        for col in self.selections:
+            for option, param in col:
+                stream_option = ThreespaceStreamingOption(option.cmd, param)
+                if stream_option not in self.streaming_options:
+                    self.streaming_options.append(stream_option)
+
+    def streaming_callback(self, status: ThreespaceStreamingStatus):
+        if status == ThreespaceStreamingStatus.Data:
+            #Get X from dynamic timestamp source
+            if self.x_source in (self.X_SOURCE_HEADER_TIMESTAMP, self.X_SOURCE_TIMESTAMP):
+                if self.x_source == self.X_SOURCE_TIMESTAMP:
+                    timestamp = self.device.get_streaming_value(StreamableCommands.GetTimestamp)
+                else:
+                    timestamp = self.device.get_streaming_last_response().header.timestamp
+                    if timestamp is None: #Something disabled the header timestamp without notifying the data charts
+                        self.unregister_streaming()
+                        return
+        
+                #Handle Wrapping of timestamp
+                if self.last_timestamp is not None and timestamp < self.last_timestamp:
+                    if self.last_timestamp < 0xFFFFFFFF:
+                        self.timestamp_offset += 0xFFFFFFFF #U32 timestamp wrap
+                    else:
+                        self.timestamp_offset += 0xFFFFFFFFFFFFFFFF #U64 timestamp wrap
+                self.last_timestamp = timestamp
+                timestamp += self.timestamp_offset
+                x = timestamp / 1_000_000
+            else:
+                x = self.cur_index
+                self.cur_index += 1
+
+            for option in self.streaming_options:
+                data = self.device.get_streaming_value(option.cmd, option.param)
+                if data is not None:
+                    self.send_point(option, x, data)
+        elif status == ThreespaceStreamingStatus.DataEnd:
+            #Tell the data window to do the draws
+            self.send_update()
+        elif status == ThreespaceStreamingStatus.Reset:
+            self.unregister_streaming()
+
+    def register_streaming(self):
+        #Register Y Axis
+        try:
+            for option in self.streaming_options:
+                self.device.register_streaming_command(self, option.cmd, option.param, immediate_update=False)
+            
+            #Register X Axis
+            success = self.device.register_streaming_command(self, StreamableCommands.GetTimestamp, immediate_update=False)
+            if success:
+                self.x_source = self.X_SOURCE_TIMESTAMP
+            elif self.device.get_cached_header().timestamp_enabled:
+                self.x_source = self.X_SOURCE_HEADER_TIMESTAMP
+            else:
+                self.x_source = self.X_SOURCE_INDEX
+            
+            self.last_timestamp = None
+            self.timestamp_offset = 0
+            self.cur_index = 0
+            self.device.update_streaming_settings()
+            self.device.register_streaming_callback(self.streaming_callback, 100)
+        except Exception as e:
+            self.device.report_error(e)
+            return False
+        return True
+
+    def unregister_streaming(self):
+        try:
+            self.device.unregister_all_streaming_commands_from_owner(self, True)
+            self.device.unregister_streaming_callback(self.streaming_callback)
+        except Exception as e:
+            self.device.report_error(e)
+            return False
+        except OSError as e:
+            return False
+
+        return True
+
+    def send_point(self, option: ThreespaceStreamingOption, x: int|float, y: int|float|list):
+        try:
+            self.conn.send(("point", option, x, y))
+        except BrokenPipeError as e:
+            self.delete()
+        except OSError as e: pass
+
+    def send_update(self):
+        try:
+            self.conn.send(("update", self.x_source != self.X_SOURCE_INDEX))
+        except BrokenPipeError as e:
+            self.delete()
+        except OSError as e: pass
+
+    def spawn(self):
+        parent_conn, child_conn = multiprocessing.Pipe()
+        self.conn = parent_conn
+        self.process = multiprocessing.Process(target=dataChartPopoutWindow, args=(self.device.name,self.selections,child_conn), daemon=True)
+        self.process.start()
+
+        self.register_streaming()
+
+    def delete(self):
+        if self.deleted:
+            return
+        self.deleted = True
+        self.process.terminate()
+        self.process.join(timeout=1)
+        self.process.close()
+        self.unregister_streaming()
+        if self.conn != None:
+            self.conn.close()
 
 class TableMatrix:
 

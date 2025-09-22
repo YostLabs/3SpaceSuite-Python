@@ -1,10 +1,13 @@
 import dearpygui.dearpygui as dpg
 from dpg_ext.filtered_dropdown import FilteredDropdown
+import dpg_ext.extension_functions as dpg_extensions
+import third_party.dearpygui_grid as dpg_grid
+from dpg_ext.dynamic_button import DynamicButton
 
 from gui.resources import theme_lib
 
 import data_charts
-from data_charts import StreamOption
+from data_charts import StreamOption, StreamableCommands
 
 from typing import Callable
 import numpy as np
@@ -338,6 +341,152 @@ class SensorDataWindow:
     def destroy(self):
         self.dropdown.delete()
         dpg.delete_item(self.window)
+
+
+class DataChartsWindow:
+    """
+    Base multi DataWindow view
+    """
+    def __init__(self, options: list[StreamOption] = None, default_selections: list[tuple[StreamOption,int]] = None, num_rows=2, num_cols=2, selectable=True):
+        X_TIME_SIZE = 5 #In seconds
+        MAX_POINTS = X_TIME_SIZE * 100
+
+        self.rows = num_rows
+        self.cols = num_cols
+
+        self.vline_enabled = False
+
+        if default_selections is not None:
+            self.cols = len(default_selections)
+            self.rows = len(default_selections[0])
+
+        self.data_windows: list[list[SensorDataWindow]] = []
+
+        #Create the Chart Area
+        with dpg.child_window(border=False) as self.window:
+            pass
+
+        self.chart_grid = dpg_grid.Grid(self.cols, self.rows, target=self.window, rect_getter=dpg_extensions.get_global_rect, overlay=False)
+
+        #Create charts
+        dpg.push_container_stack(self.window)
+        for col in range(self.cols):
+            self.data_windows.append([])
+            for row in range(self.rows):
+                default_option = default_selections[col][row] if default_selections else None
+                #default_option = None
+                window = SensorDataWindow(options, max_points=MAX_POINTS, default_option=default_option, options_selectable=selectable)
+                self.data_windows[col].append(window)
+                self.chart_grid.push(window.window, col, row)
+        dpg.pop_container_stack()
+
+        with dpg.item_handler_registry(label="Data Charts Visible") as self.visible_handler:
+            dpg.add_item_visible_handler(callback=self.__on_visible)
+        dpg.bind_item_handler_registry(self.data_windows[0][0].plot, self.visible_handler)
+
+        #If not running, the grid will not properly size at the start, and because its so small, the plot
+        #won't be visible which will cause the visible handler to not run. So schedule on the first frame after done drawing (frame 2)
+        #to resize the grid to fit the view
+        if not dpg.is_dearpygui_running():
+            dpg.set_frame_callback(2, self.chart_grid)    
+
+    def add_data(self, option: tuple[StreamableCommands,int], x: int|float, y: int|float|list):
+        for col in self.data_windows:
+            for window in col:
+                wo = window.get_option()
+                if wo[0].cmd != option[0] or wo[1] != option[1]: 
+                    continue
+                window.add_point(x, y)
+
+    def update_display(self, fix_ticks=True):
+        for col in self.data_windows:
+            for window in col:
+                window.update(fix_ticks=fix_ticks)
+
+    def set_vline_enabled(self, enabled: bool):
+        self.vline_enabled = enabled
+
+    def __on_visible(self):
+        self.chart_grid()
+
+        #Handle VLINE
+        if self.vline_enabled:
+            hovered = any(dpg.is_item_hovered(window.plot) for col in self.data_windows for window in col)
+            x = None if not hovered else dpg.get_plot_mouse_pos()[0]
+            for col in self.data_windows:
+                for window in col:
+                    window.set_vline_pos(x)
+
+class DataChartPopoutWindowProcess(DataChartsWindow):
+    """
+    Version of DataCharts to spawn in a separate process
+    """
+
+    def __init__(self, default_selections: list[list[tuple[StreamOption,int]]]):
+        super().__init__(default_selections=default_selections, selectable=False)
+
+        self.paused = False
+
+        #Add pause button
+        dpg.push_container_stack(self.window)
+        self.chart_grid.offsets = [0, 20, 0, 8]
+        dpg.configure_item(self.window, menubar=True)
+        with dpg.menu_bar() as menu_bar:
+            self.pause_button = DynamicButton()
+            pause_button_dpg = dpg.add_button(label="Pause", callback=lambda: self.set_paused_state(True))
+            resume_button_dpg = dpg.add_button(label="Resume", callback=lambda: self.set_paused_state(False))
+            self.pause_button.add_button("pause", pause_button_dpg, active=True, default=True)
+            self.pause_button.add_button("resume", resume_button_dpg)
+        dpg.pop_container_stack()
+
+    def set_paused_state(self, paused: bool):
+        self.paused = paused
+        self.set_vline_enabled(paused)
+        if paused:
+            self.pause_button.set_button("resume")
+        else:
+            self.pause_button.set_button("pause")
+    
+    def update_display(self, fix_ticks=True):
+        if self.paused: return
+        return super().update_display(fix_ticks)
+
+import multiprocessing
+import multiprocessing.connection
+"""
+The actual multiprocessing target for creating a data chart window controlled by multiprocessing.
+"""
+def dataChartPopoutWindow(name: str, default_selections: list[list[tuple[StreamOption,int]]], conn: multiprocessing.connection.Connection):
+    import gui.resources.theme_lib as theme_lib
+    from gui.core_ui import FontManager
+    from managers.resource_manager import IMAGE_FOLDER
+    from dpg_ext.dynamic_button import DynamicButton
+
+    dpg.create_context()
+    dpg.create_viewport(title=name, large_icon=(IMAGE_FOLDER / "icon.ico").as_posix())
+
+    theme_lib.init()
+    FontManager.init()
+    dpg.bind_font(FontManager.DEFAULT_FONT)
+
+    with dpg.window() as primary_window:
+        charts = DataChartPopoutWindowProcess(default_selections)
+
+    dpg.set_primary_window(primary_window, True)
+
+    dpg.setup_dearpygui()
+    dpg.show_viewport()
+    while dpg.is_dearpygui_running():
+        while conn.poll(0):
+            command = conn.recv()
+            if command[0] == "point":
+                charts.add_data(*command[1:])
+            elif command[0] == "update":
+                charts.update_display(fix_ticks=command[1])
+        dpg.render_dearpygui_frame()
+    dpg.destroy_context()
+
+    conn.close()
 
 #This version of the data window takes a ThreespaceDevice and manages setting up streaming and displaying streaming results,
 #while providing configuration for pausing and such
