@@ -704,7 +704,7 @@ class SensorOrientationWindow(StagedView):
         self.grid.clear()
         self.grid2.clear()
         self.orientation_viewer.delete()
-        self.device.reregister_stream_callback.unsubscribe(self.__start_viewer)
+        self.device.reregister_stream_callback.unsubscribe(self.__restart_viewer)
         return super().delete()
 
 
