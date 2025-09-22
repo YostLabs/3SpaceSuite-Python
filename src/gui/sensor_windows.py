@@ -998,6 +998,7 @@ class DataChartPopoutWindowMain:
             self.cur_index = 0
             self.device.update_streaming_settings()
             self.device.register_streaming_callback(self.streaming_callback, 100)
+            self.set_max_points((1_000_000 / self.device.get_streaming_interval()) * 5)
         except Exception as e:
             self.device.report_error(e)
             return False
@@ -1025,6 +1026,13 @@ class DataChartPopoutWindowMain:
     def send_update(self):
         try:
             self.conn.send(("update", self.x_source != self.X_SOURCE_INDEX))
+        except BrokenPipeError as e:
+            self.delete()
+        except OSError as e: pass
+
+    def set_max_points(self, num_points: int):
+        try:
+            self.conn.send(("max", num_points))
         except BrokenPipeError as e:
             self.delete()
         except OSError as e: pass

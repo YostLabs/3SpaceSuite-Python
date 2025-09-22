@@ -84,7 +84,7 @@ class SensorDataWindow:
         for i, v in enumerate(data):
             self.y_data[i].append(v)
         
-        if len(self.x_data) > self.max_points:
+        while len(self.x_data) > self.max_points:
             self.x_data.pop(0)
             for axis in self.y_data:
                 axis.pop(0)
@@ -446,6 +446,11 @@ class DataChartPopoutWindowProcess(DataChartsWindow):
             self.pause_button.add_button("resume", resume_button_dpg)
         dpg.pop_container_stack()
 
+    def set_max_points(self, max_points: int):
+        for col in self.data_windows:
+            for window in col:
+                window.set_max_points(max_points)
+
     def set_paused_state(self, paused: bool):
         self.paused = paused
         self.set_vline_enabled(paused)
@@ -492,6 +497,8 @@ def dataChartPopoutWindow(name: str, default_selections: list[list[tuple[StreamO
                 charts.update_display(fix_ticks=command[1])
             elif command[0] == "clear":
                 charts.clear()
+            elif command[0] == "max":
+                charts.set_max_points(command[1])
         dpg.render_dearpygui_frame()
     dpg.destroy_context()
 
@@ -558,6 +565,7 @@ class SensorDataWindowAsync(SensorDataWindow):
             if not self.__delay_registration:
                 self.device.update_streaming_settings()
             self.device.register_streaming_callback(self.streaming_callback, hz=self.streaming_hz)
+            self.set_max_points((1_000_000 / self.device.get_streaming_interval()) * 5)
             self.streaming = True
             self.last_timestamp = None
             self.timestamp_offset = 0

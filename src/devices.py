@@ -205,6 +205,9 @@ class ThreespaceDevice:
     def unlock_streaming_modifications(self, owner: object) -> bool:
         return self.streaming_manager.unlock_modifications(owner)
 
+    def get_streaming_interval(self):
+        return self.streaming_manager.interval
+
     def is_api_streaming(self):
         if not self.is_open: return False
         return self.__api.is_streaming is True
