@@ -46,6 +46,8 @@ class SensorDataWindow:
             self.dropdown = FilteredDropdown(items=self.keys, default_item=self.cur_axis, 
                                         width=-1, allow_custom_options=False, allow_empty=False, 
                                         callback=self._on_stream_command_changed).submit()
+            if not options_selectable:
+                self.dropdown.modification_enabled(False)
             
             #Text Display
             with dpg.group(horizontal=True):
