@@ -1,5 +1,7 @@
 if __name__ == "__main__":
-
+    import multiprocessing
+    multiprocessing.freeze_support()
+    
     import platform
     import asyncio
     if platform.system() == 'Windows':
