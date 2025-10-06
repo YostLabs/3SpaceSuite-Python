@@ -7,7 +7,7 @@ from dpg_ext.staged_view import StagedView, StagedTabManager
 from dpg_ext.global_lock import dpg_lock
 
 from devices import ThreespaceDevice, StreamableCommands, ThreespaceStreamingManager, ThreespaceStreamingStatus, ThreespaceCommandInfo, threespace_consts, ThreespaceStreamingOption
-from yostlabs.tss3.utils.calibration import ThreespaceGradientDescentCalibration
+from yostlabs.tss3.utils.calibration import ThreespaceGradientDescentCalibration, ThreespaceSphereCalibration
 from utility import Logger, MainLoopEventQueue
 
 from dataclasses import dataclass, field
@@ -1279,6 +1279,7 @@ class SensorCalibrationWindow(StagedView):
         default_accel = None if len(self.accels) == 0 else self.accels[0]
 
         self.gradient_descent_wizard = None
+        self.sphere_calib_wizard = None
 
         with dpg.stage(label="Sensor Calib Stage") as self._stage_id:
             with dpg.child_window() as self.window:
@@ -1329,11 +1330,26 @@ class SensorCalibrationWindow(StagedView):
                                            enabled=len(self.mags) > 0)
                 dpg.add_spacer(height=12)
                 dpg.add_separator()      
-                dpg.add_spacer(height=12)                                               
-                dpg.add_button(label="Gradient Descent Calibration", callback=self.start_gradient_descent_wizard)
+                dpg.add_spacer(height=12)
+                with dpg.group(horizontal=True):                                               
+                    dpg.add_button(label="Gradient Descent Calibration", callback=self.start_gradient_descent_wizard)
+                    dpg.add_button(label="Sphere Calibration", callback=self.start_sphere_calib_wizard)                    
                 # dpg.add_button(label="Start Gyro Calibration")
                 # dpg.add_button(label="Start Mag Ref Calibration")
                 # dpg.add_button(label="Start Mag Bias Calibration")
+
+    def start_sphere_calib_wizard(self):
+        if self.sphere_calib_wizard is not None: return
+        self.sphere_calib_wizard = SphereCalibrationWizard(self.device, self.__on_sphere_calib_complete)
+
+    def __on_sphere_calib_complete(self, successful: bool):
+        if not successful:
+            self.sphere_calib_wizard = None
+            return
+        result = self.sphere_calib_wizard.get_result()
+        self.sphere_calib_wizard = None
+
+        self.apply_calibration_result(result)
 
     def start_gradient_descent_wizard(self):
         if self.gradient_descent_wizard is not None: return #This shouldn't be possible, but putting this here anyways
@@ -1347,6 +1363,9 @@ class SensorCalibrationWindow(StagedView):
         result = self.gradient_descent_wizard.get_result()
         self.gradient_descent_wizard = None
 
+        self.apply_calibration_result(result)
+
+    def apply_calibration_result(self, result: "CalibrationResult"):
         try:
             for accel, calib in result.accels.items():
                 self.device.set_accel_calibration(accel, mat=calib.mat, bias=calib.bias)
@@ -1502,6 +1521,9 @@ class SensorCalibrationWindow(StagedView):
         if self.gradient_descent_wizard is not None:
             self.gradient_descent_wizard.delete()
             self.gradient_descent_wizard = None
+        if self.sphere_calib_wizard is not None:
+            self.sphere_calib_wizard.delete()
+            self.sphere_calib_wizard = None
         super().delete()
 
 def gradient_descent_thread( gradient: ThreespaceGradientDescentCalibration, 
@@ -1588,6 +1610,7 @@ class GradientDescentCalibrationWizard:
         self.__cached_accels: dict[int, int] = {}
         self.__cached_mags: dict[int, int] = {}
         self.__cached_axis_order: str = None
+        self.__cached_axis_offset_enabled: bool = None
         self.gathering = False 
     
     def get_result(self):
@@ -1630,6 +1653,7 @@ class GradientDescentCalibrationWizard:
             self.__cached_accels = self.device.get_accel_odrs(*selected_accels)
             self.__cached_mags = self.device.get_mag_odrs(*selected_mags)
             self.__cached_axis_order = self.device.get_axis_order()
+            self.__cached_axis_offset_enabled = self.device.get_axis_offset_enabled()
         except Exception as e:
             self.device.report_error(e)
             self.__on_config_cancel_button()
@@ -1646,6 +1670,7 @@ class GradientDescentCalibrationWizard:
             
             #Change the axis order to be the required XYZ (The math would have to change without this, would rather just do this atleast for now since it is easier)
             self.device.set_axis_order("xyz")
+            self.device.set_axis_offset_enabled(False)
         except Exception as e:
             self.device.report_error(e)
             self.__on_config_cancel_button()
@@ -1886,6 +1911,8 @@ class GradientDescentCalibrationWizard:
             #Restore axis order
             if self.__cached_axis_order is not None:
                 self.device.set_axis_order(self.__cached_axis_order)
+            if self.__cached_axis_offset_enabled is not None:
+                self.device.set_axis_offset_enabled(self.__cached_axis_offset_enabled)
         except Exception as e:
             self.device.report_error(e)
 
@@ -1896,6 +1923,194 @@ class GradientDescentCalibrationWizard:
         self.__restore_sensor_state()
 
         dpg.delete_item(self.keyboard_handler)
+        dpg.delete_item(self.visible_handler)
+        dpg.delete_item(self.modal)
+
+class SphereCalibrationWizard:
+    MIN_ODR = 500               #If any component has an ODR less then this value when starting calibration, it will be set to this
+
+    SAMPLE_INTERVAL = 0.001     #In seconds, the time in between each reading
+
+    GATHERING = 1
+    CALCULATING = 2
+
+    BASE_AXIS_INFO = vector.parse_axis_string_info("xyz")
+
+    def __init__(self, device: ThreespaceDevice, on_completion: Callable[[bool],None]):
+        """
+        Params
+        ------
+        on_completion : Callback called when wizard completes or is cancelled. If cancelled, passed False, if completed, passed True
+        """
+        self.device = device
+        self.result: CalibrationResult|None = None
+        self.completion_callback = on_completion
+        self.__cached_axis_order = None
+
+        with dpg.window(modal=True, no_move=False, no_resize=True, label="Sphere Calib Window", no_close=True, autosize=True) as self.modal:
+            self.texture_width = 400
+            self.texture_height = 400
+            self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
+            dpg.add_text("Move the sensor to gather points. Repeatedly rotate the yellow arrows together to optimize results. Aim for >= 400 points and sparsity <= 20. ", wrap=self.texture_width)
+            with dpg.group(horizontal=True):
+                        dpg.add_text("Samples:")
+                        self.sample_text = dpg.add_text("0")
+            with dpg.table(header_row=False, width=self.texture_width):
+                dpg.add_table_column()
+                dpg.add_table_column(width_fixed=True, width=30)
+                dpg.add_table_column(width_fixed=True, width=30)
+                dpg.add_table_column(width_fixed=True, width=30)
+                with dpg.table_row():
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("Sparsity:")
+                        self.sparsity_text = dpg.add_text(f"{0:<5.1f}")
+                        dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                        with dpg.tooltip(parent=dpg.last_item()):
+                            dpg.add_text("The max angle between any 2 gathered points. Improves as value approaches 0.")
+                    dpg.add_button(label="Finish", callback=self.finish)
+                    dpg.add_button(label="Reset", callback=self.clear)
+                    dpg.add_button(label="Cancel", callback=self.cancel)
+                    
+        # with dpg.handler_registry() as self.keyboard_handler:
+        #     dpg.add_key_press_handler(dpg.mvKey_Return, callback=self.__on_keyboard_next_pressed)
+        #     dpg.add_key_press_handler(dpg.mvKey_NumPadEnter, callback=self.__on_keyboard_next_pressed)
+        #     dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=self.__on_keyboard_next_pressed)
+
+        #Keeps window centered
+        with dpg.item_handler_registry(label="Sphere Calib Visible Handler") as self.visible_handler:
+            dpg.add_item_visible_handler(callback=dpg_ext.center_window_handler_callback, user_data=self.modal)
+        dpg.bind_item_handler_registry(self.modal, self.visible_handler)
+
+
+        self.calibrators: dict[int,ThreespaceSphereCalibration] = {}
+        self.gathered_orients: dict[int,list[list[float]]] = {}
+
+        self.display_mag = None
+        self.last_mag = None
+
+        #Control variables
+        self.wizard_stage = None
+        self.__cached_axis_order: str = None
+        self.__cached_axis_offset_enabled = None
+        self.gathering = False 
+
+        self.__configure_gathering()
+    
+    def __configure_gathering(self):
+        try:
+            mags = self.device.get_available_mags()
+            if len(mags) == 0:
+                self.cancel()
+                return
+            self.__cached_axis_offset_enabled = self.device.get_axis_offset_enabled()
+            self.__cached_axis_order = self.device.get_axis_order()
+            self.device.set_axis_order("xyz")
+            self.device.set_axis_offset_enabled(False)
+        except Exception as e:
+            self.device.report_error(e)
+            self.cancel()
+            return
+
+        for mag in mags:
+            if not self.device.register_streaming_command(self, StreamableCommands.GetRawMagVec, param=mag, immediate_update=False):
+                self.cancel()
+                return
+        if not self.device.register_streaming_command(self, StreamableCommands.GetUntaredOrientation, immediate_update=False):
+            self.cancel()
+            return
+
+        self.calibrators = { mag: ThreespaceSphereCalibration() for mag in mags }
+        self.gathered_orients = { mag: [] for mag in mags }
+        self.display_mag = mags[0]
+
+        self.device.register_streaming_callback(self.__on_sample_received, hz=100)
+        self.device.update_streaming_settings()
+        self.wizard_stage = SphereCalibrationWizard.GATHERING
+        self.gathering = True
+
+    def __on_sample_received(self, status: ThreespaceStreamingStatus):
+        if not self.gathering: return
+        if status == ThreespaceStreamingStatus.Data:
+            for mag in self.calibrators:
+                sample = self.device.get_streaming_value(StreamableCommands.GetRawMagVec, mag)
+                if self.calibrators[mag].process_point(sample):
+                    self.gathered_orients[mag].append(self.device.get_streaming_value(StreamableCommands.GetUntaredOrientation))             
+        elif status == ThreespaceStreamingStatus.DataEnd:
+            quat = self.device.get_streaming_value(StreamableCommands.GetUntaredOrientation)
+            self.last_mag = self.device.get_streaming_value(StreamableCommands.GetRawMagVec, self.display_mag)
+            self.render_quat(quat)
+            dpg.set_value(self.sample_text, str(self.calibrators[self.display_mag].num_points))
+            dpg.set_value(self.sparsity_text, f"{(self.calibrators[self.display_mag].largest_delta):<5.1f}")
+        elif status == ThreespaceStreamingStatus.Reset:
+            self.device.unregister_all_streaming_commands_from_owner(self)
+            self.cancel()
+
+    def clear(self):
+        for calibrator in self.calibrators.values():
+            calibrator.clear()
+
+    def render_quat(self, quat: list[float]):
+        self.orientation_viewer.render_image(quat, self.BASE_AXIS_INFO, hide_sensor=True)
+        # TODO
+        if self.last_mag is not None:
+            quat = quaternion.quat_from_one_vector(self.last_mag)
+            glQuat = quaternion.quaternion_swap_axes_fast(quat, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
+
+            quat2 = quaternion.quat_from_one_vector(self.calibrators[self.display_mag].sparsest_vector)
+            glQuat2 = quaternion.quaternion_swap_axes_fast(quat2, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
+            with self.orientation_viewer.renderer:
+                self.orientation_viewer.viewer.render_arrow(glQuat, color=(1, 1, 0), size=1, text=None, no_grotate=False)
+                self.orientation_viewer.viewer.render_arrow(glQuat2, color=theme_lib.color_w, size=1, text=None, no_grotate=False)
+                # for orient in self.gathered_orients[self.display_mag]:
+                #     pass
+                #     #self.orientation_viewer.viewer.render_arrow(orient, color=(1, 0, 0), size=1, text=None)
+                self.orientation_viewer.update_pixels()
+        self.orientation_viewer.update_image()
+    
+    def restore_settings(self):
+        try:
+            self.device.unregister_streaming_callback(self.__on_sample_received)
+            self.device.unregister_all_streaming_commands_from_owner(self)
+
+            if self.__cached_axis_order is not None:
+                self.device.set_axis_order(self.__cached_axis_order)
+            if self.__cached_axis_offset_enabled is not None:
+                self.device.set_axis_offset_enabled(self.__cached_axis_offset_enabled)
+        except Exception as e:
+            self.device.report_error(e)
+
+    def callback(self, success: bool):
+        if not self.completion_callback: return
+        self.completion_callback(success)
+
+    def cancel(self):
+        self.callback(False)
+        self.delete()
+
+    def get_result(self):
+        return self.result
+
+    def finish(self):
+        self.wizard_stage = GradientDescentCalibrationWizard.CALCULATING
+        self.restore_settings()
+
+        self.result = CalibrationResult()
+
+        for mag in self.calibrators:
+            matrix, bias = self.calibrators[mag].calculate()
+            self.result.mags[mag] = CalibrationResult.Calibration(bias, matrix)
+
+        self.completion_callback(True)
+
+        self.delete()
+
+    def delete(self):
+        if self.orientation_viewer is not None:
+            self.orientation_viewer.delete()
+
+        self.restore_settings()
+
+        #dpg.delete_item(self.keyboard_handler)
         dpg.delete_item(self.visible_handler)
         dpg.delete_item(self.modal)
 

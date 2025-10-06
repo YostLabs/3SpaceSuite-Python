@@ -380,6 +380,13 @@ class ThreespaceDevice:
             axis_str = self.get_axis_order()
         self.cached_axis_info = yl_vec.parse_axis_string_info(axis_str)
     
+    def get_axis_offset_enabled(self) -> bool:
+        return self.__api.get_settings("axis_offset_enabled")
+    
+    def set_axis_offset_enabled(self, enabled: bool):
+        result = self.__api.set_settings(axis_offset_enabled=1 if enabled else 0)
+        return result
+
     @staticmethod
     def get_axis_info(order):
         return 

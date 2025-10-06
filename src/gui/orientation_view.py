@@ -24,10 +24,10 @@ class OrientationView:
     GL_AXIS_STR = "xy-z"
     GL_AXIS_INFO = vector.parse_axis_string_info(GL_AXIS_STR)
 
-    def __init__(self, model: OBJ, texture_width: int, texture_height: int, static_size=False):
+    def __init__(self, model: OBJ, texture_width: int, texture_height: int, static_size=False, axis_compass_display=True):
         self.static_size = static_size
         self.size = (texture_width, texture_height)
-        self.viewer = GlOrientationViewer(model, GL_Renderer.text_renderer, GL_Renderer.base_font, texture_width, texture_height)
+        self.viewer = GlOrientationViewer(model, GL_Renderer.text_renderer, GL_Renderer.base_font, texture_width, texture_height, tl_arrows=axis_compass_display)
         self.dirty = False
         self.pixels = None #The actual image data. Stored separately because must seperate rendering and updating the texture
         self.deleted = False
@@ -60,7 +60,7 @@ class OrientationView:
     def set_model(self, model: OBJ):
         self.viewer.set_model(model)
 
-    def render_image(self, quat: list[float], axis_info: list[list[int],list[int],bool], hide_sensor=False, hide_arrows=False):
+    def render_image(self, quat: list[float], axis_info: list[list[int],list[int],bool], hide_sensor=False, hide_arrows=False, update_pixels=True):
         """
         Params
         ------
@@ -79,13 +79,23 @@ class OrientationView:
         #Actually render the image
         with self.renderer:
             self.viewer.render()
+
+        #Will actually get rendered when update_image is called
+        self.dirty = True
+
+        if update_pixels:
+            self.update_pixels()
+    
+    """
+    If doing additional drawing to the image after render_image,
+    call this to actually update the display
+    """
+    def update_pixels(self):
+        if not self.dirty: return
         pixels = self.renderer.get_texture_pixels()
         pixels = np.flip(pixels, 0).flatten()
         self.pixels = pixels
 
-        #Will actually get rendered when update_image is called
-        self.dirty = True
-    
     def update_image(self):
         if not self.static_size:
             rect = dpg.get_item_rect_size(self.image)

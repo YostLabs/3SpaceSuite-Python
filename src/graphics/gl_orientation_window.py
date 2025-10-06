@@ -85,6 +85,9 @@ class GlOrientationViewer:
     def set_axes_visible(self, visible: bool):
         self.axes_visible = visible
 
+    def set_compass_visible(self, visible: bool):
+        self.tl_arrows = visible
+
     def set_axis_info(self, order: list[int], multipliers: list[int]):
         self.axis_order = order
         self.axis_multipliers = multipliers
@@ -129,54 +132,50 @@ class GlOrientationViewer:
 
         #-----------------------------Render its axes----------------------------------
         if self.model_arrows and self.axes_visible:
-            LETTER_OFFSET = 28 #TODO CHANGE ME
+            # LETTER_OFFSET = 28 #TODO CHANGE ME
             #X
-            glPushMatrix()
             color, letter = self.ARROW_ORDER[self.axis_order.index(0)]
             mult = self.axis_multipliers[self.axis_order.index(0)]
-
-            glColor(*color, 1)
-            glRotate(-90, 0, 1, 0)
-            glScale(1, 1, 1 * mult)
-            glCallList(GlOrientationViewer.DEFAULT_ARROWS)
-            glTranslate(0, 0, -LETTER_OFFSET)
-            projection = glGetFloatv(GL_PROJECTION_MATRIX)
-            mv = glGetFloatv(GL_MODELVIEW_MATRIX)
-            mv[:3,:3] = np.identity(3)  #Setting the top left to the identity removes the rotation component but keeps translation. This allows it to stay facing the camera
-            mvp = mv @ projection
-            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)
-            glPopMatrix()
-
+            self.render_arrow(yl_quat.quat_from_axis_angle([0, 1, 0], np.radians(-90)), color, mult, letter)
             #Y
-            glPushMatrix()
             color, letter = self.ARROW_ORDER[self.axis_order.index(1)]
             mult = self.axis_multipliers[self.axis_order.index(1)]
-            glColor(*color, 1)
-            glRotate(90, 1, 0, 0)
-            glScale(1, 1, 1 * mult)
-            glCallList(GlOrientationViewer.DEFAULT_ARROWS)
-            glTranslate(0, 0, -LETTER_OFFSET)
-            projection = glGetFloatv(GL_PROJECTION_MATRIX)
-            mv = glGetFloatv(GL_MODELVIEW_MATRIX)
-            mv[:3,:3] = np.identity(3)
-            mvp = mv @ projection
-            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)
-            glPopMatrix()
+            self.render_arrow(yl_quat.quat_from_axis_angle([1, 0, 0], np.radians(90)), color, mult, letter)
 
             #Z
-            glPushMatrix()
             color, letter = self.ARROW_ORDER[self.axis_order.index(2)]
             mult = self.axis_multipliers[self.axis_order.index(2)]
-            glColor(*color, 1)
-            glScale(1, 1, 1 * mult)
-            glCallList(GlOrientationViewer.DEFAULT_ARROWS)
+            self.render_arrow([0, 0, 0, 1], color, mult, letter)
+
+    def render_arrow(self, quat: list[float], color: tuple[float,float,float], size: float, text=None, no_grotate=False):
+        LETTER_OFFSET = 28 #TODO CHANGE ME
+
+        #Setup rotation of model
+        matrix = yl_quat.quaternion_to_3x3_rotation_matrix(quat)
+
+        #Convert the 3x3 rotation matrix to the 4x4 model matrix
+        model_matrix = np.identity(4)
+        model_matrix[:3,:3] = matrix
+
+        glPushMatrix()
+        if no_grotate:
+            glMatrixMode(GL_MODELVIEW)
+            glLoadIdentity()
+            glTranslate(0, 0, self.z) #TODO: Change me
+
+        glColor(*color, 1)
+        glMultMatrixf(model_matrix.T)
+        #glRotate(-90, 0, 1, 0)
+        glScale(1, 1, 1 * size)
+        glCallList(GlOrientationViewer.DEFAULT_ARROWS)
+        if text is not None:
             glTranslate(0, 0, -LETTER_OFFSET)
             projection = glGetFloatv(GL_PROJECTION_MATRIX)
             mv = glGetFloatv(GL_MODELVIEW_MATRIX)    
             mv[:3,:3] = np.identity(3)
             mvp = mv @ projection
-            self.text_renderer.render_text(self.font, letter, 0, 0, 0.1, color, mvp, centered=True)     
-            glPopMatrix()
+            self.text_renderer.render_text(self.font, text, 0, 0, 0.1, color, mvp, centered=True)          
+        glPopMatrix()
 
     def render(self):
         glClearColor(*self.background_color)
