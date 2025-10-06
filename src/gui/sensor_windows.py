@@ -1951,7 +1951,7 @@ class SphereCalibrationWizard:
             self.texture_width = 400
             self.texture_height = 400
             self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
-            dpg.add_text("Move the sensor to gather points. Repeatedly rotate the yellow arrows together to optimize results. Aim for >= 400 points and sparsity <= 20. ", wrap=self.texture_width)
+            dpg.add_text("Move the sensor to gather points. Repeatedly rotate the yellow/orange arrows together to optimize results. Aim for >= 400 points and sparsity <= 20. ", wrap=self.texture_width)
             with dpg.group(horizontal=True):
                         dpg.add_text("Samples:")
                         self.sample_text = dpg.add_text("0")
@@ -2060,7 +2060,7 @@ class SphereCalibrationWizard:
             glQuat2 = quaternion.quaternion_swap_axes_fast(quat2, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
             with self.orientation_viewer.renderer:
                 self.orientation_viewer.viewer.render_arrow(glQuat, color=(1, 1, 0), size=1, text=None, no_grotate=False)
-                self.orientation_viewer.viewer.render_arrow(glQuat2, color=theme_lib.color_w, size=1, text=None, no_grotate=False)
+                self.orientation_viewer.viewer.render_arrow(glQuat2, color=(1, 0.5, 0), size=1, text=None, no_grotate=False)
                 # for orient in self.gathered_orients[self.display_mag]:
                 #     pass
                 #     #self.orientation_viewer.viewer.render_arrow(orient, color=(1, 0, 0), size=1, text=None)
