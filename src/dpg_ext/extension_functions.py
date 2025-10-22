@@ -107,8 +107,8 @@ def create_popup_message(text: str = "", title: str = "", width=350, always_cent
     return PopupWindow(title=title, width=width, always_center=always_center).set_message_box(text, title)
 
 def create_confirm_popup(text: str = "", on_cancel: Callable = None, on_confirm: Callable = None, title: str = "Confirmation", width=350,
-                            always_center: bool = True):
+                            always_center: bool = True, confirm_text="Confirm", cancel_text="Cancel"):
     """
     Creates a modal window with supplied text and a cancel and confirm button with settable callbacks
     """
-    return PopupWindow(width=width, always_center=always_center).set_confirm_box(text=text, title=title, on_cancel=on_cancel, on_confirm=on_confirm)
+    return PopupWindow(title=title, width=width, always_center=always_center).set_confirm_box(text=text, title=title, on_cancel=on_cancel, on_confirm=on_confirm, confirm_text=confirm_text, cancel_text=cancel_text)

@@ -281,7 +281,9 @@ class ThreespaceDevice:
         self.__api.set_settings("default")
 
     def commit_settings(self):
-        self.__api.commitSettings()
+        #Doing this instead of calling command so can get the status response regardless of current header state
+        err, successes = self.__api.set_settings("commit")
+        return err
 
     def restart_sensor(self):
         self.streaming_manager.reset() #Disable anything relying on streaming since sensor must reset

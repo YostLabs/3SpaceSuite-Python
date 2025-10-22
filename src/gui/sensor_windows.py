@@ -564,8 +564,7 @@ class SensorOrientationWindow(StagedView):
                                                user_data=[device.set_offset, [0, 0, 0, 1]])
                         dpg.add_button(label="Auto Calibrate Gyros", width=-1, callback=self.generic_device_command,
                                        user_data=[device.start_gyro_autocalibration])
-                        dpg.add_button(label="Commit", width=-1, callback=self.generic_device_command,
-                                       user_data=[device.commit_settings])                  
+                  
                 self.grid.push(self.orientation_viewer.image, 0, 0)#, max_size = (400, 400))
                 self.grid.push(control_window, 1, 0)
                 self.grid2 = dpg_grid.Grid(1, 5, control_window, rect_getter=dpg_ext.get_global_rect, overlay=False)
@@ -1083,6 +1082,7 @@ class TableMatrix:
 
 DEFAULT_FIRMWARE_FOLDER = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FOLDER
 DEFAULT_FIRMWARE_KEY = "firmware_folder"
+COMMIT_POPUP_ENABLED_KEY = "confirm_commit"
 
 from third_party.file_dialog.fdialog import FileDialog
 import threading
@@ -1112,13 +1112,6 @@ class SensorSettingsWindow(StagedView):
                     self.version_firmware_text = dpg.add_text()     
                     dpg.add_spacer(width=50)
                     dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)          
-                with dpg.group(horizontal=True):
-                    dpg.add_button(label="Restore Factory Settings", 
-                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restore factory settings?", 
-                                                                         on_confirm=self.restore_factory_settings))
-                    dpg.add_button(label="Restart",
-                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?", 
-                                                                         on_confirm=self.restart_sensor))
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
@@ -1146,9 +1139,70 @@ class SensorSettingsWindow(StagedView):
 
                 if device.has_datetime():
                     dpg.add_button(label="Set Date Time", callback=self.__set_date_time)
+
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Commit Settings", callback=self.__on_commit_button)
+                    dpg.add_button(label="Restore Factory Settings", 
+                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restore factory settings?", 
+                                                                         on_confirm=self.restore_factory_settings))
+                    dpg.add_button(label="Restart",
+                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?", 
+                                                                         on_confirm=self.restart_sensor))
         
         self.device = device
+        self.popup = None
         self.reload_settings()
+
+    def __on_commit_button(self, sender, app_data):
+        #Check/initialize settings for if popup should appear
+        settings: dict = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY, default={})
+        confirm_dialog_enabled = True
+        if COMMIT_POPUP_ENABLED_KEY in settings:
+            confirm_dialog_enabled = settings[COMMIT_POPUP_ENABLED_KEY]
+        else:
+            settings[COMMIT_POPUP_ENABLED_KEY] = True
+            GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
+
+        if confirm_dialog_enabled:
+            self.popup = dpg_ext.PopupWindow(title="Confirmation")
+            self.popup.add_text("Are sure you want to overwrite the current saved settings?")
+            with self.popup:
+                dpg.add_checkbox(label="Don't ask me again", callback=self.__on_ignore_checkbox)
+                dpg.add_spacer()
+            confirm_button = dpg_ext.PopupButton(label="Yes", callback=self.__do_commit, close_on_select=False, width=60)
+            deny_button = dpg_ext.PopupButton(label="No", close_on_select=True, width=60)
+            self.popup.add_buttons([confirm_button, deny_button])
+        else:
+            #Create the popup window do_commit uses to report results before calling
+            self.popup = dpg_ext.PopupWindow(title="Confirmation")
+            self.__do_commit()
+
+    def __on_ignore_checkbox(self, sender, app_data, user_data):
+        enabled = not app_data
+        settings: dict = GenericSettingsManager.get_local(SENSOR_SETTINGS_KEY, default={})
+        if COMMIT_POPUP_ENABLED_KEY not in settings or settings[COMMIT_POPUP_ENABLED_KEY] != enabled:
+            settings[COMMIT_POPUP_ENABLED_KEY] = enabled
+            GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
+
+    def __do_commit(self):
+
+        try:
+            err = self.device.commit_settings()
+        except Exception as e:
+            self.device.report_error(e)
+            return
+        
+        if err == 0:
+            #Success!
+            self.popup.set_message_box("Successfully commited settings.", title="Success")
+        elif err == threespace_consts.THREESPACE_ERR_COMMIT_FS_LOCKED:
+            #SD card was locked
+            self.popup.configure(width=450)
+            self.popup.set_message_box("Failed to commit settings to the SD Card.\nEject the mass storage device and try again.", title="Error")
+        else:
+            #Unknown Error
+            self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
+
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()

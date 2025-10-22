@@ -5,9 +5,10 @@ from typing import Callable
 
 class PopupButton:
 
-    def __init__(self, label: str = "", callback: Callable = None, **kwargs):
+    def __init__(self, label: str = "", callback: Callable = None, close_on_select=False, **kwargs):
         self.label = label
         self.callback = callback
+        self.close_on_select = close_on_select
         self.kwargs = kwargs
 
 class PopupWindow:
@@ -19,11 +20,12 @@ class PopupWindow:
 
     def __init__(self, title=None, width=350, always_center=True, no_close=False, **kwargs):
         with dpg.window(label=title, modal=True, no_resize=True, show=True, 
-                        width=width, autosize=True,
+                        width=width, autosize=False,
                         no_move=always_center, no_close=no_close, on_close=self.__on_close, no_title_bar=not title, 
                         **kwargs) as self.window:
             self.text_group = dpg.add_group()
             self.loading_group = dpg.add_group()
+            self.custom_group = dpg.add_group()
             self.button_group = dpg.add_group()
             
         #Handle centering the window
@@ -40,10 +42,19 @@ class PopupWindow:
         dpg.configure_item(self.window, **kwargs)
 
     def add_buttons(self, buttons: list[PopupButton]):
+        def __on_select(sender, app_data, user_data):
+            button: PopupButton = user_data
+
+            if button.close_on_select:
+                self.delete()
+            
+            if button.callback is not None:
+                button.callback()
+
         dpg.push_container_stack(self.button_group)
         with dpg.group(horizontal=True):
             for button in buttons:
-                dpg.add_button(label=button.label, callback=button.callback, **button.kwargs)
+                dpg.add_button(label=button.label, callback=__on_select, user_data=button, **button.kwargs)
         dpg.pop_container_stack()
 
         return self
@@ -84,36 +95,47 @@ class PopupWindow:
         dpg.push_container_stack(self.window)
         self.text_group = dpg.add_group()
         self.loading_group = dpg.add_group()
+        self.custom_group = dpg.add_group()
         self.button_group = dpg.add_group()
         dpg.pop_container_stack()
 
-    def set_confirm_box(self, text: str = "", title: str="Confirmation", on_cancel: Callable = None, on_confirm: Callable = None, close_on_selection: bool = True):
+    def set_autosize(self, enabled=True):
+        """
+        Autosize is useful, especially when keeping the same popup window and changing its contents.
+        However, there are times this needs to be disabled due to the following bug. Sadly, there does not
+        seem to be a one size fits all fix right now, so the user may have to manually manage this state when
+        creating and modifiying popups. If your popup starts growing, disable this.
+        https://github.com/hoffstadt/DearPyGui/issues/2500#issuecomment-2797531732
+        """
+        dpg.configure_item(self.window, autosize=enabled)
+
+    def set_confirm_box(self, text: str = "", title: str="Confirmation", on_cancel: Callable = None, on_confirm: Callable = None, close_on_selection: bool = True, confirm_text="Confirm", cancel_text="Cancel"):
         self.clear()
         dpg.configure_item(self.window, label=title)
         if text:
             self.add_text(text)
 
-        def __on_select(sender, app_data, user_data):
-            callback = user_data
-
-            if close_on_selection:
-                self.delete()
-            
-            if callback is not None:
-                callback()
-
-        self.add_buttons([PopupButton(label="Confirm", callback=__on_select, user_data=on_confirm), 
-                          PopupButton(label="Cancel", callback=__on_select, user_data=on_cancel)])
+        self.add_buttons([PopupButton(label=confirm_text, callback=on_confirm, close_on_select=True), 
+                          PopupButton(label=cancel_text, callback=on_cancel, close_on_select=True)])
         
         return self
     
     def set_message_box(self, text: str = "", title: str = ""):
         self.clear()
         dpg.configure_item(self.window, label=title)
+        dpg.configure_item(self.window, autosize=True)
         self.add_text(text)
-        self.add_buttons([PopupButton("Ok", callback=self.delete)])
+        self.add_buttons([PopupButton("Ok", close_on_select=True)])
 
         return self
+
+    def __enter__(self):
+        dpg.push_container_stack(self.custom_group)
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        dpg.pop_container_stack()
+        return False
 
     def __on_close(self):
         self.delete()
