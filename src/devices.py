@@ -96,6 +96,12 @@ class ThreespaceDevice:
             return "BLE"
         else:
             return "UNKNOWN"
+    
+    @property
+    def type_suffix(self):
+        if hasattr(self.com, 'suffix'):
+            return self.com.suffix
+        return None
 
     def open(self):
         if self.is_open: return

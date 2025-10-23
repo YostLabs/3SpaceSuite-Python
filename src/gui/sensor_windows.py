@@ -49,6 +49,9 @@ class SensorBanner(SelectableButton):
 
     @property
     def __name(self):
+        suffix = self.device.type_suffix
+        if suffix is not None:
+            return f"{self.device.name} ({self.device.com_type} {suffix})"
         return f"{self.device.name} ({self.device.com_type})"
 
 
@@ -1211,7 +1214,7 @@ class SensorSettingsWindow(StagedView):
         except Exception as e:
             self.device.report_error(e)
         else:
-            dpg_ext.create_popup_message(f"Set time to {now.strftime('%Y %m %d, %H:%M:%S')}")
+            dpg_ext.create_popup_message(f"Set time to {now.strftime('%Y %m %d, %H:%M:%S')}", title="Result")
 
     def restart_sensor(self):
         try:

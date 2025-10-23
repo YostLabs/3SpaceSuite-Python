@@ -216,7 +216,10 @@ class ThreespaceManager:
         device = ThreespaceDevice(com)
         # if com.name in self.device_mapping:
         #     device.name = self.device_mapping[com.name]
-        device.name = com.name
+        default_name = com.name
+        if default_name.lower() in (f"com{i}" for i in range(10)):
+            default_name = f"{default_name[:3]}0{default_name[3]}"
+        device.name = default_name
         Logger.log_info(f"Detected: {com.name}")
         device.on_error.subscribe(self.__on_sensor_error)
         device.on_disconnect.subscribe(self.__on_sensor_disconnect)
