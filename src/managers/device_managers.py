@@ -69,6 +69,7 @@ ThreespaceGroup = NamedTuple("ThreespaceGroup", [("device", ThreespaceDevice), (
 @dataclasses.dataclass
 class SerialSettings:
     enabled: bool = True
+    show_unknown: bool = False
 
 @dataclasses.dataclass
 class BleSettings:
@@ -148,11 +149,11 @@ class ThreespaceManager:
     def __discover_coms(self):
         valid_coms = []
         if self.settings.serial.enabled:
-            for port in ThreespaceSerialComClass.enumerate_ports():
-                if port.pid & ThreespaceSerialComClass.PID_V3_MASK == ThreespaceSerialComClass.PID_V3_MASK or port.pid == ThreespaceSerialComClass.PID_BOOTLOADER:
-                    ser = serial.Serial(None, baudrate=115200, timeout=2) #By seperating the port assignment from the constructor, can create the object without automatically opening the port
-                    ser.port = port.device
-                    valid_coms.append(ThreespaceSerialComClass(ser))
+            ports = serial.tools.list_ports.comports()
+            for port in ports:
+                if self.settings.serial.show_unknown or ThreespaceSerialComClass.is_threespace_port(port):
+                    com = ThreespaceSerialComClass(port.device)
+                    valid_coms.append(com)
         
         if self.ble_supported and self.settings.ble.enabled:
             for ble_device in ThreespaceBLEComClass.auto_detect():
@@ -179,7 +180,6 @@ class ThreespaceManager:
                 #If its a ble device, make sure to flag its address as a valid address
                 if isinstance(com, ThreespaceBLEComClass) and not com.address in self.settings.ble.allow:
                     self.settings.ble.allow.append(com.address)
-            
             #-------------Handle inactive devices------------------
             else:
                 available = False
@@ -228,7 +228,9 @@ class ThreespaceManager:
             group = ThreespaceGroup(device, banner, SensorMasterWindow(device, banner, self.macro_manager, on_connect=self.notify_opened))
         self.devices[com] = group
         self.banner_menu.add_banner(group.banner)
-        group.banner.add_selected_callback(lambda _: self.load_sensor_window(com))        
+        group.banner.add_selected_callback(lambda _: self.load_sensor_window(com))  
+        
+        return group      
 
     def update_device_by_com(self, com: ThreespaceComClass):
         registered_com = self.get_registered_com(com)

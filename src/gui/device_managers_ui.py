@@ -10,6 +10,7 @@ class ThreespaceManagerToolbar(StagedView):
         with dpg.stage(label="TS-Manager Stage") as self._stage_id:
             with dpg.menu(label="Serial"):
                 self.serial_enabled = dpg.add_checkbox(label="Enabled", default_value=self.settings.serial.enabled, callback=self.__on_serial_enable_changed)
+                self.show_unknown_serial_box = dpg.add_checkbox(label="Show Unknown", default_value=self.settings.serial.show_unknown, callback=self.__on_show_unknown_changed)
             with dpg.menu(label="BLE"):
                 self.ble_enabled = dpg.add_checkbox(label="Enabled", default_value=self.settings.ble.enabled, callback=self.__on_ble_enable_changed)
                 self.hidden_enabled = dpg.add_checkbox(label="Show Hidden", default_value=self.settings.ble.show_hidden, callback=self.__on_show_hidden_changed)
@@ -18,6 +19,9 @@ class ThreespaceManagerToolbar(StagedView):
     
     def __on_serial_enable_changed(self, sender, app_data):
         self.settings.serial.enabled = app_data
+
+    def __on_show_unknown_changed(self, sender, app_data):
+        self.settings.serial.show_unknown = app_data        
     
     def __on_ble_enable_changed(self, sender, app_data):
         self.settings.ble.enabled = app_data

@@ -215,6 +215,9 @@ class SensorConnectionWindow(StagedView):
             result[1] = e
             return
 
+    def request_connect(self):
+        self.__on_connect_requested()
+
     def __on_connect_requested(self):
         result = [0, 0]
         if self.device.com_type == "BLE":
