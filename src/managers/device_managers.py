@@ -21,7 +21,7 @@ from yostlabs.tss3.api import ThreespaceSensor
 #Import the communication objects used
 from yostlabs.communication.ble import ThreespaceComClass
 from yostlabs.communication.serial import ThreespaceSerialComClass
-from yostlabs.communication.ble import ThreespaceBLEComClass
+from yostlabs.communication.ble import ThreespaceBLEComClass, ThreespaceBLENordicUartProfile
 
 import serial
 import serial.tools.list_ports
@@ -78,6 +78,12 @@ class BleSettings:
     show_hidden: bool = False
     allow: list[str] = dataclasses.field(default_factory=list)
     deny: list[str] = dataclasses.field(default_factory=list)
+    profiles: list[ThreespaceBLENordicUartProfile] = dataclasses.field(default_factory=list)
+
+    def __post_init__(self):
+        for i, profile in enumerate(self.profiles):
+            if isinstance(profile, dict):
+                self.profiles[i] = ThreespaceBLENordicUartProfile(**profile)
 
 @dataclasses.dataclass
 class ThreespaceManagerSettings:
@@ -118,6 +124,7 @@ class ThreespaceManager:
 
         self.ble_supported = False
         try:
+            ThreespaceBLEComClass.set_profiles(self.settings.ble.profiles)
             ThreespaceBLEComClass.set_scanner_continous(True)
             self.ble_supported = True
         except Exception as e:
@@ -136,6 +143,9 @@ class ThreespaceManager:
             self.settings = ThreespaceManagerSettings()
         else:
             self.settings = ThreespaceManagerSettings(**setting_dict)
+        if len(self.settings.ble.profiles) == 0:
+            self.settings.ble.profiles.append(ThreespaceBLEComClass.DEFAULT_PROFILE)
+        print(f"{self.settings.ble.profiles=}")
 
     def __show_ble_device(self, device: ThreespaceBLEComClass):
         if device.address in self.settings.ble.deny: return False #In the reject List
@@ -145,6 +155,13 @@ class ThreespaceManager:
         if device.name.startswith(self.settings.ble.filter): return True #Matched the filter, so allowed
         return False #Default to hidden unless allowed by the settings above
     
+    def set_ble_registrations(self, profiles: list[ThreespaceBLENordicUartProfile]):
+        if len(profiles) == 0:
+            profiles.append(ThreespaceBLEComClass.DEFAULT_PROFILE)
+        self.settings.ble.profiles = profiles
+        print("setting profiles:", profiles)
+        ThreespaceBLEComClass.set_profiles(profiles)
+
     #---------------------Find potential com classes for ThreespaceSensors--------------------------------
     def __discover_coms(self):
         valid_coms = []
@@ -216,7 +233,7 @@ class ThreespaceManager:
         device = ThreespaceDevice(com)
         # if com.name in self.device_mapping:
         #     device.name = self.device_mapping[com.name]
-        default_name = com.name
+        default_name = com.name or "Unknown"
         if default_name.lower() in (f"com{i}" for i in range(10)):
             default_name = f"{default_name[:3]}0{default_name[3]}"
         device.name = default_name

@@ -11,6 +11,8 @@ class PopupButton:
         self.close_on_select = close_on_select
         self.kwargs = kwargs
 
+        self.tag = None
+
 class PopupWindow:
     """
     A helper class for creating frequently used popups that
@@ -54,7 +56,7 @@ class PopupWindow:
         dpg.push_container_stack(self.button_group)
         with dpg.group(horizontal=True):
             for button in buttons:
-                dpg.add_button(label=button.label, callback=__on_select, user_data=button, **button.kwargs)
+                button.tag = dpg.add_button(label=button.label, callback=__on_select, user_data=button, **button.kwargs)
         dpg.pop_container_stack()
 
         return self
