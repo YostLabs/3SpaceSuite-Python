@@ -129,6 +129,7 @@ class ThreespaceManager:
             ThreespaceBLEComClass.set_profiles(self.settings.ble.profiles)
             ThreespaceBLEComClass.set_scanner_continous(True)
             self.ble_supported = True
+            # ThreespaceBluetoothComClass.set_scanner_continous(True)
         except Exception as e:
             Logger.log_error(f"Failed to start BLE scanning: {e}")
 
