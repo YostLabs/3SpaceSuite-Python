@@ -10,6 +10,7 @@ from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSe
     ThreespaceCommandInfo, threespaceCommandGetInfo, threespaceCommandGetByName, ThreespaceCmdResult, \
     ThreespaceHeaderInfo
 from yostlabs.communication.ble import ThreespaceBLEComClass
+from yostlabs.communication.bluetooth import ThreespaceBluetoothComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
 from yostlabs.tss3.utils.version import ThreespaceFirmwareUploader
 import yostlabs.math.quaternion as yl_quat
@@ -45,6 +46,9 @@ class ThreespaceDevice:
             self._name = "3Space" + str(self.com.ser.port)
         elif isinstance(com, ThreespaceBLEComClass):
             com: ThreespaceBLEComClass
+            self._name = self.com.name
+        elif isinstance(com, ThreespaceBluetoothComClass):
+            com: ThreespaceBluetoothComClass
             self._name = self.com.name
         else:
             self._name = "3SpaceUnknown"
@@ -94,6 +98,8 @@ class ThreespaceDevice:
             return "Serial"
         elif isinstance(self.com, ThreespaceBLEComClass):
             return "BLE"
+        elif isinstance(self.com, ThreespaceBluetoothComClass):
+            return "BT"
         else:
             return "UNKNOWN"
     

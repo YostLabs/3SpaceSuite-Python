@@ -22,6 +22,8 @@ from yostlabs.tss3.api import ThreespaceSensor
 from yostlabs.communication.ble import ThreespaceComClass
 from yostlabs.communication.serial import ThreespaceSerialComClass
 from yostlabs.communication.ble import ThreespaceBLEComClass, ThreespaceBLENordicUartProfile
+from yostlabs.communication.bluetooth import ThreespaceBluetoothComClass
+
 
 import serial
 import serial.tools.list_ports
@@ -177,6 +179,10 @@ class ThreespaceManager:
                 if not self.__show_ble_device(ble_device): continue
                 valid_coms.append(ble_device)
         
+            #TODO: Check for bluetooth support, for now combining with BLE check
+            # for bluetooth_device in ThreespaceBluetoothComClass.auto_detect(wait_for_update=False):
+            #     valid_coms.append(bluetooth_device)
+        
         return valid_coms
 
     #-----------------------------Update/Remove connected ports based on potential ports--------------------------------
@@ -216,6 +222,8 @@ class ThreespaceManager:
             return a.ser.port == b.ser.port
         elif isinstance(a, ThreespaceBLEComClass):
             return a.client.address == b.client.address
+        elif isinstance(a, ThreespaceBluetoothComClass):
+            return a.address == b.address
         return False
 
     #Com classes are not required to implement == or hash, so this is required to use coms
