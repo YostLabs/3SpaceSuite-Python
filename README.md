@@ -19,7 +19,7 @@ To get started with the suite, simply connect a sensor via USB to your computer,
 
 ![](docs/assets/gifs/IntroConnect.gif)
 
-Sensors that support BLE can also be connected to wirelessly via the BLE interface if your computer supports BLE and has Bluetooth enabled. The connection interface is shown in the parentheses, and multiple interfaces may show up for a single sensor, such as BLE and Serial/USB. For some interfaces, such as Serial, the type of sensor will also be shown in abbreviated form, such as EM for embedded, or DL for Data Logger.
+Sensors that support BLE can also be connected wirelessly via the BLE interface if your computer supports BLE and has Bluetooth enabled. The connection interface is shown in parentheses, and multiple interfaces may show up for a single sensor, such as BLE and Serial/USB. For some interfaces, such as Serial, the type of sensor will also be shown in abbreviated form, such as EM for embedded, or DL for Data Logger.
 
 ## Common Procedures
 ### Calibrating Sensors
@@ -28,7 +28,7 @@ To calibrate a sensor, first connect to a sensor and then go to its calibration 
 ![](docs/assets/gifs/GradientDescent.gif)
 
 To calibrate the gyroscope, set the sensor on a flat motionless surface and click the **Auto Calibrate Gyros** button. The sensors LED will blink on/off until the process is complete.\
-<small>NOTE: At the time of writing, the **Auto Calibrate Gyros** button is actually in the Orientation tab, but is planned to be moved. Check there if you can not find it.</small>
+<small>NOTE: At the time of writing, the **Auto Calibrate Gyros** button is in the Orientation tab, but is planned to be moved. Check there if you can not find it.</small>
 
 For the calibration to persist across power cycles, make sure to commit settings by going to the settings tab and pressing the **Commit Settings** button.
 
