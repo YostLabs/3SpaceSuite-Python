@@ -32,6 +32,7 @@ from gui.orientation_view import OrientationView
 from yostlabs.graphics import ModelObject, GL_AXIS_ORDER
 from yostlabs.graphics.dpg import DpgScene
 from yostlabs.graphics.scene_prefabs import OrientationScene
+from yostlabs.graphics.prefabs import ArrowObject
 from gui.resources.obj_lib import ObjectLibrary
 
 SENSOR_SETTINGS_KEY = "sensor"
@@ -165,7 +166,7 @@ class SensorConnectionWindow(StagedView):
 
         #render the object
         self.base_scene = OrientationScene(self.texture_width, self.texture_height,
-                                           ModelObject(model=ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number)))
+                                           ModelObject(model=ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(device.type_suffix))))
         self.base_scene.set_background_color(0, 0, 0, 0)
         self.base_scene.axes.set_visible(False)
         self.base_scene.orientation_indicator.set_visible(False)
@@ -1432,10 +1433,16 @@ class SensorCalibrationWindow(StagedView):
 
     def apply_calibration_result(self, result: "CalibrationResult"):
         try:
+            #The calibration is currently computed in XYZ space, so must apply it while the axis order is XYZ.
+            #This allows the sensor to perform the math correctly rather than having to convert axis spaces
+            #here before applying.
+            order = self.device.get_axis_order()
+            self.device.set_axis_order("xyz")
             for accel, calib in result.accels.items():
                 self.device.set_accel_calibration(accel, mat=calib.mat, bias=calib.bias)
             for mag, calib in result.mags.items():
                 self.device.set_mag_calibration(mag, mat=calib.mat, bias=calib.bias)
+            self.device.set_axis_order(order)
         except Exception as e:
             self.device.report_error(e)
         else:
@@ -1734,7 +1741,7 @@ class GradientDescentCalibrationWizard:
                 self.device.set_mag_odrs(new_mag_odrs)
             
             #Change the axis order to be the required XYZ (The math would have to change without this, would rather just do this atleast for now since it is easier)
-            self.device.set_axis_order("xyz")
+            self.device.set_axis_order(self.BASE_AXIS_ORDER.to_xyz_string())
             self.device.set_axis_offset_enabled(False)
         except Exception as e:
             self.device.report_error(e)
@@ -2035,11 +2042,15 @@ class SphereCalibrationWizard:
                     dpg.add_button(label="Finish", callback=self.finish)
                     dpg.add_button(label="Reset", callback=self.clear)
                     dpg.add_button(label="Cancel", callback=self.cancel)
-                    
-        # with dpg.handler_registry() as self.keyboard_handler:
-        #     dpg.add_key_press_handler(dpg.mvKey_Return, callback=self.__on_keyboard_next_pressed)
-        #     dpg.add_key_press_handler(dpg.mvKey_NumPadEnter, callback=self.__on_keyboard_next_pressed)
-        #     dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=self.__on_keyboard_next_pressed)
+
+        #Add some arrows to the OrientationViewerScene to show the guiding arrows
+        self.mag_arrow = ArrowObject(arrow_color=(1, 1, 0), name="Mag Arrow") #Yellow
+        self.spare_area_arrow = ArrowObject(arrow_color=(1, 0.5, 0), name="Sparsest Area Arrow") #orange
+        model = self.orientation_viewer.orientation_scene.model
+        self.mag_arrow.set_scale(1 / model.scale)
+        self.spare_area_arrow.set_scale(1 / model.scale)
+        model.add_child(self.mag_arrow)
+        model.add_child(self.spare_area_arrow)
 
         #Keeps window centered
         with dpg.item_handler_registry(label="Sphere Calib Visible Handler") as self.visible_handler:
@@ -2069,7 +2080,7 @@ class SphereCalibrationWizard:
                 return
             self.__cached_axis_offset_enabled = self.device.get_axis_offset_enabled()
             self.__cached_axis_order = self.device.get_axis_order()
-            self.device.set_axis_order("xyz")
+            self.device.set_axis_order(self.BASE_AXIS_ORDER.to_xyz_string())
             self.device.set_axis_offset_enabled(False)
         except Exception as e:
             self.device.report_error(e)
@@ -2113,25 +2124,20 @@ class SphereCalibrationWizard:
     def clear(self):
         for calibrator in self.calibrators.values():
             calibrator.clear()
-
-    def render_quat(self, quat: list[float]):
-        self.orientation_viewer.render_image(quat, self.BASE_AXIS_ORDER, hide_sensor=True)
-        # TODO
+    
+    def render_quat(self, sensor_quat: list[float]):
         if self.last_mag is not None:
             quat = quaternion.quat_from_one_vector(self.last_mag)
-            glQuat = quaternion.quaternion_swap_axes_fast(quat, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
+            glQuat = self.BASE_AXIS_ORDER.swap_to(GL_AXIS_ORDER, quat, rotational=True)
+            self.mag_arrow.set_rotation_quat(glQuat)
 
-            quat2 = quaternion.quat_from_one_vector(self.calibrators[self.display_mag].sparsest_vector)
-            glQuat2 = quaternion.quaternion_swap_axes_fast(quat2, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
-            with self.orientation_viewer.renderer:
-                self.orientation_viewer.viewer.render_arrow(glQuat, color=(1, 1, 0), size=1, text=None, no_grotate=False)
-                self.orientation_viewer.viewer.render_arrow(glQuat2, color=(1, 0.5, 0), size=1, text=None, no_grotate=False)
-                # for orient in self.gathered_orients[self.display_mag]:
-                #     pass
-                #     #self.orientation_viewer.viewer.render_arrow(orient, color=(1, 0, 0), size=1, text=None)
-                self.orientation_viewer.update_pixels()
+            quat = quaternion.quat_from_one_vector(self.calibrators[self.display_mag].sparsest_vector)
+            glQuat = self.BASE_AXIS_ORDER.swap_to(GL_AXIS_ORDER, quat, rotational=True)
+            self.spare_area_arrow.set_rotation_quat(glQuat)
+        self.orientation_viewer.render_image(sensor_quat, self.BASE_AXIS_ORDER, hide_sensor=True)
+
         self.orientation_viewer.update_image()
-    
+
     def restore_settings(self):
         try:
             self.device.unregister_streaming_callback(self.__on_sample_received)
