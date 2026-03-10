@@ -1,7 +1,7 @@
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
-    
+
     import platform
     import asyncio
     if platform.system() == 'Windows':
@@ -13,9 +13,10 @@ if __name__ == "__main__":
     print("Starting main")
     from managers.resource_manager import *
     import dearpygui.dearpygui as dpg
-    from graphics.gl_renderer import GL_Renderer
+    from yostlabs.graphics import GL_Context, resources, Font
     from gui.main_menubar import MenuBar
-    import gui.resources.theme_lib as theme_lib, gui.resources.obj_lib as obj_lib, gui.resources.texture_lib as texture_lib
+    import gui.resources.theme_lib as theme_lib, gui.resources.texture_lib as texture_lib
+    from gui.resources.obj_lib import ObjectLibrary
     import time
 
     #Initialization
@@ -35,12 +36,12 @@ if __name__ == "__main__":
     from utility import Logger, MainLoopEventQueue
     Logger.init()
     from gui.core_ui import FontManager
-    GL_Renderer.init()
-    obj_lib.init()
+    GL_Context.init()
+    ObjectLibrary.init()
 
     FontManager.init()
     dpg.bind_font(FontManager.DEFAULT_FONT)
-    GL_Renderer.set_font((FONT_FOLDER / "FiraCode-Regular.ttf").as_posix(), 48)
+    GL_Context.default_font = Font((FONT_FOLDER / "FiraCode-Regular.ttf").as_posix())
 
     #Create Window Structures and connections
     with dpg.window(label="Main Window") as primary_window:
@@ -150,4 +151,4 @@ if __name__ == "__main__":
 
     #Shut down
     dpg.destroy_context()
-    GL_Renderer.cleanup()
+    GL_Context.cleanup()

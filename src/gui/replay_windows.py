@@ -13,11 +13,11 @@ from gui.datachart_view import SensorDataWindow
 import data_charts
 from data_charts import StreamOption
 
-from graphics.objloader import OBJ
-import gui.resources.obj_lib as obj_lib
+from yostlabs.graphics import OBJ
+from gui.resources.obj_lib import ObjectLibrary
 import gui.resources.theme_lib as theme_lib
 
-from yostlabs.math.vector import parse_axis_string_info
+from yostlabs.math.axes import AxisOrder
 from yostlabs.tss3.api import StreamableCommands
 from utility import MainLoopEventQueue, Logger, Callback
 
@@ -275,7 +275,7 @@ class OrientationReplayWindow(StagedView):
         self.data_file: TssDataFile = None
         self.quat = [0, 0, 0, 1]
         self.dirty = False
-        self.axis_info = parse_axis_string_info("xyz")
+        self.axis_order = AxisOrder("xyz")
 
         with dpg.stage() as self._stage_id:
             with dpg.child_window(width=-1, height=-1) as self.child_window:
@@ -283,7 +283,7 @@ class OrientationReplayWindow(StagedView):
                 self.grid.offsets = 8, 8, 8, 8
                 self.grid.rows[1].configure(size=56)
 
-                self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(None), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
+                self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(None), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
                 self.grid.push(self.orientation_viewer.image, 0, 0)
                 with dpg.child_window(border=False) as self.timeline_window:
                     dpg.add_spacer()
@@ -329,7 +329,7 @@ class OrientationReplayWindow(StagedView):
             self.timeline.configure(True, 0, 0)
             self.timeline.set_timeline_value(0)
         self.quat = [0, 0, 0, 1]
-        self.axis_info = parse_axis_string_info("xyz")
+        self.axis_order = AxisOrder("xyz")
         self.queue_render()
 
     def set_data_file(self, data_file: TssDataFile):
@@ -348,7 +348,7 @@ class OrientationReplayWindow(StagedView):
             self.orientation_source = None
             return
 
-        self.axis_info = self.data_file.settings.axis_order_info
+        self.axis_order = self.data_file.settings.axis_order_info
 
         #Set the time source and load the initial position
         if not self.timeline_shared:
@@ -371,7 +371,7 @@ class OrientationReplayWindow(StagedView):
         MainLoopEventQueue.queue_sync_event(self.__render_image_queue)
 
     def render_image(self):
-        self.orientation_viewer.render_image(self.quat, self.axis_info)
+        self.orientation_viewer.render_image(self.quat, self.axis_order)
         self.dirty = False
 
     def __render_image_queue(self):
@@ -747,7 +747,7 @@ class ReplayConfigWindow(StagedView):
                                 self.length_box = dpg.add_checkbox(label="Length")
                 with dpg.tree_node(label="Orientation", default_open=True):
                     self.axis_order_input = dpg.add_input_text(label="Axis Order", width=200)
-                    self.model_combo = dpg.add_combo(obj_lib.getAvailableModelNames(), label="Model", width=200)
+                    self.model_combo = dpg.add_combo(ObjectLibrary.getAvailableModelNames(), label="Model", width=200)
                 
                 with dpg.tree_node(label="Data Gathering", default_open=True):
                     self.data_hz_input = dpg.add_input_float(label="Hz", width=200)
@@ -774,8 +774,8 @@ class ReplayConfigWindow(StagedView):
 
         self.set_axis_order("XYZ")
 
-        modelnames = obj_lib.getAvailableModelNames()
-        default_model = obj_lib.getDefaultModelName()
+        modelnames = ObjectLibrary.getAvailableModelNames()
+        default_model = ObjectLibrary.getDefaultModelName()
         if default_model not in modelnames:
             default_model = modelnames[0]
         dpg.set_value(self.model_combo, default_model)
@@ -837,7 +837,7 @@ class ReplayConfigWindow(StagedView):
             return
 
         self.orient_window.set_data_file(data_file)
-        self.orient_window.set_model(obj_lib.getObjFromName(dpg.get_value(self.model_combo)))
+        self.orient_window.set_model(ObjectLibrary.getObjFromName(dpg.get_value(self.model_combo)))
         self.data_window.set_data_file(data_file)
         
         #Set the shared timelines values
@@ -874,7 +874,7 @@ class ReplayConfigWindow(StagedView):
         if settings.serial_no is None:
             errors.append("Model")
         else:
-            name = obj_lib.getModelNameFromSerialNumber(settings.serial_no)
+            name = ObjectLibrary.getModelNameFromSerialNumber(settings.serial_no)
             dpg.set_value(self.model_combo, name)
         
         if settings.data_hz is None:
