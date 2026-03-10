@@ -7,7 +7,7 @@ results of reading the data.
 from yostlabs.tss3.api import ThreespaceHeaderInfo, ThreespaceCmdResult, ThreespaceHeader, StreamableCommands
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingOption, get_stream_options_from_str, stream_options_to_command
 from yostlabs.tss3.utils.parser import ThreespaceBinaryParser
-import yostlabs.math.vector as yl_vec
+from yostlabs.math.axes import AxisOrder
 
 from pathlib import Path
 import dataclasses
@@ -69,7 +69,7 @@ class TssDataFileSettings:
     header: ThreespaceHeaderInfo = dataclasses.field(default_factory=ThreespaceHeaderInfo)
 
     axis_order: str = "XYZ"
-    axis_order_info: list = dataclasses.field(default_factory=list) #Handled by the post init
+    axis_order_info: AxisOrder = AxisOrder("XYZ") #Handled by the post init
 
     data_hz: float = 200
     stream_slots: list[ThreespaceStreamingOption] = dataclasses.field(default_factory=list)
@@ -79,7 +79,7 @@ class TssDataFileSettings:
         self.update_slot_cache()
 
     def update_axis_cache(self):
-        self.axis_order_info = yl_vec.parse_axis_string_info(self.axis_order)
+        self.axis_order_info = AxisOrder(self.axis_order)
 
     def update_slot_cache(self):
         self.option_to_index = { option: i for i, option in enumerate(self.stream_slots) }
@@ -100,7 +100,7 @@ class TssDataFileSettings:
                 settings.axis_order = None
                 settings.axis_order_info = None
             else: 
-                settings.axis_order_info = yl_vec.parse_axis_string_info(settings.axis_order)
+                settings.axis_order_info = AxisOrder(settings.axis_order)
         
 
         #Determine if the log file is from a data logger (Using logging settings)

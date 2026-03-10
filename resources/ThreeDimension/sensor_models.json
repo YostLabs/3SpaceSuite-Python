@@ -1,12 +1,12 @@
 {
 	"Models": {
 		"BaseEM": {
-			"Path": "Embedded/TSS-EM-2_6.obj",
+			"Path": "EM-3.obj",
 			"Scale": 1
 		},
 		"BaseDL": {
-			"Path":  "DataLogger/DL3.obj",
-			"Scale": 6.8
+			"Path":  "DL-3.obj",
+			"Scale": 1
 		}
 	},
 	"Mapping": {

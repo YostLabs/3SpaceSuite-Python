@@ -14,7 +14,7 @@ from yostlabs.communication.bluetooth import ThreespaceBluetoothComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
 from yostlabs.tss3.utils.version import ThreespaceFirmwareUploader
 import yostlabs.math.quaternion as yl_quat
-import yostlabs.math.vector as yl_vec
+from yostlabs.math.axes import AxisOrder
 from utility import Logger, Callback
 import yostlabs.tss3.consts as threespace_consts
 
@@ -82,7 +82,7 @@ class ThreespaceDevice:
         #These will be loaded when initially opened
         #self.dirty = False
         self.cached_serial_number = None
-        self.cached_axis_info = None
+        self.cached_axis_order = None
 
     @property
     def is_open(self):
@@ -392,7 +392,7 @@ class ThreespaceDevice:
     def cache_axis_order(self, axis_str: str = None):
         if axis_str is None:
             axis_str = self.get_axis_order()
-        self.cached_axis_info = yl_vec.parse_axis_string_info(axis_str)
+        self.cached_axis_order = AxisOrder(axis_str)
     
     def get_axis_offset_enabled(self) -> bool:
         return self.__api.get_settings("axis_offset_enabled")
@@ -617,13 +617,14 @@ class ThreespaceDevice:
         self.__api.setOffsetWithCurrentOrientation()
 
     def convert_quat_order(self, quat: list[float], new_order: str):
-        return yl_quat.quaternion_swap_axes_fast(quat, self.cached_axis_info, yl_vec.parse_axis_string_info(new_order))
+        new_order = AxisOrder(new_order)
+        return self.cached_axis_order.swap_to(new_order, quat, rotational=True)
     
-    def convert_quat_order_fast(self, quat: list[float], new_order_info: list[list, list, bool]):
-        return yl_quat.quaternion_swap_axes_fast(quat, self.cached_axis_info, new_order_info)
+    def convert_quat_order_fast(self, quat: list[float], new_order: AxisOrder):
+        return self.cached_axis_order.swap_to(new_order, quat, rotational=True)
 
     def is_right_handed(self):
-        return self.cached_axis_info[2]
+        return self.cached_axis_order.is_right_handed
 
     def set_offset(self, quat: list[float]):
         self.__api.set_settings(offset=','.join(str(v) for v in quat))

@@ -14,12 +14,13 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from gui.core_ui import FontManager, DpgWizard
-import gui.resources.theme_lib as theme_lib, gui.resources.obj_lib as obj_lib, gui.resources.texture_lib as texture_lib
+import gui.resources.theme_lib as theme_lib, gui.resources.texture_lib as texture_lib
 
 import math
 import numpy as np
 from yostlabs.math import quaternion
 from yostlabs.math import vector
+from yostlabs.math.axes import AxisOrder
 import pathlib
 
 from managers.resource_manager import *
@@ -27,11 +28,12 @@ from managers.settings_manager import GenericSettingsManager
 from managers.macro_manager import MacroManager, TerminalMacro
 from gui.macro_window import MacroConfigurationWindow
 
-from graphics.gl_renderer import GL_Renderer
-from graphics.gl_orientation_window import GlOrientationViewer
-from graphics.gl_texture_renderer import TextureRenderer
-
 from gui.orientation_view import OrientationView
+from yostlabs.graphics import ModelObject, GL_AXIS_ORDER
+from yostlabs.graphics.dpg import DpgScene
+from yostlabs.graphics.scene_prefabs import OrientationScene
+from yostlabs.graphics.prefabs import ArrowObject
+from gui.resources.obj_lib import ObjectLibrary
 
 SENSOR_SETTINGS_KEY = "sensor"
 
@@ -152,7 +154,7 @@ class SensorMasterWindow(StagedTabManager):
         super().delete()
         self.deleted = True
 
-Z_DIST=50
+Z_DIST=50/23
 class SensorConnectionWindow(StagedView):
 
     def __init__(self, device: ThreespaceDevice, connected_callback: Callable):
@@ -163,22 +165,25 @@ class SensorConnectionWindow(StagedView):
             self.texture = dpg.add_raw_texture(width=self.texture_width, height=self.texture_height, default_value=[],  format=dpg.mvFormat_Float_rgba)
 
         #render the object
-        self.sensor_obj = GlOrientationViewer(obj_lib.getObjFromSerialNumber(device.cached_serial_number), GL_Renderer.text_renderer, GL_Renderer.base_font,
-                                                    self.texture_width, self.texture_height,
-                                                    background_color=(0, 0, 0, 0), tl_arrows=False, model_arrows=False)
-        self.sensor_texture = TextureRenderer(self.texture_width, self.texture_height)
-        self.sensor_obj.set_distance(50)
-        self.sensor_obj.set_orientation_quat(quaternion.angles_to_quaternion([-45, 45], "YX"))
-        with self.sensor_texture:
-            self.sensor_obj.render()
+        self.base_scene = OrientationScene(self.texture_width, self.texture_height,
+                                           ModelObject(model=ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(device.type_suffix))))
+        self.base_scene.set_background_color(0, 0, 0, 0)
+        self.base_scene.axes.set_visible(False)
+        self.base_scene.orientation_indicator.set_visible(False)
+        self.base_scene.model.set_rotation_quat(quaternion.angles_to_quaternion([-45, 45], "YX"))
+        base_scale = self.base_scene.model.scale
+        new_scale = [1.2 * v for v in base_scale]
+        print(f"{base_scale=}")
+        self.base_scene.model.set_scale(new_scale)
 
+        self.dpg_scene = DpgScene(self.texture_width, self.texture_height, self.base_scene)
+        self.dpg_scene.camera.set_position([0, 0, Z_DIST])
         #Put the image into the DPG texture
-        texture = np.flip(self.sensor_texture.get_texture_pixels(), 0)
-        dpg.set_value(self.texture, texture.flatten())
+        self.dpg_scene.render()
+        self.dpg_scene.update_dpg_texture(self.texture)
 
         #Clean up the GL texture resources since only draws once
-        self.sensor_obj.delete()
-        self.sensor_texture.destroy()
+        self.dpg_scene.destroy()
 
         #Setup the UI
         button_width = 300
@@ -524,7 +529,8 @@ class SensorOrientationWindow(StagedView):
                 self.grid.cols[1].configure(size=command_window_width) #Settings bar is a static size
                 self.grid.offsets = 8, 8, 8, 8 #Compensating for title bar and scrollbar
 
-                self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(device.cached_serial_number), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
+
+                self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
                 with dpg.child_window(border=False) as control_window:
                     logo_image = dpg.add_image(texture_lib.logo_texture.texture)
                     with dpg.child_window(label="Components") as components_enabled_window:
@@ -618,7 +624,7 @@ class SensorOrientationWindow(StagedView):
     def render_image(self):
         #NOTE: GL rendering MUST happen in the main thread
         #Set configs
-        self.orientation_viewer.render_image(self.quat, self.device.cached_axis_info, hide_sensor=self.hide_sensor, hide_arrows=self.hide_arrows)
+        self.orientation_viewer.render_image(self.quat, self.device.cached_axis_order, hide_sensor=self.hide_sensor, hide_arrows=self.hide_arrows)
 
     def __on_visible(self, sender, app_data):
         self.grid()
@@ -1427,10 +1433,16 @@ class SensorCalibrationWindow(StagedView):
 
     def apply_calibration_result(self, result: "CalibrationResult"):
         try:
+            #The calibration is currently computed in XYZ space, so must apply it while the axis order is XYZ.
+            #This allows the sensor to perform the math correctly rather than having to convert axis spaces
+            #here before applying.
+            order = self.device.get_axis_order()
+            self.device.set_axis_order("xyz")
             for accel, calib in result.accels.items():
                 self.device.set_accel_calibration(accel, mat=calib.mat, bias=calib.bias)
             for mag, calib in result.mags.items():
                 self.device.set_mag_calibration(mag, mat=calib.mat, bias=calib.bias)
+            self.device.set_axis_order(order)
         except Exception as e:
             self.device.report_error(e)
         else:
@@ -1614,7 +1626,7 @@ class GradientDescentCalibrationWizard:
     GATHERING = 1
     CALCULATING = 2
 
-    BASE_AXIS_INFO = vector.parse_axis_string_info("xyz")
+    BASE_AXIS_ORDER = AxisOrder("xyz")
 
     def __init__(self, device: ThreespaceDevice, on_completion: Callable[[bool],None]):
         """
@@ -1729,7 +1741,7 @@ class GradientDescentCalibrationWizard:
                 self.device.set_mag_odrs(new_mag_odrs)
             
             #Change the axis order to be the required XYZ (The math would have to change without this, would rather just do this atleast for now since it is easier)
-            self.device.set_axis_order("xyz")
+            self.device.set_axis_order(self.BASE_AXIS_ORDER.to_xyz_string())
             self.device.set_axis_offset_enabled(False)
         except Exception as e:
             self.device.report_error(e)
@@ -1768,8 +1780,8 @@ class GradientDescentCalibrationWizard:
         dpg.push_container_stack(self.modal)
         self.texture_width = 400
         self.texture_height = 400
-        self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True)
-        self.orientation_viewer.viewer.set_distance(Z_DIST)
+        self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True)
+        self.orientation_viewer.orientation_scene.camera.set_position([0, 0, Z_DIST])
         dpg.add_text("Put the sensor in the depicted orientation and press Next.", wrap=self.texture_width)
         with dpg.group(horizontal=True):
             dpg.add_text("Step")
@@ -1825,7 +1837,7 @@ class GradientDescentCalibrationWizard:
         dpg.disable_item(self.next_button)
 
         #Convert form opengl back to sensor space
-        start_quat = quaternion.quaternion_swap_axes_fast(self.orientation_viewer.viewer.orientation, self.orientation_viewer.GL_AXIS_INFO, self.BASE_AXIS_INFO)
+        start_quat = GL_AXIS_ORDER.swap_to(self.BASE_AXIS_ORDER, self.orientation_viewer.orientation_scene.model.get_rotation_as_quat(), rotational=True)
         start_time = time.time()
         elapsed_time = time.time() - start_time
         while elapsed_time < self.transition_time:
@@ -1841,7 +1853,7 @@ class GradientDescentCalibrationWizard:
         self.animating = False
 
     def render_quat(self, quat: list[float]):
-        self.orientation_viewer.render_image(quat, self.BASE_AXIS_INFO)
+        self.orientation_viewer.render_image(quat, self.BASE_AXIS_ORDER)
         self.orientation_viewer.update_image()
 
     def __on_sample_received(self, status: ThreespaceStreamingStatus):
@@ -1994,7 +2006,7 @@ class SphereCalibrationWizard:
     GATHERING = 1
     CALCULATING = 2
 
-    BASE_AXIS_INFO = vector.parse_axis_string_info("xyz")
+    BASE_AXIS_ORDER = AxisOrder("xyz")
 
     def __init__(self, device: ThreespaceDevice, on_completion: Callable[[bool],None]):
         """
@@ -2010,7 +2022,7 @@ class SphereCalibrationWizard:
         with dpg.window(modal=True, no_move=False, no_resize=True, label="Sphere Calib Window", no_close=True, autosize=True) as self.modal:
             self.texture_width = 400
             self.texture_height = 400
-            self.orientation_viewer = OrientationView(obj_lib.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
+            self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
             dpg.add_text("Move the sensor to gather points. Repeatedly rotate the yellow/orange arrows together to optimize results. Aim for >= 400 points and sparsity <= 20. ", wrap=self.texture_width)
             with dpg.group(horizontal=True):
                         dpg.add_text("Samples:")
@@ -2030,11 +2042,15 @@ class SphereCalibrationWizard:
                     dpg.add_button(label="Finish", callback=self.finish)
                     dpg.add_button(label="Reset", callback=self.clear)
                     dpg.add_button(label="Cancel", callback=self.cancel)
-                    
-        # with dpg.handler_registry() as self.keyboard_handler:
-        #     dpg.add_key_press_handler(dpg.mvKey_Return, callback=self.__on_keyboard_next_pressed)
-        #     dpg.add_key_press_handler(dpg.mvKey_NumPadEnter, callback=self.__on_keyboard_next_pressed)
-        #     dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=self.__on_keyboard_next_pressed)
+
+        #Add some arrows to the OrientationViewerScene to show the guiding arrows
+        self.mag_arrow = ArrowObject(arrow_color=(1, 1, 0), name="Mag Arrow") #Yellow
+        self.spare_area_arrow = ArrowObject(arrow_color=(1, 0.5, 0), name="Sparsest Area Arrow") #orange
+        model = self.orientation_viewer.orientation_scene.model
+        self.mag_arrow.set_scale(1 / model.scale)
+        self.spare_area_arrow.set_scale(1 / model.scale)
+        model.add_child(self.mag_arrow)
+        model.add_child(self.spare_area_arrow)
 
         #Keeps window centered
         with dpg.item_handler_registry(label="Sphere Calib Visible Handler") as self.visible_handler:
@@ -2064,7 +2080,7 @@ class SphereCalibrationWizard:
                 return
             self.__cached_axis_offset_enabled = self.device.get_axis_offset_enabled()
             self.__cached_axis_order = self.device.get_axis_order()
-            self.device.set_axis_order("xyz")
+            self.device.set_axis_order(self.BASE_AXIS_ORDER.to_xyz_string())
             self.device.set_axis_offset_enabled(False)
         except Exception as e:
             self.device.report_error(e)
@@ -2108,25 +2124,20 @@ class SphereCalibrationWizard:
     def clear(self):
         for calibrator in self.calibrators.values():
             calibrator.clear()
-
-    def render_quat(self, quat: list[float]):
-        self.orientation_viewer.render_image(quat, self.BASE_AXIS_INFO, hide_sensor=True)
-        # TODO
+    
+    def render_quat(self, sensor_quat: list[float]):
         if self.last_mag is not None:
             quat = quaternion.quat_from_one_vector(self.last_mag)
-            glQuat = quaternion.quaternion_swap_axes_fast(quat, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
+            glQuat = self.BASE_AXIS_ORDER.swap_to(GL_AXIS_ORDER, quat, rotational=True)
+            self.mag_arrow.set_rotation_quat(glQuat)
 
-            quat2 = quaternion.quat_from_one_vector(self.calibrators[self.display_mag].sparsest_vector)
-            glQuat2 = quaternion.quaternion_swap_axes_fast(quat2, self.BASE_AXIS_INFO, OrientationView.GL_AXIS_INFO)
-            with self.orientation_viewer.renderer:
-                self.orientation_viewer.viewer.render_arrow(glQuat, color=(1, 1, 0), size=1, text=None, no_grotate=False)
-                self.orientation_viewer.viewer.render_arrow(glQuat2, color=(1, 0.5, 0), size=1, text=None, no_grotate=False)
-                # for orient in self.gathered_orients[self.display_mag]:
-                #     pass
-                #     #self.orientation_viewer.viewer.render_arrow(orient, color=(1, 0, 0), size=1, text=None)
-                self.orientation_viewer.update_pixels()
+            quat = quaternion.quat_from_one_vector(self.calibrators[self.display_mag].sparsest_vector)
+            glQuat = self.BASE_AXIS_ORDER.swap_to(GL_AXIS_ORDER, quat, rotational=True)
+            self.spare_area_arrow.set_rotation_quat(glQuat)
+        self.orientation_viewer.render_image(sensor_quat, self.BASE_AXIS_ORDER, hide_sensor=True)
+
         self.orientation_viewer.update_image()
-    
+
     def restore_settings(self):
         try:
             self.device.unregister_streaming_callback(self.__on_sample_received)
