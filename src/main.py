@@ -6,10 +6,9 @@ if __name__ == "__main__":
     import asyncio
     if platform.system() == 'Windows':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-    import sys
-    import bleak.backends.winrt.util as bleak_util
-    bleak_util.allow_sta() #Using a GUI that handles the event loop without a background thread for asyncio, so allow_sta
+        import bleak.backends.winrt.util as bleak_util
+        bleak_util.allow_sta() #Using a GUI that handles the event loop without a background thread for asyncio, so allow_sta
+    
     print("Starting main")
     from managers.resource_manager import *
     import dearpygui.dearpygui as dpg
