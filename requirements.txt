@@ -6,7 +6,7 @@ PyOpenGL>=3.1.7
 pyserial>=3.5
 typing_extensions>=4.12.2
 yostlabs>=2026.2.26
-yostlabs-graphics>=2026.2.26.post1
+yostlabs-graphics>=2026.3.10
 psutil>=7.0.0
 freetype-py>=2.5.1
 #Using this fork until the pull request gets implemented into the parent repository
