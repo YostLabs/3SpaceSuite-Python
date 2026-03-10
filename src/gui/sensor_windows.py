@@ -165,7 +165,7 @@ class SensorConnectionWindow(StagedView):
 
         #render the object
         self.base_scene = OrientationScene(self.texture_width, self.texture_height,
-                                           ModelObject(ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number)))
+                                           ModelObject(model=ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number)))
         self.base_scene.set_background_color(0, 0, 0, 0)
         self.base_scene.axes.set_visible(False)
         self.base_scene.orientation_indicator.set_visible(False)

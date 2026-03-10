@@ -26,7 +26,7 @@ class OrientationView:
     def __init__(self, model: OBJ, texture_width: int, texture_height: int, static_size=False, axis_compass_display=True):
         self.static_size = static_size
         self.size = (texture_width, texture_height)
-        self.orientation_scene = OrientationScene(texture_width, texture_height, model=ModelObject(model), font=GL_Context.default_font)
+        self.orientation_scene = OrientationScene(texture_width, texture_height, model=ModelObject(model=model), font=GL_Context.default_font)
         self.orientation_scene.orientation_indicator.set_visible(axis_compass_display)
         self.dirty = False
         self.deleted = False
@@ -58,7 +58,7 @@ class OrientationView:
             self.image = dpg.add_image(self.texture)
 
     def set_model(self, model: OBJ):
-        self.orientation_scene.set_model(ModelObject(model))
+        self.orientation_scene.set_model(ModelObject(model=model))
 
     def render_image(self, quat: list[float], axis_order: AxisOrder, hide_sensor=False, hide_arrows=False):
         """
