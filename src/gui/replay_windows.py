@@ -837,7 +837,7 @@ class ReplayConfigWindow(StagedView):
             return
 
         self.orient_window.set_data_file(data_file)
-        self.orient_window.set_model(ObjectLibrary.getObjFromName(dpg.get_value(self.model_combo)))
+        self.orient_window.set_model(ObjectLibrary.getObjFromModelName(dpg.get_value(self.model_combo)))
         self.data_window.set_data_file(data_file)
         
         #Set the shared timelines values
