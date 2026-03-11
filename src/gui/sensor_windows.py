@@ -589,7 +589,7 @@ class SensorOrientationWindow(StagedView):
                 self.grid2.push(program_window, 0, 2)
                 self.grid2.rows[2].configure(size=140)
                 self.grid2.push(commands_window, 0, 4)
-                self.grid2.rows[4].configure(size=245)
+                self.grid2.rows[4].configure(size=190)
         
         with dpg.item_handler_registry(label="Orientation Visible Handler") as self.visible_handler:
             dpg.add_item_visible_handler(callback=self.__on_visible)
