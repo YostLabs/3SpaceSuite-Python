@@ -243,6 +243,16 @@ class ThreespaceManager:
         # if com.name in self.device_mapping:
         #     device.name = self.device_mapping[com.name]
         default_name = com.name or "Unknown"
+        #Prevent issues with file paths. This should only happen on MacOS/Linux Serial Connections
+        #For now, using basic solution of pretending to be a com port
+        if '/' in default_name:
+            existing_names = [group.device.name for group in self.devices.values()]
+            index = 1
+            default_name = f"COM{index}"
+            while default_name in existing_names:
+                index += 1
+                default_name = f"COM{index}"
+
         if default_name.lower() in (f"com{i}" for i in range(10)):
             default_name = f"{default_name[:3]}0{default_name[3]}"
         device.name = default_name
