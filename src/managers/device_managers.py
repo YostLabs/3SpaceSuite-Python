@@ -346,7 +346,10 @@ class ThreespaceManager:
                 group.device.cleanup()
             except Exception as e:
                 print("Failed to force cleanup device", e)
-
+        if self.ble_supported:
+            #Prevent crashes due to BLE scanning attempting to call python callbacks
+            #while the Python Environment is shutting down.
+            ThreespaceBLEComClass.set_scanner_continous(False)
         self.save_device_names()
         self.save_settings()
 
