@@ -37,8 +37,10 @@ class StagedView:
         with dpg_lock():
             for slot in dpg.get_item_children(self._stage_id):
                 for child in dpg.get_item_children(self._stage_id, slot):
-                    dpg.delete_item(child)
-            dpg.delete_item(self._stage_id)
+                    try:
+                        dpg.delete_item(child)
+                    except Exception as e:
+                        pass
 
 class StagedTabManager(StagedView):
 
