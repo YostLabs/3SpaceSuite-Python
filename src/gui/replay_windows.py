@@ -824,7 +824,7 @@ class ReplayConfigWindow(StagedView):
         thread = threading.Thread(target=load_data_file_thread, args=(data_file, output), daemon=True)
         thread.start()
         while thread.is_alive():
-            dpg.render_dearpygui_frame()
+            MainLoopEventQueue.update_dpg_render_loop()
         thread.join() #Should finish instantly
 
         if len(output) > 0:

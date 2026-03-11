@@ -1035,8 +1035,12 @@ class Grid(_GridComponent):
             for item_data in self._item_data:
                 try:
                     _item_set_config(item_data.item, pos=())
-                except SystemError:
+                except SystemError as e:
                     pass
+                except Exception as e:
+                    #The exception type got changed from SystemError to Exception in DPG 2.2
+                    if not "Item not found" in str(e):
+                        raise e
             self._trashbin.update(self._item_data)
             self._clean_cache()
 

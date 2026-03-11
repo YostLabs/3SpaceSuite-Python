@@ -81,8 +81,6 @@ class SelectableButton(StagedView):
         dpg.configure_item(self.button, label=text)
 
     def delete(self):
-        for child in dpg.get_item_children(self._stage_id, 1):
-            dpg.delete_item(child)
         dpg.delete_item(self.selected_theme)
         dpg.delete_item(self.unselected_theme)
         super().delete()

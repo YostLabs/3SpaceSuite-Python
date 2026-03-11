@@ -4,12 +4,6 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 import yostlabs.tss3.eepts as yleepts
 
-#This is used for fixing a DPG custom series memory leak issue
-import ctypes
-Py_DECREF = ctypes.pythonapi.Py_DecRef
-Py_DECREF.argtypes = (ctypes.py_object,)
-Py_DECREF.restype  = None
-
 #http://www.movable-type.co.uk/scripts/latlong.html
 def get_distance(start_lat, start_lon, end_lat, end_lon):
     """
@@ -298,7 +292,6 @@ class PathSeries:
         #Its possible when using manual callbacks that the callback gets scheduled and then the series is deleted
         #This prevents modifying a deleted series when that occurs
         if self.deleted: 
-            Py_DECREF(app_data) #Memory leak fix
             return
         _helper_data = app_data[0]
         mouse_x_plot_space = _helper_data["MouseX_PlotSpace"] #Plot Space = Coordinate in the Graph
@@ -325,7 +318,6 @@ class PathSeries:
             dpg.configure_item(self.menu_group, show=not tooltip_enabled) #Only show if no tooltip
 
         if not self.dirty:
-            Py_DECREF(app_data) #Memory leak fix
             return
 
         #Draw to the plot this belongs to
@@ -354,7 +346,6 @@ class PathSeries:
             dpg.pop_container_stack()
 
         self.dirty = False
-        Py_DECREF(app_data) #Memory leak fix
 
     @contextmanager
     def menu(self):
