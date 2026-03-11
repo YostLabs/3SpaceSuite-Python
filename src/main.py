@@ -4,6 +4,7 @@ if __name__ == "__main__":
 
     import platform
     import asyncio
+    import glfw
     if platform.system() == 'Windows':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         import bleak.backends.winrt.util as bleak_util
@@ -18,11 +19,65 @@ if __name__ == "__main__":
     from gui.resources.obj_lib import ObjectLibrary
     import time
 
+    #Get initial window size based on the monitor information obtained from GLFW
+    width_per_height_ratio = 1280 / 815
+    def get_initial_viewport_config() -> tuple[int, int, int | None, int | None]:
+        max_desired_height = 815
+        default_height = 725
+        default_width = int(default_height * width_per_height_ratio)
+
+        try:
+            if not glfw.init():
+                return default_width, default_height, None, None
+
+            monitor = glfw.get_primary_monitor()
+            if monitor is None:
+                return default_width, default_height, None, None
+
+            work_x = work_y = 0
+            try:
+                #This returns the work area (size-taskbars) so is preferred, but may not
+                #always be supported.
+                work_x, work_y, work_width, work_height = glfw.get_monitor_workarea(monitor)
+            except Exception:
+                #Fallback, returns general monitor screen space, refresh rate, ...
+                mode = glfw.get_video_mode(monitor)
+                if mode is None:
+                    return default_width, default_height, None, None
+                work_width, work_height = mode.size.width, mode.size.height
+
+            MAX_FILL_PERCENT = 0.9
+
+            max_height = int(work_height * MAX_FILL_PERCENT)
+            height = min(max_desired_height, max_height)
+            max_desired_width = int(height * width_per_height_ratio)
+            
+            max_width = int(work_width * MAX_FILL_PERCENT)
+            width = min(max_desired_width, max_width)
+
+            print()
+            print()
+            print(f"{work_x=} {work_y=} {work_width=} {work_height=}")
+
+            pos_x = int(work_x + max(0, (work_width - width) // 2))
+            pos_y = int(work_y + max(0, (work_height - height) // 2))
+            return width, height, pos_x, pos_y + 25 // 2
+        finally:
+            glfw.terminate()
+
     #Initialization
     dpg.create_context()
-    dpg.create_viewport()
 
-    dpg.create_viewport(title=APPNAME, large_icon=(IMAGE_FOLDER / "icon.ico").as_posix(), height=815)
+    viewport_width, viewport_height, viewport_x, viewport_y = get_initial_viewport_config()
+
+    print(f"Viewport config: {viewport_width=} {viewport_height=} {viewport_x=} {viewport_y=}")
+
+    dpg.create_viewport(title=APPNAME, 
+                        large_icon=(IMAGE_FOLDER / "icon.ico").as_posix(), 
+                        width=viewport_width,
+                        height=viewport_height,
+                        x_pos=viewport_x,
+                        y_pos=viewport_y)
 
     theme_lib.init()
     texture_lib.init()
