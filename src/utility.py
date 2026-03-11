@@ -1,5 +1,6 @@
 import threading
 from dpg_ext.global_lock import dpg_lock
+import dearpygui.dearpygui as dpg
 import dataclasses
 
 class WatchdogTimer:
@@ -286,6 +287,18 @@ class MainLoopEventQueue:
 
         for event in events:
             event()
+
+    @staticmethod
+    def update_dpg_render_loop():
+        """
+        TODO
+        Intended to be used when a seperate thread is blocking and there is a temporary
+        update loop to keep the UI responsive. Planned to refactor at some point.
+        """
+        jobs = dpg.get_callback_queue()
+        MainLoopEventQueue.process_sync_events()
+        dpg.run_callbacks(jobs)
+        dpg.render_dearpygui_frame()
 
 #Used to allow to_dict to also get values from @property variables
 #as well as load a class from that same dict setting the associated property variables.

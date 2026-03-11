@@ -231,7 +231,7 @@ class SensorConnectionWindow(StagedView):
             thread = threading.Thread(target=self.connect_thread, args=(result,), daemon=True)
             thread.start()
             while thread.is_alive():
-                dpg.render_dearpygui_frame()
+                MainLoopEventQueue.update_dpg_render_loop()
             thread.join()
 
             popup.delete()
@@ -1923,7 +1923,7 @@ class GradientDescentCalibrationWizard:
                                       kwargs = {"verbose": True}, daemon=True)
             thread.start()
             while thread.is_alive():
-                dpg.render_dearpygui_frame()
+                MainLoopEventQueue.update_dpg_render_loop()
             thread.join() #Should finish instantly
 
             params[9:] += -bias_guess #Gradient descent and this use opposite signs, so swap it
@@ -1937,7 +1937,7 @@ class GradientDescentCalibrationWizard:
                                         kwargs = {"verbose": True}, daemon=True)
             thread.start()
             while thread.is_alive():
-                dpg.render_dearpygui_frame()
+                MainLoopEventQueue.update_dpg_render_loop()
             thread.join() #Should finish instantly
             self.result.accels[accel] = CalibrationResult.Calibration(params[9:], params[:9])
 
