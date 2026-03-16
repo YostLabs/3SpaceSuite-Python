@@ -6,7 +6,7 @@ Also has some abstract devices, such as LoggerDevice
 
 #from Threespace.USB_ExampleClass import UsbCom
 #from Threespace.ThreeSpaceAPI import ThreeSpaceSensor, Streamable, STREAM_CONTINUOUSLY
-from yostlabs.tss3.api import ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, \
+from yostlabs.tss3.api import ThreespaceHardwareVersion, ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, \
     ThreespaceCommandInfo, threespaceCommandGetInfo, threespaceCommandGetByName, ThreespaceCmdResult, \
     ThreespaceHeaderInfo
 from yostlabs.communication.ble import ThreespaceBLEComClass
@@ -443,7 +443,11 @@ class ThreespaceDevice:
         return self.__api.get_settings("valid_components")
 
     def get_serial_number(self):
-        if self.__api.in_bootloader:
+        if not self.is_open:
+            if isinstance(self.com, ThreespaceSerialComClass):
+                return self.com.serial_number
+            return self.cached_serial_number
+        elif self.__api.in_bootloader:
             return self.__api.bootloader_get_sn()
         else:
             return int(self.__api.get_settings("serial_number"), 16)
@@ -674,6 +678,16 @@ class ThreespaceDevice:
     @property
     def name(self):
         return self._name
+    
+    def get_default_name(self) -> tuple[str, bool]:
+        default_name = self.com.name or "Unknown"
+        sn = self.get_serial_number()
+        if isinstance(self.com, ThreespaceSerialComClass) and sn is not None:
+            hardware_version = ThreespaceHardwareVersion.from_serial_number(sn)
+
+            if hardware_version.id > 0: #Load default name based on serial number/hardware version.
+                default_name = f"{hardware_version.family_name} {hardware_version.id:03X}"
+        return default_name
     
     def type(self):
         return self._type

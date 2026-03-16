@@ -39,9 +39,10 @@ SENSOR_SETTINGS_KEY = "sensor"
 
 class SensorBanner(SelectableButton):
 
-    def __init__(self, device: ThreespaceDevice, text = None, selected = False, on_select = None):
+    def __init__(self, device: ThreespaceDevice, text = None, selected = False, on_select = None, show_suffix=True):
         super().__init__(text=text, selected=selected, on_select=on_select, height=50)
         self.device = device
+        self.show_suffix = show_suffix
         dpg.configure_item(self.button, label=self.__name)
 
         self.device.subscribe_property_update(self.on_property_changed)
@@ -51,9 +52,10 @@ class SensorBanner(SelectableButton):
 
     @property
     def __name(self):
-        suffix = self.device.type_suffix
-        if suffix is not None:
-            return f"{self.device.name} ({self.device.com_type} {suffix})"
+        if self.show_suffix:
+            suffix = self.device.type_suffix
+            if suffix is not None:
+                return f"{self.device.name} ({self.device.com_type} {suffix})"
         return f"{self.device.name} ({self.device.com_type})"
 
 
@@ -308,7 +310,8 @@ class SensorTerminalWindow(StagedView):
             dpg.add_separator()
             with dpg.group(horizontal=True):
                 dpg.add_text("Device Name:")
-                dpg.add_input_text(width=200, default_value=threespace_device.name, callback=self.__on_device_name_changed)
+                self.device_name_input = dpg.add_input_text(width=200, default_value=threespace_device.name, callback=self.__on_device_name_changed)
+                dpg.add_button(label="Reset", callback=self.__on_device_name_changed, user_data="Reset")
             with dpg.group(horizontal=True):
                 self.color = dpg.add_color_edit(display_mode=dpg.mvColorEdit_rgb, no_alpha=True, width=200, callback=self.__on_set_led)
             with dpg.group(horizontal=True):
@@ -377,9 +380,12 @@ class SensorTerminalWindow(StagedView):
         if len(macro.text) == 0: return
         self.send_command(macro.text)
 
-
     def __on_device_name_changed(self, sender, app_data, user_data):
-        self.device.name = app_data
+        if user_data == "Reset":
+            self.device.name = self.device.get_default_name()
+            dpg.set_value(self.device_name_input, self.device.name)
+        else:
+            self.device.name = app_data
     
     def __on_set_led(self, sender, app_data, user_data):
         color = dpg.get_value(self.color)

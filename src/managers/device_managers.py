@@ -240,9 +240,14 @@ class ThreespaceManager:
 
     def add_device_by_com(self, com: ThreespaceComClass):
         device = ThreespaceDevice(com)
-        # if com.name in self.device_mapping:
-        #     device.name = self.device_mapping[com.name]
-        default_name = com.name or "Unknown"
+
+        default_name = device.get_default_name()
+        sn = device.get_serial_number()
+        if sn is not None:
+            serial_string = f"0x{sn:016X}"
+            if serial_string in self.device_mapping: #Attempt to load associated name with serial number
+                default_name = self.device_mapping[serial_string]
+        
         #Prevent issues with file paths. This should only happen on MacOS/Linux Serial Connections
         #For now, using basic solution of pretending to be a com port
         if '/' in default_name:
@@ -253,8 +258,11 @@ class ThreespaceManager:
                 index += 1
                 default_name = f"COM{index}"
 
+        #Names that can not by default log/be file names.
         if default_name.lower() in (f"com{i}" for i in range(10)):
             default_name = f"{default_name[:3]}0{default_name[3]}"
+
+        #Set the device name and create the banner
         device.name = default_name
         Logger.log_info(f"Detected: {com.name}")
         device.on_error.subscribe(self.__on_sensor_error)
@@ -282,6 +290,7 @@ class ThreespaceManager:
         if com is None: return
         group = self.devices.pop(com)
         group.main_window.delete()
+        self.save_device_name(group.device) #Save the name before cleanup in case it needs to be loaded again later
         try:
             group.device.cleanup()
         except: pass
@@ -314,15 +323,25 @@ class ThreespaceManager:
         if self.device_mapping is None:
             self.device_mapping = {}
 
+    def save_device_name(self, device: ThreespaceDevice):
+        serial_number = device.cached_serial_number
+        if serial_number is None or serial_number == 0: #Don't save unmapped serial numbers.
+            return
+        name = device.name
+        self.device_mapping[f"0x{serial_number:016X}"] = name
+
     def save_device_names(self):
         """
         Maps the current device names for each com port into
         a file to save names between runs
         """
+        #Save off device names by serial number of the sensor. This allows
+        #the name to follow the sensor. However, not all communication interfaces
+        #allow for serial number detection, so it may not be visible before connection.
+        #For serial devices though, this should work fine. BLE devices have the BLE Name
+        #on the sensor they can use anyways.
         for group in self.devices.values():
-            port = group.device.com.name
-            name = group.device.name
-            self.device_mapping[port] = name
+            self.save_device_name(group.device)
         
         self.settings_manager.save(self.map_fname, self.device_mapping)
 
