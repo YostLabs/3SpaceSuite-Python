@@ -243,7 +243,7 @@ class ThreespaceManager:
 
         default_name = device.get_default_name()
         sn = device.get_serial_number()
-        if sn is not None:
+        if sn is not None and device.com_type == "Serial":
             serial_string = f"0x{sn:016X}"
             if serial_string in self.device_mapping: #Attempt to load associated name with serial number
                 default_name = self.device_mapping[serial_string]
@@ -324,6 +324,8 @@ class ThreespaceManager:
             self.device_mapping = {}
 
     def save_device_name(self, device: ThreespaceDevice):
+        if device.com_type != "Serial": #Only save names for serial devices.
+            return
         serial_number = device.cached_serial_number
         if serial_number is None or serial_number == 0: #Don't save unmapped serial numbers.
             return
