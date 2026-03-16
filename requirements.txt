@@ -7,9 +7,8 @@ pyserial==3.5
 typing_extensions==4.15
 yostlabs==2026.3.16
 yostlabs-math==2026.3.11
-yostlabs-graphics==2026.3.10
+yostlabs-graphics==2026.3.16
 psutil==7.2.2
 freetype-py==2.5.1
 #Using this fork until the pull request gets implemented into the parent repository
 platformdirs @ git+https://github.com/Jayman2000/platformdirs-pr.git@2d2187030770ff9325985cab8d8586f8307b63e3
-#platformdirs>=4.3.7
