@@ -83,6 +83,7 @@ def createAboutWindow():
         dpg.add_text("Developers:")
         with dpg.group(indent=8):
             dpg.add_text("Andy Riedlinger")
+            dpg_ext.add_hyperlink("Yost Labs", "https://yostlabs.com/")
 
         dpg.add_separator()
         dpg.add_text("Third Party Resources:")
