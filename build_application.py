@@ -63,6 +63,9 @@ cmd_properties.append(f"--paths=src")
 #cmd_properties.append(f'--specpath=src')
 cmd_properties.append(f"--add-binary={glfw.library.glfw._name}:glfw")
 cmd_properties.append(f"--add-data=resources:resources")
+
+#Required to get the shaders to be included.
+cmd_properties.append(f"--collect-all=yostlabs.graphics")
 cmd_properties.append(f"--icon=resources/images/icon.ico")
 cmd_properties.append(f"--splash=resources/images/logo.jpg")
 cmd_properties.append(f"--noconfirm")
