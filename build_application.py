@@ -1,6 +1,8 @@
 #In addition to the requirements in requirements.txt,
 #this script requires PyInstaller and GitPython
 
+import platform
+
 import glfw.library
 import PyInstaller.__main__
 import pathlib
@@ -67,7 +69,8 @@ cmd_properties.append(f"--add-data=resources:resources")
 #Required to get the shaders to be included.
 cmd_properties.append(f"--collect-all=yostlabs.graphics")
 cmd_properties.append(f"--icon=resources/images/icon.ico")
-cmd_properties.append(f"--splash=resources/images/logo.jpg")
+if platform.system() == 'Windows':
+    cmd_properties.append(f"--splash=resources/images/logo.jpg")
 cmd_properties.append(f"--noconfirm")
 
 if not debug:
