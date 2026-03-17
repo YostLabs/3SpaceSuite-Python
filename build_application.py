@@ -11,7 +11,7 @@ import datetime
 
 #----------------------------DETERMINE VERSION TO DISPLAY BASED ON GIT STATUS----------------------------
 try:
-    repo = git.Repo(".")
+    repo = git.Repo(pathlib.Path(__file__).parent)
     current_commit = repo.head.commit
 
     if repo.is_dirty():
