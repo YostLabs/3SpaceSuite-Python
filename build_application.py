@@ -1,9 +1,7 @@
 #In addition to the requirements in requirements.txt,
 #this script requires PyInstaller and GitPython
 
-import platform
-
-import glfw.library
+import os
 import PyInstaller.__main__
 import pathlib
 import git
@@ -11,6 +9,7 @@ import time
 import shutil
 import datetime
 
+#----------------------------DETERMINE VERSION TO DISPLAY BASED ON GIT STATUS----------------------------
 try:
     repo = git.Repo(".")
     current_commit = repo.head.commit
@@ -48,7 +47,9 @@ parent_folder = pathlib.Path(__file__).parent
 with open(parent_folder / "resources" / "version.txt", 'w') as fp:
     fp.write(version)
 
-#Clean up any old folders for a clean build
+
+#-----------------------------CLEAN UP OLD BUILD FOLDERS----------------------------
+
 build_folder = parent_folder / "build"
 dist_folder = parent_folder / "dist"
 if build_folder.exists():
@@ -56,30 +57,18 @@ if build_folder.exists():
 if dist_folder.exists():
     shutil.rmtree(dist_folder)
 
+#-----------------------------APPLY BUILD SETTINGS-----------------------------
 
 debug = False
+os.environ["TSS3_DEBUG_BUILD"] = "1" if debug else "0"
 
-cmd_properties = []
-cmd_properties.append(f'src/main.py')
-cmd_properties.append(f"--paths=src")
-#cmd_properties.append(f'--specpath=src')
-cmd_properties.append(f"--add-binary={glfw.library.glfw._name}:glfw")
-cmd_properties.append(f"--add-data=resources:resources")
+#----------------------------------RUN THE BUILD--------------------------------
 
-#Required to get the shaders to be included.
-cmd_properties.append(f"--collect-all=yostlabs.graphics")
-cmd_properties.append(f"--icon=resources/images/icon.ico")
-if platform.system() == 'Windows':
-    cmd_properties.append(f"--splash=resources/images/logo.jpg")
-cmd_properties.append(f"--noconfirm")
-
-if not debug:
-    cmd_properties.append(f"--name=TSS-3 Suite")
-    cmd_properties.append(f"--noconsole")
-else:
-    cmd_properties.append(f"--name=TSS-3 Suite DEV")
-
-PyInstaller.__main__.run(cmd_properties)
+PyInstaller.__main__.run([
+    'TSS-3 Suite.spec',
+    '--noconfirm',
+    '--clean',
+])
 
 print()
 print("Finished building version:", version)
