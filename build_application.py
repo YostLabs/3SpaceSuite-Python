@@ -68,6 +68,8 @@ PyInstaller.__main__.run([
     str(parent_folder / 'TSS-3 Suite.spec'),
     '--noconfirm',
     '--clean',
+    f'--distpath={dist_folder}',
+    f'--workpath={build_folder}',
 ])
 
 print()
