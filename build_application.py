@@ -65,7 +65,7 @@ os.environ["TSS3_DEBUG_BUILD"] = "1" if debug else "0"
 #----------------------------------RUN THE BUILD--------------------------------
 
 PyInstaller.__main__.run([
-    'TSS-3 Suite.spec',
+    str(parent_folder / 'TSS-3 Suite.spec'),
     '--noconfirm',
     '--clean',
 ])
