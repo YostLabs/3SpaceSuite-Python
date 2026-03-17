@@ -176,3 +176,6 @@ cython_debug/
 settings/
 log_data/
 resources/version.txt
+
+#Mac
+.DS_Store
