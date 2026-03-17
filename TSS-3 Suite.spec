@@ -83,3 +83,21 @@ coll = COLLECT(
     upx_exclude=[],
     name=app_name,
 )
+
+if platform.system() == 'Darwin':
+    info_plist = {
+        'NSBluetoothAlwaysUsageDescription': (
+            'TSS-3 Suite uses Bluetooth to discover and communicate with nearby 3-Space sensors.'
+        ),
+        'NSBluetoothPeripheralUsageDescription': (
+            'TSS-3 Suite uses Bluetooth to communicate with supported hardware sensors.'
+        ),
+    }
+
+    app = BUNDLE(
+        coll,
+        name=f'{app_name}.app',
+        icon=str(icon_path),
+        bundle_identifier=None,
+        info_plist=info_plist,
+    )
