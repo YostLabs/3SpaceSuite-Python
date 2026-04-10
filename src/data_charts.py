@@ -3,7 +3,7 @@ Includes utility for working with data charts and configuration information
 for how some data will show up
 """
 from dataclasses import dataclass, field
-from devices import ThreespaceDevice, StreamableCommands, threespaceCommandGetInfo, ThreespaceCommandInfo, ThreespaceStreamingOption
+from devices import ThreespaceDevice, StreamableCommands, threespace_command_get_info, ThreespaceCommandInfo, ThreespaceStreamingOption
 import re
 
 @dataclass
@@ -19,7 +19,7 @@ class StreamOption:
 
 #--------------------------Retrieving options in various ways------------------------------------
 def get_option(streamable_command: StreamableCommands):
-    cmd = threespaceCommandGetInfo(streamable_command.value)
+    cmd = threespace_command_get_info(streamable_command.value)
     display_name = ' '.join(re.findall(r'[A-Z][a-z]*', streamable_command.name)[1:])
     return StreamOption(display_name, streamable_command, cmd, get_param_type(streamable_command))
 
@@ -142,7 +142,7 @@ __bounds_dict = {
     StreamableCommands.GetGpsAltitude : (None, None),
     StreamableCommands.GetGpsFixState : (0, 6),
     StreamableCommands.GetGpsHdop : (0, 2),
-    StreamableCommands.GetGpsSattelites : (0, 8),
+    StreamableCommands.GetGpsSatellites : (0, 8),
     StreamableCommands.GetButtonState : (0, 1),
 }
 

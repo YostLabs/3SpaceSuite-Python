@@ -6,7 +6,7 @@ from dpg_ext.filtered_dropdown import FilteredDropdown
 from dpg_ext.staged_view import StagedView, StagedTabManager
 from dpg_ext.global_lock import dpg_lock
 
-from devices import ThreespaceDevice, StreamableCommands, ThreespaceStreamingManager, ThreespaceStreamingStatus, ThreespaceCommandInfo, threespace_consts, ThreespaceStreamingOption
+from devices import ThreespaceDevice, StreamableCommands, ThreespaceStreamingManager, ThreespaceStreamingStatus, threespace_consts, ThreespaceStreamingOption
 from yostlabs.tss3.utils.calibration import ThreespaceGradientDescentCalibration, ThreespaceSphereCalibration
 from utility import Logger, MainLoopEventQueue
 

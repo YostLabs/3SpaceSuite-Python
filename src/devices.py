@@ -6,9 +6,10 @@ Also has some abstract devices, such as LoggerDevice
 
 #from Threespace.USB_ExampleClass import UsbCom
 #from Threespace.ThreeSpaceAPI import ThreeSpaceSensor, Streamable, STREAM_CONTINUOUSLY
-from yostlabs.tss3.api import ThreespaceHardwareVersion, ThreespaceSensor, ThreespaceComClass, ThreespaceSerialComClass, StreamableCommands, \
-    ThreespaceCommandInfo, threespaceCommandGetInfo, threespaceCommandGetByName, ThreespaceCmdResult, \
-    ThreespaceHeaderInfo
+from yostlabs.tss3 import ThreespaceHardwareVersion, ThreespaceSensor, StreamableCommands, \
+    ThreespaceHeaderInfo, ThreespaceCmdResult
+from yostlabs.tss3.commands import threespace_command_get_by_name, ThreespaceCommandInfo, threespace_command_get_info
+from yostlabs.communication.serial import ThreespaceSerialComClass, ThreespaceComClass
 from yostlabs.communication.ble import ThreespaceBLEComClass
 from yostlabs.communication.bluetooth import ThreespaceBluetoothComClass
 from yostlabs.tss3.utils.streaming import ThreespaceStreamingManager, ThreespaceStreamingOption, ThreespaceStreamingStatus
@@ -228,25 +229,25 @@ class ThreespaceDevice:
         return self.__api.getStreamingBatch()
 
     def reset_timestamp(self):
-        self.__api.set_settings(timestamp=0)
+        self.__api.writeTimestamp(0)
         return True
     
     def set_timestamp(self, time):
-        self.__api.set_settings(timestmap=time)
+        self.__api.writeTimestamp(time)
 
     def has_datetime(self):
-        return self.__api.has_command(threespaceCommandGetByName("setDateTime"))
+        return self.__api.has_command(threespace_command_get_by_name("setDateTime"))
 
     def set_datetime(self, year: int, month: int, day: int, hour: int, minute: int, second: int):
         self.__api.setDateTime(year, month, day, hour, minute, second)
 
     def set_response_header(self, success_fail=False, timestamp=False, echo=False, checksum=False, id=False, serial_number=False, data_len=False):        
-        return self.__api.set_settings(header_status=success_fail, header_timestamp=timestamp, 
+        return self.__api.write_settings(header_status=success_fail, header_timestamp=timestamp, 
                                        header_echo=echo, header_checksum=checksum, 
                                        header_serial=serial_number, header_length=data_len)
 
     def set_response_header_bitfield(self, bitfield: int):
-        return self.__api.set_settings(header=bitfield)
+        return self.__api.writeHeader(bitfield)
 
     def build_header_bitfield(self, success_fail=False, timestamp=False, echo=False, checksum=False, serial_number=False, data_len=False):
         header = ThreespaceHeaderInfo()
@@ -270,7 +271,7 @@ class ThreespaceDevice:
         self.metadata[key] = value
 
     def get_all_settings(self) -> dict[str,str]:
-        return self.__api.get_settings("settings")
+        return self.__api.read_settings_ascii("settings")
 
     def start_eepts(self):
         self.__api.eeptsStart()
@@ -279,22 +280,22 @@ class ThreespaceDevice:
         self.__api.eeptsStop()
     
     def eepts_reset_settings(self):
-        self.__api.set_settings("pts_default")
+        self.__api.restorePtsDefaultSettings()
 
     def eepts_set_static_offset(self):
         self.__api.eeptsAutoOffset()
         #When using the auto offset, the declination will be naturally included into the offset
-        self.__api.set_settings(pts_auto_declination=0, pts_mag_declination=0)
+        self.__api.write_settings(pts_auto_declination=0, pts_mag_declination=0)
 
     def set_settings(self, **kwargs):
-        self.__api.set_settings(**kwargs)
+        self.__api.write_settings(**kwargs)
 
     def restore_factory_settings(self):
-        self.__api.set_settings("default")
+        self.__api.restoreDefaultSettings()
 
     def commit_settings(self):
         #Doing this instead of calling command so can get the status response regardless of current header state
-        err, successes = self.__api.set_settings("commit")
+        err, successes = self.__api.write_settings(commit=None)
         return err
 
     def restart_sensor(self):
@@ -303,11 +304,10 @@ class ThreespaceDevice:
         self.cache_axis_order()
 
     def set_led_color(self, rgb: list[int, int, int]):
-        self.__api.set_settings(led_rgb=f"{rgb[0]/255},{rgb[1]/255},{rgb[2]/255}")
+        self.__api.writeLedRgb([rgb[0]/255, rgb[1]/255, rgb[2]/255])
 
     def get_led_color(self):
-        result = self.__api.get_settings("led_rgb")
-        return [float(v) for v in result.split(',')]
+        return self.__api.readLedRgb()
 
     def get_raw_mag(self, id: int):
         return self.__api.getRawMagVec(id).data
@@ -316,7 +316,7 @@ class ThreespaceDevice:
         return self.__api.getRawAccelVec(id).data    
     
     def get_streamable_commands(self) -> list[StreamableCommands]: #TO DO - Make this work
-        commands = self.__api.get_settings("streamable_commands")
+        commands = self.__api.readStreamableCommands()
         registered_commands = []
         for v in commands.split(','):
             try:
@@ -354,14 +354,14 @@ class ThreespaceDevice:
         return [v for v in components if "Baro" in v]    
     
     def get_available_components(self):
-        components = self.__api.get_settings("valid_components")
+        components = self.__api.readValidComponents()
         components = components.split(',')
         return components
     
     def get_odrs(self, type: str, *ids):
         prefix = f"odr_{type}"
-        result = self.__api.get_settings(';'.join(f"{prefix}{v}" for v in ids), format="Dict")
-        return {int(k.removeprefix(prefix)) : int(v) for k, v in result.items()}
+        result = self.__api.read_settings(*[f"{prefix}{v}" for v in ids])
+        return {int(k.removeprefix(prefix)) : v for k, v in result.items()}
 
     def get_accel_odrs(self, *ids):
         return self.get_odrs("accel", *ids)
@@ -372,7 +372,7 @@ class ThreespaceDevice:
     def set_odrs(self, type: str, odrs: dict[int, int]):
         prefix = f"odr_{type}"
         odrs = {f"{prefix}{k}" : v for k, v in odrs.items()}
-        self.__api.set_settings(**odrs)
+        self.__api.write_settings(**odrs)
 
     def set_accel_odrs(self, odrs: dict[int, int]):
         self.set_odrs("accel", odrs)
@@ -381,13 +381,13 @@ class ThreespaceDevice:
         self.set_odrs("mag", odrs)
 
     def get_axis_order(self) -> str:
-        return self.__api.get_settings("axis_order")
+        return self.__api.readAxisOrder()
 
     def set_axis_order(self, order: str):
-        result = self.__api.set_settings(axis_order=order)
-        if result[0] == 0: 
+        err = self.__api.writeAxisOrder(order)
+        if err == 0: 
             self.cache_axis_order(order)
-        return result
+        return err
 
     def cache_axis_order(self, axis_str: str = None):
         if axis_str is None:
@@ -395,11 +395,10 @@ class ThreespaceDevice:
         self.cached_axis_order = AxisOrder(axis_str)
     
     def get_axis_offset_enabled(self) -> bool:
-        return self.__api.get_settings("axis_offset_enabled")
+        return self.__api.readAxisOffsetEnabled()
     
     def set_axis_offset_enabled(self, enabled: bool):
-        result = self.__api.set_settings(axis_offset_enabled=1 if enabled else 0)
-        return result
+        return self.__api.writeAxisOffsetEnabled(1 if enabled else 0)
 
     @staticmethod
     def get_axis_info(order):
@@ -431,16 +430,16 @@ class ThreespaceDevice:
             set_params[f"calib_mat_{id_key}"] = mat
         if bias is not None:
             set_params[f"calib_bias_{id_key}"] = bias
-        self.__api.set_settings(**set_params)
+        self.__api.write_settings(**set_params)
 
     def __get_calibration(self, id_key: str):
         mat_key = f"calib_mat_{id_key}"
         bias_key = f"calib_bias_{id_key}"
-        calib = self.__api.get_settings(f"{mat_key};{bias_key}")
-        return [float(v) for v in calib[mat_key].split(',')], [float(v) for v in calib[bias_key].split(',')]
+        calib = self.__api.read_settings(mat_key, bias_key)
+        return calib[mat_key], calib[bias_key]
 
     def get_detected_components(self):
-        return self.__api.get_settings("valid_components")
+        return self.__api.readValidComponents()
 
     def get_serial_number(self):
         if not self.is_open:
@@ -450,13 +449,13 @@ class ThreespaceDevice:
         elif self.__api.in_bootloader:
             return self.__api.bootloader_get_sn()
         else:
-            return int(self.__api.get_settings("serial_number"), 16)
+            return self.__api.readSerialNumber()
 
     def get_firmware_version(self):
-        return self.__api.get_settings("version_firmware")
+        return self.__api.readVersionFirmware()
 
     def get_hardware_version(self):
-        return self.__api.get_settings("version_hardware")
+        return self.__api.readVersionHardware()
 
     def get_filter_mode(self):
         filter_dict = {
@@ -464,29 +463,29 @@ class ThreespaceDevice:
             1: "Q-GRAD3",
             2: "Kalman"
         }
-        r = int(self.__api.get_settings("filter_mode"))
+        r = self.__api.readFilterMode()
         return filter_dict.get(r, f"Unknown: {r}")
     
     def set_filter_mode(self, mode: int):
-        self.__api.set_settings(filter_mode=mode)
+        self.__api.writeFilterMode(mode)
 
     def set_accel_enabled(self, enabled: bool):
-        self.__api.set_settings(accel_enabled=int(enabled))
+        self.__api.writeAccelEnabled(int(enabled))
 
     def set_mag_enabled(self, enabled: bool):
-        self.__api.set_settings(mag_enabled=int(enabled))
+        self.__api.writeMagEnabled(int(enabled))
 
     def set_gyro_enabled(self, enabled: bool):
-        self.__api.set_settings(gyro_enabled=int(enabled))        
+        self.__api.writeGyroEnabled(int(enabled))      
 
     def is_accel_enabled(self):
-        return bool(int(self.__api.get_settings("accel_enabled")))
+        return bool(self.__api.readAccelEnabled())
     
     def is_gyro_enabled(self):
-        return bool(int(self.__api.get_settings("gyro_enabled")))
+        return bool(self.__api.readGyroEnabled())
     
     def is_mag_enabled(self):
-        return bool(int(self.__api.get_settings("mag_enabled")))
+        return bool(self.__api.readMagEnabled())
 
     def set_cached_settings_dirty(self):
         #self.dirty = True
@@ -603,19 +602,19 @@ class ThreespaceDevice:
         self.__api.setBaseTareWithCurrentOrientation()
 
     def set_base_tare(self, quat: list[float]):
-        self.__api.set_settings(base_tare=','.join(str(v) for v in quat))
+        self.__api.writeBaseTare(quat)
     
     def tare_with_current_orientation(self):
         self.__api.tareWithCurrentOrientation()
     
     def set_tare(self, quat: list[float]):
-        self.__api.set_settings(tare_quat=','.join(str(v) for v in quat))
+        self.__api.writeTareQuat(quat)
 
     def base_offset_with_current_orientation(self):
         self.__api.setBaseOffsetWithCurrentOrientation()
     
     def set_base_offset(self, quat: list[float]):
-        self.__api.set_settings(base_offset=','.join(str(v) for v in quat))
+        self.__api.writeBaseOffset(quat)
 
     def offset_with_current_orientation(self):
         self.__api.setOffsetWithCurrentOrientation()
@@ -631,7 +630,7 @@ class ThreespaceDevice:
         return self.cached_axis_order.is_right_handed
 
     def set_offset(self, quat: list[float]):
-        self.__api.set_settings(offset=','.join(str(v) for v in quat))
+        self.__api.writeOffset(quat)
 
     def start_gyro_autocalibration(self):
         self.__api.beginPassiveAutoCalibration(threespace_consts.PASSIVE_CALIBRATE_GYRO)
