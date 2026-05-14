@@ -236,7 +236,9 @@ class DpgSettingParamEnum(DpgSettingParamField):
         self.dropdown = None
 
     def create_gui(self):
-        self.dropdown = dpg.add_combo(self.descriptor.valid_value_keys(), width=100,
+        width = max([dpg.get_text_size(label)[0] for label in self.descriptor.valid_value_keys()])
+        width = max(width, 100) + 30 #Extra space is for the dropdown arrow
+        self.dropdown = dpg.add_combo(self.descriptor.valid_value_keys(), width=width,
                                       callback=self._dpg_callback)
 
     def set_value(self, value):
