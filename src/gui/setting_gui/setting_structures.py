@@ -433,3 +433,13 @@ class DpgSettingMenu:
                 section["all_valid"] = section["all_valid"] and success
             self.__update_section_validity_theme(name)
         return all_success
+
+    def reload_values(self):
+        """Re-read all writable settings from the sensor and update the GUI values."""
+        writeable_settings = self.sensor.readAllWritableSettings()
+        for setting in self.settings:
+            key = setting.descriptor.key
+            if key in writeable_settings:
+                setting.set_value(writeable_settings[key])
+        
+        self.validate_all()

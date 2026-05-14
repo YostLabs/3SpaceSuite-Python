@@ -1120,7 +1120,7 @@ class SensorSettingsWindow(StagedView):
                 device.report_error(e)
                 return
 
-            with dpg.child_window():
+            with dpg.child_window(no_scroll_with_mouse=True) as self.window:
                 with dpg.group(horizontal=True):
                     dpg.add_text(f"Serial#:")
                     self.serial_number_text = dpg.add_text(f"0x{serial_number:016X}") 
@@ -1174,16 +1174,46 @@ class SensorSettingsWindow(StagedView):
                 dpg.add_spacer(height=2)
                 with dpg.group(horizontal=True):
                     dpg.add_text("Settings")
-                    dpg.add_button(label="Import")
-                    dpg.add_button(label="Export")
+                    dpg.add_button(label="Apply")
                 dpg.add_spacer(height=4)
-                self.setting_menu = DpgSettingMenu(device.sensor)
-                self.setting_menu.create_hierarchy()
-                self.setting_menu.create_gui()
+                with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
+                    self.settings_menu = DpgSettingMenu(device.sensor)
+                    self.settings_menu.create_hierarchy()
+                    self.settings_menu.create_gui()
         
+        #Custom scroll handler to allow desired scrolling logic.
+        #This is why scroll with mouse is disabled for both windows
+        with dpg.handler_registry() as self.scroll_handler:
+            dpg.add_mouse_wheel_handler(callback=self.__on_settings_scroll)
+
         self.device = device
         self.popup = None
         self.reload_settings()
+
+    def __on_settings_scroll(self, sender, app_data):
+        """Propagate scroll to the parent window when the inner settings child window hits its scroll limit."""
+        delta = app_data  # positive = scroll up, negative = scroll down
+        if dpg.is_item_hovered(self.setting_config_window):
+            scroll_y = dpg.get_y_scroll(self.setting_config_window)
+            scroll_max = dpg.get_y_scroll_max(self.setting_config_window)
+
+            scrolling_past_top = delta > 0 and scroll_y == 0
+            scrolling_past_bottom = delta < 0 and scroll_y == scroll_max
+        
+            if scrolling_past_top or scrolling_past_bottom:
+                self.__scroll_outer_window(delta)
+            else:
+                # If not scrolling past limits, scroll the inner window
+                new_scroll = max(0, min(scroll_max, scroll_y - delta * 90))  # Adjust scroll speed as needed
+                dpg.set_y_scroll(self.setting_config_window, new_scroll)
+        elif dpg.is_item_hovered(self.window):
+            self.__scroll_outer_window(delta)
+    
+    def __scroll_outer_window(self, delta: int):
+        parent_scroll = dpg.get_y_scroll(self.window)
+        parent_scroll_max = dpg.get_y_scroll_max(self.window)
+        new_parent_scroll = max(0, min(parent_scroll_max, parent_scroll - delta * 90))
+        dpg.set_y_scroll(self.window, new_parent_scroll)
 
     def __on_commit_button(self, sender, app_data):
         #Check/initialize settings for if popup should appear
@@ -1248,12 +1278,14 @@ class SensorSettingsWindow(StagedView):
     def restart_sensor(self):
         try:
             self.device.restart_sensor()
+            self.reload_settings()
         except Exception as e:
             self.device.report_error(e)
 
     def restore_factory_settings(self):
         try:
             self.device.restore_factory_settings()
+            self.reload_settings()
         except Exception as e:
             self.device.report_error(e)
 
@@ -1264,6 +1296,8 @@ class SensorSettingsWindow(StagedView):
             dpg.set_value(self.accel_detected_text, ' '.join(self.device.get_available_accels_str()))
             dpg.set_value(self.mag_detected_text, ' '.join(self.device.get_available_mags_str()))
             dpg.set_value(self.filter_mode_text, self.device.get_filter_mode())
+
+            self.settings_menu.reload_values()
         except Exception as e:
             self.device.report_error(e)
         
@@ -1330,15 +1364,11 @@ class SensorSettingsWindow(StagedView):
         self.firmware_selector = None
 
     def notify_opened(self, old_view):
-        try:
-            filter_mode = self.device.get_filter_mode()
-        except Exception as e:
-            self.device.report_error(e)
-            return
-        dpg.set_value(self.filter_mode_text, filter_mode)
+        self.reload_settings()
 
     def delete(self):
         self.close_firmware_selector()
+        dpg.delete_item(self.scroll_handler)
         super().delete()
 
 class SensorCalibrationWindow(StagedView):
