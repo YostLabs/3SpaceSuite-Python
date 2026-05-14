@@ -12,7 +12,7 @@ class MatrixSetting(DpgSetting):
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            dpg.add_text(self.descriptor.key)
+            self._key_label = dpg.add_text(self.descriptor.key)
             self._add_help_tag()
         with dpg.group(indent=self.INDENT):
             for row in range(3):
@@ -22,6 +22,7 @@ class MatrixSetting(DpgSetting):
         self._ui_initialized = True
         if self._tmp_value is not None:
             self.set_value(self._tmp_value)
+            self._tmp_value = None
 
 @register_setting(r"^calib_bias_\w+\d+$")
 class VectorSetting(DpgSetting):
@@ -31,7 +32,7 @@ class VectorSetting(DpgSetting):
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            dpg.add_text(self.descriptor.key)
+            self._key_label = dpg.add_text(self.descriptor.key)
             self._add_help_tag()
         with dpg.group(horizontal=True, indent=self.INDENT):
             for param in self.params:
@@ -39,6 +40,7 @@ class VectorSetting(DpgSetting):
         self._ui_initialized = True
         if self._tmp_value is not None:
             self.set_value(self._tmp_value)
+            self._tmp_value = None
 
 @register_setting(r"^primary_(accel|gyro|mag)$")
 class OrderedItemSelection(DpgSetting):
@@ -66,7 +68,7 @@ class OrderedItemSelection(DpgSetting):
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            dpg.add_text(self.descriptor.key)
+            self._key_label = dpg.add_text(self.descriptor.key)
             self._add_help_tag()
         with dpg.group(horizontal=True, indent=24):
             with dpg.group():
@@ -77,6 +79,7 @@ class OrderedItemSelection(DpgSetting):
                     height=self._list_height,
                     item_width=self.ITEM_WIDTH,
                 )
+                self._active_list.on_change.subscribe(lambda v: self._on_param_changed(None, v))
             dpg.add_text(" <-> ")
             with dpg.group():
                 dpg.add_text("Available", color=(180, 180, 180))
@@ -93,6 +96,7 @@ class OrderedItemSelection(DpgSetting):
             # Start with what has already been set, or default to everything in available
             value = self._tmp_value or []
             self.set_value(value)
+            self._tmp_value = None
 
     def get_value(self):
         return ",".join(str(value) for _label, value in self._active_list.get_items())
@@ -152,7 +156,7 @@ class ColorSetting(DpgSetting):
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            dpg.add_text(self.descriptor.key)
+            self._key_label = dpg.add_text(self.descriptor.key)
             self.color_picker = dpg.add_color_edit(
                 label="", default_value=self.cached_value, 
                 no_alpha=True, display_type=dpg.mvColorEdit_float,

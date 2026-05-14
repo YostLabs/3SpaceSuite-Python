@@ -1,4 +1,5 @@
 import dearpygui.dearpygui as dpg
+from utility import Callback
 import itertools
 
 
@@ -230,7 +231,7 @@ class DraggableList:
     within this list, and items are always kept in ascending label order.
     """
 
-    ITEM_HEIGHT = 23   # px per button row (tune to match your DPG theme)
+    ITEM_HEIGHT = 28   # px per button row (tune to match your DPG theme)
     PANEL_PADDING = 12  # extra px for the child_window border
 
     _id_counter = itertools.count()
@@ -250,6 +251,8 @@ class DraggableList:
         self._button_theme = None
         # Each entry: {"id": int, "label": str, "value": any}
         self._items: list[dict] = []
+
+        self.on_change = Callback()
 
         kwargs = {}
         if parent:
@@ -352,7 +355,9 @@ class DraggableList:
         """Remove and return the item with the given id."""
         for i, item in enumerate(self._items):
             if item["id"] == item_id:
-                return self._items.pop(i)
+                item = self._items.pop(i)
+                self.on_change._notify(self.get_items())
+                return item
         raise KeyError(f"DraggableList: no item with id {item_id}")
 
     def _insert_item(self, item: dict, before_id: int | None = None):
@@ -363,6 +368,7 @@ class DraggableList:
             for i, existing in enumerate(self._items):
                 if existing["id"] == before_id:
                     self._items.insert(i, item)
+                    self.on_change._notify(self.get_items())
                     return
             self._items.append(item)  # fallback: target gone, append
 
@@ -410,6 +416,7 @@ class DraggableList:
 
         #Put item at end of the list it was dropped on and re-render
         self._items.append(item)
+        self.on_change._notify(self.get_items())
         if not self._reorderable:
             self._sort()
         self._rebuild()

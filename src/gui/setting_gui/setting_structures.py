@@ -5,6 +5,7 @@ from yostlabs.tss3 import ThreespaceSensor
 from yostlabs.tss3.settings import ThreespaceSettingDescriptor, ThreespaceSettingParamDescriptor, ThreespaceSettingParamValidationMode
 
 from managers.documentation_manager import SettingsDocumentationTable
+from utility import Callback
 
 import re
 
@@ -14,9 +15,11 @@ from typing import Any
 INVALID_FIELD_THEME = None
 INVALID_SECTION_THEME = None
 _RESET_THEME = None
+CACHED_VALUE_THEME = None
+CACHED_VALUE_SECTION_THEME = None
 
 def init_themes():
-    global INVALID_FIELD_THEME, INVALID_SECTION_THEME, _RESET_THEME
+    global INVALID_FIELD_THEME, INVALID_SECTION_THEME, _RESET_THEME, CACHED_VALUE_THEME, CACHED_VALUE_SECTION_THEME
     with dpg.theme() as INVALID_FIELD_THEME:
         for component in [dpg.mvInputText, dpg.mvCombo, dpg.mvCheckbox, dpg.mvChildWindow]:
             with dpg.theme_component(component):
@@ -38,6 +41,16 @@ def init_themes():
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255, 255))
             dpg.add_theme_color(dpg.mvThemeCol_Border, (78, 78, 78, 255))
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 0)
+
+    with dpg.theme() as CACHED_VALUE_SECTION_THEME:
+        with dpg.theme_component(dpg.mvCollapsingHeader):
+            dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
+            dpg.add_theme_color(dpg.mvThemeCol_Border, (255, 220, 50, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
+
+    with dpg.theme() as CACHED_VALUE_THEME:
+        with dpg.theme_component(dpg.mvText):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
 
 _SETTING_REGISTRY: list[tuple[re.Pattern, type["DpgSetting"]]] = []
 
@@ -62,7 +75,12 @@ class DpgSetting:
         self.description = None
 
         self._tmp_value = None
+        self._cached_value = None
+        self._key_label = None
         self._ui_initialized = False
+        self.on_change: Callback[[str, Any], None] = Callback()
+        for param in self.params:
+            param.on_change.subscribe(self._on_param_changed)
 
     def _add_help_tag(self):
         """Add the '?' help tooltip next to the current cursor position, if a description is set."""
@@ -73,15 +91,24 @@ class DpgSetting:
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            dpg.add_text(self.descriptor.key)
+            self._key_label = dpg.add_text(self.descriptor.key)
             for param in self.params:
                 param.create_gui()
             self._add_help_tag()
         self._ui_initialized = True
         if self._tmp_value is not None:
             self.set_value(self._tmp_value)
+            self._tmp_value = None
+
+    def _on_param_changed(self, param: "DpgSettingParamField", value: Any):
+        """Called when any param changes; fires the setting-level on_change callback."""
+        self._update_dirty_theme()
+        print("Param changed:", self.descriptor.key, "New value:", value)
+        self.on_change._notify(self.descriptor.key, self.get_value())
 
     def get_value(self):
+        if self._tmp_value is not None:
+            return self._tmp_value
         values = [param.get_value() for param in self.params]
         if len(values) == 1:
             return values[0]
@@ -98,6 +125,26 @@ class DpgSetting:
     
     def set_description(self, description: str):
         self.description = description
+
+    def cache_value(self):
+        """Snapshot the current value as the cached (last-applied) value and update the dirty indicator."""
+        self._cached_value = self.get_value()
+        self._update_dirty_theme()
+
+    def is_dirty(self) -> bool:
+        """Return True if the current UI value differs from the cached value."""
+        if self._cached_value is None:
+            return False
+        return self.get_value() != self._cached_value
+
+    def _update_dirty_theme(self, *args):
+        """Color the key label yellow when dirty, white when clean."""
+        if self._key_label is None:
+            return
+        if self.is_dirty():
+            dpg.bind_item_theme(self._key_label, CACHED_VALUE_THEME)
+        else:
+            dpg.bind_item_theme(self._key_label, None)
 
     def pre_validate(self):
         """
@@ -124,6 +171,8 @@ class DpgSetting:
         except:
             err = -256
         self.mark_invalid(err != 0)
+        if not err:
+            self.cache_value()
         return not err
 
     @staticmethod
@@ -137,6 +186,7 @@ class DpgSettingParamField(ABC):
 
     def __init__(self, descriptor: ThreespaceSettingParamDescriptor):
         self.descriptor = descriptor
+        self.on_change: Callback[[str, Any], None] = Callback()
 
     @staticmethod
     def create(descriptor: ThreespaceSettingParamDescriptor):
@@ -152,11 +202,17 @@ class DpgSettingParamField(ABC):
             elif descriptor.type is str:
                 return DpgSettingParamFreeform(descriptor)
             else:
-                print(f"Unsupported setting parameter type for key {descriptor.setting.key}: {descriptor.type}, defaulting to freeform input.")
+                print(f"Unsupported setting parameter type: {descriptor.type}, defaulting to freeform input.")
                 return DpgSettingParamFreeform(descriptor)
 
     def validate(self):
         return self.descriptor.validate(self.get_value())
+
+    def _dpg_callback(self, sender, app_data):
+        self._generic_callback()
+    
+    def _generic_callback(self, *args, **kwargs):
+        self.on_change._notify(self, self.get_value())
 
     @abstractmethod
     def get_value(self):
@@ -181,7 +237,8 @@ class DpgSettingParamEnum(DpgSettingParamField):
         self.dropdown = None
 
     def create_gui(self):
-        self.dropdown = dpg.add_combo(self.descriptor.valid_value_keys(), width=100)
+        self.dropdown = dpg.add_combo(self.descriptor.valid_value_keys(), width=100,
+                                      callback=self._dpg_callback)
 
     def set_value(self, value):
         return dpg.set_value(self.dropdown, self.descriptor.value_to_string(value))
@@ -203,7 +260,7 @@ class DpgSettingParamBool(DpgSettingParamField):
         self.checkbox = None
 
     def create_gui(self):
-        self.checkbox = dpg.add_checkbox()
+        self.checkbox = dpg.add_checkbox(callback=self._dpg_callback)
 
     def set_value(self, value):
         dpg.set_value(self.checkbox, bool(value))
@@ -229,7 +286,7 @@ class DpgSettingParamNumeric(DpgSettingParamField):
 
     def create_gui(self):
         DEFAULT_WIDTH = 100
-        self.input = self.INPUT_CLASS(width=DEFAULT_WIDTH)
+        self.input = self.INPUT_CLASS(width=DEFAULT_WIDTH, callback=self._generic_callback)
         if self.descriptor.validation_mode == ThreespaceSettingParamValidationMode.RANGE:
             self.input.set_range(self.descriptor.min_value, self.descriptor.max_value)
             required_width = self.input.get_required_width_by_current_range(padding=0)
@@ -271,7 +328,7 @@ class DpgSettingParamFreeform(DpgSettingParamField):
         self.input = None
 
     def create_gui(self):
-        self.input = dpg.add_input_text(width=100)
+        self.input = dpg.add_input_text(width=100, callback=self._dpg_callback)
         if self.descriptor.unit:
             dpg.add_text(f"{self.descriptor.unit}")
 
@@ -322,17 +379,27 @@ class DpgSettingMenu:
 
         self.sections: dict[str, dict[str, dict[str, int]] | dict[str, list[DpgSetting]]] = {}
         self.settings: list[DpgSetting] = []
+        self._setting_category: dict[str, str] = {}
         self.documentation = SettingsDocumentationTable()
 
         self.sensor = sensor
 
-    def __update_section_validity_theme(self, section_name: str):
+    def __update_all_section_themes(self):
+        for section in self.sections:
+            self.__update_section_theme(section)
+
+    def __update_section_theme(self, section_name: str):
         if section_name not in self.sections:
             return
         section = self.sections[section_name]
         is_invalid = not section["all_valid"]
+        dirty = section["dirty"]
         if is_invalid:
             dpg.bind_item_theme(section["gui"]["header"], INVALID_SECTION_THEME)
+            dpg.bind_item_theme(section["gui"]["primary"], _RESET_THEME)
+            dpg.bind_item_theme(section["gui"]["secondary"], _RESET_THEME)
+        elif dirty:
+            dpg.bind_item_theme(section["gui"]["header"], CACHED_VALUE_SECTION_THEME)
             dpg.bind_item_theme(section["gui"]["primary"], _RESET_THEME)
             dpg.bind_item_theme(section["gui"]["secondary"], _RESET_THEME)
         else:
@@ -344,12 +411,12 @@ class DpgSettingMenu:
         if section_name not in self.sections:
             return
         self.sections[section_name]["all_valid"] = not is_invalid
-        self.__update_section_validity_theme(section_name)
+        self.__update_section_theme(section_name)
 
     def add_section(self, name: str):
         if name in self.sections:
             return
-        self.sections[name] = { "gui": {"header": None, "primary": None, "secondary": None }, "settings": [], "all_valid": True }
+        self.sections[name] = { "gui": {"header": None, "primary": None, "secondary": None }, "settings": [], "all_valid": True, "dirty": False }
 
     def add_item(self, category: str, descriptor: ThreespaceSettingDescriptor, value: Any, description: str | None):
         if category not in self.sections:
@@ -359,6 +426,48 @@ class DpgSettingMenu:
         setting.set_description(description)
         self.sections[category]["settings"].append(setting)
         self.settings.append(setting)
+        self._setting_category[descriptor.key] = category
+        setting.on_change.subscribe(self._on_setting_changed)
+
+    def _on_setting_changed(self, key: str, new_value: Any):
+        category = self._setting_category.get(key)
+        if category is None:
+            return
+        section = self.sections[category]
+
+        # Find the setting by key
+        setting = next((s for s in section["settings"] if s.descriptor.key == key), None)
+        if setting is None:
+            return
+
+        theme_dirty = False
+
+        # Validity: only rescan if this setting's validity could flip the section state
+        setting_valid = setting.pre_validate()
+        if not setting_valid and section["all_valid"]:
+            # Section just became invalid
+            section["all_valid"] = False
+            theme_dirty = True
+        elif setting_valid and not section["all_valid"]:
+            # This setting recovered — rescan to see if section is fully valid again
+            if all(s.pre_validate() for s in section["settings"]):
+                section["all_valid"] = True
+                theme_dirty = True
+
+        # Dirty: only rescan if this setting's dirty state could flip the section state
+        setting_dirty = setting.is_dirty()
+        if setting_dirty and not section["dirty"]:
+            # Section just became dirty
+            section["dirty"] = True
+            theme_dirty = True
+        elif not setting_dirty and section["dirty"]:
+            # This setting cleaned up — rescan to see if section is fully clean
+            if not any(s.is_dirty() for s in section["settings"]):
+                section["dirty"] = False
+                theme_dirty = True
+
+        if theme_dirty:
+            self.__update_section_theme(category)
 
     def create_hierarchy(self):
         #Create all the section headers first to ensure correct ordering.
@@ -389,7 +498,7 @@ class DpgSettingMenu:
             self.sections[section]["gui"]["header"] = header
             self.sections[section]["gui"]["primary"] = primary
             self.sections[section]["gui"]["secondary"] = secondary
-            self.__update_section_validity_theme(section)
+            self.__update_section_theme(section)
 
             for setting in self.sections[section]["settings"]:
                 subsection = "primary"
@@ -406,6 +515,7 @@ class DpgSettingMenu:
                 dpg.push_container_stack(self.sections[section]["gui"][subsection])
                 setting.create_gui()
                 dpg.pop_container_stack()
+        self.cache_all_values()
     
     def validate_all(self):
         all_valid = True
@@ -417,21 +527,30 @@ class DpgSettingMenu:
                     print(f"Invalid setting: {setting.descriptor.key} in section {name}")
                 section["all_valid"] = section["all_valid"] and valid
                 all_valid = all_valid and valid
-            self.__update_section_validity_theme(name)
+        self.__update_all_section_themes()
         print("All Valid:", all_valid)
         return all_valid
     
+    def cache_all_values(self):
+        """Snapshot the current UI values as the cached baseline for all settings."""
+        for setting in self.settings:
+            setting.cache_value()
+
     def apply_all(self):
         all_success = True
         for name, section in self.sections.items():
             section["all_valid"] = True
             for setting in section["settings"]:
-                success = setting.apply(self.sensor)
+                if not setting.is_dirty():
+                    continue
+                success = setting.apply(self.sensor)  # caches value internally on success
                 if not success:
                     print(f"Failed to apply setting: {setting.descriptor.key} in section {name}")
                 all_success = all_success and success
                 section["all_valid"] = section["all_valid"] and success
-            self.__update_section_validity_theme(name)
+            if section["all_valid"]:
+                section["dirty"] = False
+        self.__update_all_section_themes()
         return all_success
 
     def reload_values(self):
@@ -441,5 +560,5 @@ class DpgSettingMenu:
             key = setting.descriptor.key
             if key in writeable_settings:
                 setting.set_value(writeable_settings[key])
-        
+        self.cache_all_values()
         self.validate_all()
