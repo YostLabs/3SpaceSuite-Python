@@ -161,7 +161,7 @@ class ColorSetting(DpgSetting):
             self.color_picker = dpg.add_color_edit(
                 label="", default_value=self.cached_value, 
                 no_alpha=True, display_type=dpg.mvColorEdit_float,
-                width=200)
+                width=200, callback=lambda: self._on_param_changed(None, self.get_value()))
             if self.description:
                 help_tag = dpg.add_text(" ?", color=(120, 170, 255))
                 with dpg.tooltip(parent=help_tag):
