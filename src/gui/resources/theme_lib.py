@@ -79,4 +79,7 @@ def init():
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 12, category=dpg.mvThemeCat_Core)
             dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 12, category=dpg.mvThemeCat_Core)
+
+    from gui.setting_gui.setting_structures import init_themes
+    init_themes()
         

@@ -86,6 +86,21 @@ class ThreespaceDevice:
         self.cached_axis_order = None
 
     @property
+    def sensor(self):
+        """
+        The API is simpler to use for certain constructs. It probably would have been better
+        to just directly use the API constructs earlier. Realistically, if implementing a different
+        threespace device, the expectation should have been for the user to implement the API constructs
+        rather than having everything go through this device class. The only convenient thing about this is
+        making it clear the minimal set of functions that need implemented for the suite.
+
+        May refactor in the future to utilize the ThreespaceAPI more directly, but for the time being, just exposing this here
+        since there are no plans to implement an older version at this time, and if we did we would just update the API rather
+        than this class.
+        """
+        return self.__api
+
+    @property
     def is_open(self):
         return self.__api is not None
 

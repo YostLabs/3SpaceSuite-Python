@@ -1102,6 +1102,8 @@ DEFAULT_FIRMWARE_FOLDER = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FO
 DEFAULT_FIRMWARE_KEY = "firmware_folder"
 COMMIT_POPUP_ENABLED_KEY = "confirm_commit"
 
+from gui.setting_gui.setting_structures import DpgSettingMenu
+from gui.setting_gui.setting_structures_custom import * #Simply loading this causes the custom types to be registered
 from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
@@ -1166,6 +1168,18 @@ class SensorSettingsWindow(StagedView):
                     dpg.add_button(label="Restart",
                                    callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?", 
                                                                          on_confirm=self.restart_sensor))
+
+                dpg.add_spacer(height=12)
+                dpg.add_separator()
+                dpg.add_spacer(height=2)
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Settings")
+                    dpg.add_button(label="Import")
+                    dpg.add_button(label="Export")
+                dpg.add_spacer(height=4)
+                self.setting_menu = DpgSettingMenu(device.sensor)
+                self.setting_menu.create_hierarchy()
+                self.setting_menu.create_gui()
         
         self.device = device
         self.popup = None
