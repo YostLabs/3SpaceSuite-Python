@@ -1,4 +1,5 @@
-from gui.setting_gui.setting_structures import DpgSetting, register_setting, INVALID_FIELD_THEME, _RESET_THEME
+import gui.setting_gui.setting_structures as setting_structures
+from gui.setting_gui.setting_structures import DpgSetting, register_setting
 from dpg_ext.input_fields import DraggableList
 import dearpygui.dearpygui as dpg
 
@@ -141,8 +142,8 @@ class OrderedItemSelection(DpgSetting):
 
     def mark_invalid(self, is_invalid: bool):
         if self._active_list is not None:
-            dpg.bind_item_theme(self._active_list.window, INVALID_FIELD_THEME if is_invalid else None)
-            button_theme = _RESET_THEME if is_invalid else None
+            dpg.bind_item_theme(self._active_list.window, setting_structures.INVALID_FIELD_THEME if is_invalid else None)
+            button_theme = setting_structures._RESET_THEME if is_invalid else None
             self._active_list.set_button_theme(button_theme)
             self._available_list.set_button_theme(button_theme)
 
@@ -190,15 +191,15 @@ class ColorSetting(DpgSetting):
 
     def pre_validate(self):
         value = self.get_value()
-        print("Validating color setting with value", value)
         all_valid = True
         for i, param in enumerate(self.params):
             valid = param.descriptor.validate(value[i])
-            print(f"{valid=}")
             all_valid = all_valid and valid
         self.mark_invalid(not all_valid)
         return all_valid
 
     def mark_invalid(self, is_invalid):
         if is_invalid:
-            dpg.bind_item_theme(self.color_picker, INVALID_FIELD_THEME)
+            dpg.bind_item_theme(self.color_picker, setting_structures.INVALID_FIELD_THEME)
+        else:
+            dpg.bind_item_theme(self.color_picker, None)

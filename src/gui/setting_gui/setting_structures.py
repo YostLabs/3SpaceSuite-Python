@@ -20,13 +20,13 @@ CACHED_VALUE_SECTION_THEME = None
 
 def init_themes():
     global INVALID_FIELD_THEME, INVALID_SECTION_THEME, _RESET_THEME, CACHED_VALUE_THEME, CACHED_VALUE_SECTION_THEME
-    with dpg.theme() as INVALID_FIELD_THEME:
+    with dpg.theme(label="Invalid Field Theme") as INVALID_FIELD_THEME:
         for component in [dpg.mvInputText, dpg.mvCombo, dpg.mvCheckbox, dpg.mvChildWindow]:
             with dpg.theme_component(component):
                 dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
                 dpg.add_theme_color(dpg.mvThemeCol_Border, (220, 40, 40, 255))
 
-    with dpg.theme() as INVALID_SECTION_THEME:
+    with dpg.theme(label="Invalid Section Theme") as INVALID_SECTION_THEME:
 
         with dpg.theme_component(dpg.mvCollapsingHeader):
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
@@ -36,19 +36,19 @@ def init_themes():
     # Resets text color to default for all widget types.
     # Bound to the children container of a section when the section is marked invalid,
     # so the red text from INVALID_SECTION_THEME does not cascade to child widgets.
-    with dpg.theme() as _RESET_THEME:
+    with dpg.theme(label="Reset Theme") as _RESET_THEME:
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255, 255))
             dpg.add_theme_color(dpg.mvThemeCol_Border, (78, 78, 78, 255))
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 0)
 
-    with dpg.theme() as CACHED_VALUE_SECTION_THEME:
+    with dpg.theme(label="Cached Value Section Theme") as CACHED_VALUE_SECTION_THEME:
         with dpg.theme_component(dpg.mvCollapsingHeader):
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
             dpg.add_theme_color(dpg.mvThemeCol_Border, (255, 220, 50, 255))
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
 
-    with dpg.theme() as CACHED_VALUE_THEME:
+    with dpg.theme(label="Cached Value Theme") as CACHED_VALUE_THEME:
         with dpg.theme_component(dpg.mvText):
             dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
 
@@ -103,7 +103,6 @@ class DpgSetting:
     def _on_param_changed(self, param: "DpgSettingParamField", value: Any):
         """Called when any param changes; fires the setting-level on_change callback."""
         self._update_dirty_theme()
-        print("Param changed:", self.descriptor.key, "New value:", value)
         self.on_change._notify(self.descriptor.key, self.get_value())
 
     def get_value(self):

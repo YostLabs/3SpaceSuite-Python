@@ -8,9 +8,11 @@ from yostlabs.tss3 import ThreespaceSensor
 dpg.create_context()
 dpg.create_viewport()
 
-from gui.setting_gui.setting_structures import DpgSettingMenu
+from gui.setting_gui.setting_structures import DpgSettingMenu, init_themes
 from gui.setting_gui.setting_structures_custom import *  #Simply loading this causes the custom types to be registered in the setting menu
 
+
+init_themes()
 sensor = ThreespaceSensor()
 setting_menu = DpgSettingMenu(sensor)
 setting_menu.create_hierarchy()
@@ -22,6 +24,8 @@ with dpg.window() as primary_window:
     setting_menu.create_gui()
 
 dpg.set_primary_window(primary_window, True)
+
+dpg.show_item_registry()
 
 dpg.setup_dearpygui()
 dpg.show_viewport()
