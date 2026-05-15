@@ -536,6 +536,9 @@ class DpgSettingMenu:
         """Snapshot the current UI values as the cached baseline for all settings."""
         for setting in self.settings:
             setting.cache_value()
+        for section in self.sections:
+            self.sections[section]["dirty"] = False
+        self.__update_all_section_themes()
 
     def apply_all(self):
         all_success = True

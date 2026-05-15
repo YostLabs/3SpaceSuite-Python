@@ -1175,6 +1175,7 @@ class SensorSettingsWindow(StagedView):
                 with dpg.group(horizontal=True):
                     dpg.add_text("Settings")
                     dpg.add_button(label="Apply")
+                    dpg.add_button(label="Reload", callback=self.reload_settings)
                 dpg.add_spacer(height=4)
                 with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
                     self.settings_menu = DpgSettingMenu(device.sensor)
