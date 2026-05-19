@@ -18,20 +18,23 @@ _RESET_THEME = None
 CACHED_VALUE_THEME = None
 CACHED_VALUE_SECTION_THEME = None
 
+INVALID_COLOR = (220, 40, 40, 255)
+DIRTY_COLOR = (255, 220, 50, 255)
+
 def init_themes():
     global INVALID_FIELD_THEME, INVALID_SECTION_THEME, _RESET_THEME, CACHED_VALUE_THEME, CACHED_VALUE_SECTION_THEME
     with dpg.theme(label="Invalid Field Theme") as INVALID_FIELD_THEME:
         for component in [dpg.mvInputText, dpg.mvCombo, dpg.mvCheckbox, dpg.mvChildWindow]:
             with dpg.theme_component(component):
                 dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
-                dpg.add_theme_color(dpg.mvThemeCol_Border, (220, 40, 40, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_Border, INVALID_COLOR)
 
     with dpg.theme(label="Invalid Section Theme") as INVALID_SECTION_THEME:
 
         with dpg.theme_component(dpg.mvCollapsingHeader):
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
-            dpg.add_theme_color(dpg.mvThemeCol_Border, (220, 40, 40, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (220, 40, 40, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, INVALID_COLOR)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, INVALID_COLOR)
 
     # Resets text color to default for all widget types.
     # Bound to the children container of a section when the section is marked invalid,
@@ -45,12 +48,12 @@ def init_themes():
     with dpg.theme(label="Cached Value Section Theme") as CACHED_VALUE_SECTION_THEME:
         with dpg.theme_component(dpg.mvCollapsingHeader):
             dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 2)
-            dpg.add_theme_color(dpg.mvThemeCol_Border, (255, 220, 50, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, DIRTY_COLOR)
+            dpg.add_theme_color(dpg.mvThemeCol_Text, DIRTY_COLOR)
 
     with dpg.theme(label="Cached Value Theme") as CACHED_VALUE_THEME:
         with dpg.theme_component(dpg.mvText):
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 220, 50, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, DIRTY_COLOR)
 
 _SETTING_REGISTRY: list[tuple[re.Pattern, type["DpgSetting"]]] = []
 
@@ -174,6 +177,11 @@ class DpgSetting:
             self.cache_value()
         return not err
 
+    def set_enabled(self, enabled: bool):
+        """Enable or disable all param input fields for this setting."""
+        for param in self.params:
+            param.set_enabled(enabled)
+
     @staticmethod
     def create(descriptor: ThreespaceSettingDescriptor):
         for pattern, cls in _SETTING_REGISTRY:
@@ -229,6 +237,10 @@ class DpgSettingParamField(ABC):
     def mark_invalid(self, is_invalid: bool):
         pass
 
+    @abstractmethod
+    def set_enabled(self, enabled: bool):
+        pass
+
 class DpgSettingParamEnum(DpgSettingParamField):
 
     def __init__(self, descriptor: ThreespaceSettingParamDescriptor):
@@ -254,6 +266,9 @@ class DpgSettingParamEnum(DpgSettingParamField):
         else:
             dpg.bind_item_theme(self.dropdown, None)
 
+    def set_enabled(self, enabled: bool):
+        dpg.configure_item(self.dropdown, enabled=enabled)
+
 class DpgSettingParamBool(DpgSettingParamField):
 
     def __init__(self, descriptor: ThreespaceSettingParamDescriptor):
@@ -274,6 +289,9 @@ class DpgSettingParamBool(DpgSettingParamField):
             dpg.bind_item_theme(self.checkbox, INVALID_FIELD_THEME)
         else:
             dpg.bind_item_theme(self.checkbox, None)
+
+    def set_enabled(self, enabled: bool):
+        dpg.configure_item(self.checkbox, enabled=enabled)
 
 class DpgSettingParamNumeric(DpgSettingParamField):
     """Shared base for numeric input fields backed by InputIntPy/InputFloatPy."""
@@ -307,6 +325,9 @@ class DpgSettingParamNumeric(DpgSettingParamField):
             dpg.bind_item_theme(self.input.field, INVALID_FIELD_THEME)
         else:
             dpg.bind_item_theme(self.input.field, None)
+
+    def set_enabled(self, enabled: bool):
+        dpg.configure_item(self.input.field, enabled=enabled)
 
 class DpgSettingParamInt(DpgSettingParamNumeric):
     INPUT_CLASS = InputIntPy
@@ -345,6 +366,9 @@ class DpgSettingParamFreeform(DpgSettingParamField):
             dpg.bind_item_theme(self.input, INVALID_FIELD_THEME)
         else:
             dpg.bind_item_theme(self.input, None)
+
+    def set_enabled(self, enabled: bool):
+        dpg.configure_item(self.input, enabled=enabled)
 
 def get_subkey(pattern_key: str, concrete_key: str) -> str | None:
     """Given a pattern like 'calib_mat_accel%d' and a concrete key like 'calib_mat_accel3',
@@ -540,12 +564,12 @@ class DpgSettingMenu:
             self.sections[section]["dirty"] = False
         self.__update_all_section_themes()
 
-    def apply_all(self):
+    def apply_all(self, dirty_only=True):
         all_success = True
         for name, section in self.sections.items():
             section["all_valid"] = True
             for setting in section["settings"]:
-                if not setting.is_dirty():
+                if dirty_only and not setting.is_dirty():
                     continue
                 success = setting.apply(self.sensor)  # caches value internally on success
                 if not success:
@@ -556,6 +580,12 @@ class DpgSettingMenu:
                 section["dirty"] = False
         self.__update_all_section_themes()
         return all_success
+
+    def set_setting_enabled(self, key: str, enabled: bool = True):
+        """Enable or disable the input fields for the setting with the given key."""
+        setting = next((s for s in self.settings if s.descriptor.key == key), None)
+        if setting is not None:
+            setting.set_enabled(enabled)
 
     def reload_values(self):
         """Re-read all writable settings from the sensor and update the GUI values."""

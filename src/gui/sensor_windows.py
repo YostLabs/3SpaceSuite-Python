@@ -1123,15 +1123,15 @@ class SensorSettingsWindow(StagedView):
             with dpg.child_window(no_scroll_with_mouse=True) as self.window:
                 with dpg.group(horizontal=True):
                     dpg.add_text(f"Serial#:")
-                    self.serial_number_text = dpg.add_text(f"0x{serial_number:016X}") 
+                    self.serial_number_text = dpg.add_text(f"0x{serial_number:016X}")
                 with dpg.group(horizontal=True):
                     dpg.add_text(f"Hardware Version:")
                     dpg.add_text(hardware_version)
                 with dpg.group(horizontal=True):
                     dpg.add_text("Firmware Version:")
-                    self.version_firmware_text = dpg.add_text()     
+                    self.version_firmware_text = dpg.add_text()
                     dpg.add_spacer(width=50)
-                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)          
+                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
@@ -1166,7 +1166,7 @@ class SensorSettingsWindow(StagedView):
                                    callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restore factory settings?", 
                                                                          on_confirm=self.restore_factory_settings))
                     dpg.add_button(label="Restart",
-                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?", 
+                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?",
                                                                          on_confirm=self.restart_sensor))
 
                 dpg.add_spacer(height=12)
@@ -1174,13 +1174,36 @@ class SensorSettingsWindow(StagedView):
                 dpg.add_spacer(height=2)
                 with dpg.group(horizontal=True):
                     dpg.add_text("Settings")
-                    dpg.add_button(label="Apply")
+                    WIDTH = 600
+                    self._settings_help_text = dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(self._settings_help_text):
+                        dpg.add_text("Navigating away from this tab, restoring factory settings, or restarting the sensor will discard any unapplied changes.", wrap=WIDTH)
+                        dpg.add_text("After applying, you must Commit settings to make changes persist across power cycles.", wrap=WIDTH)
+                        dpg.add_separator()
+                        dpg.add_text("Color Indicators:", wrap=WIDTH)
+                        with dpg.group(horizontal=True):
+                            dpg.add_text("Yellow", color=setting_structures.DIRTY_COLOR)
+                            dpg.add_text("-")
+                            dpg.add_text("Setting has been changed from the current on-sensor value.", wrap=WIDTH - dpg.get_text_size("Yellow - ")[0])
+                        with dpg.group(horizontal=True):
+                            dpg.add_text("Red", color=setting_structures.INVALID_COLOR)
+                            dpg.add_text("-")
+                            dpg.add_text("Setting has an invalid value or failed to apply.", wrap=WIDTH - dpg.get_text_size("Red - ")[0])
+                        
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Apply", callback=self.__on_settings_apply)
                     dpg.add_button(label="Reload", callback=self.reload_settings)
                 dpg.add_spacer(height=4)
                 with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
                     self.settings_menu = DpgSettingMenu(device.sensor)
                     self.settings_menu.create_hierarchy()
                     self.settings_menu.create_gui()
+
+                    #These settings are required by the underlying API to function, and are force re-enabled if changed.
+                    #This prevents the user from thinking they disabled them when they will be immediately reapplied for functionality.
+                    #To actually change these, they would need to use the terminal
+                    for key in ("header_echo", "header_checksum", "header_length"):
+                        self.settings_menu.set_setting_enabled(key, False)
         
         #Custom scroll handler to allow desired scrolling logic.
         #This is why scroll with mouse is disabled for both windows
@@ -1215,6 +1238,17 @@ class SensorSettingsWindow(StagedView):
         parent_scroll_max = dpg.get_y_scroll_max(self.window)
         new_parent_scroll = max(0, min(parent_scroll_max, parent_scroll - delta * 90))
         dpg.set_y_scroll(self.window, new_parent_scroll)
+
+    def __on_settings_apply(self):
+        try:
+            success = self.settings_menu.apply_all()
+        except Exception as e:
+            self.device.report_error(e)
+        else:
+            if success:
+                dpg_ext.create_popup_message("Successfully applied settings. To save changes across power cycles, commit the settings.", title="Success")
+            else:
+                dpg_ext.create_popup_message("Failed to apply all settings. Check highlighted red errors below.", title="Error")
 
     def __on_commit_button(self, sender, app_data):
         #Check/initialize settings for if popup should appear
@@ -1265,7 +1299,6 @@ class SensorSettingsWindow(StagedView):
         else:
             #Unknown Error
             self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
-
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()
