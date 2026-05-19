@@ -1,7 +1,9 @@
 import gui.setting_gui.setting_structures as setting_structures
-from gui.setting_gui.setting_structures import DpgSetting, register_setting
+from gui.setting_gui.setting_structures import ThreespaceSettingDescriptor, DpgSetting, register_setting
 from dpg_ext.input_fields import DraggableList
 import dearpygui.dearpygui as dpg
+from yostlabs.tss3 import StreamableCommands
+from utility import Logger
 
 @register_setting(r"^calib_mat_\w+\d+$")
 class MatrixSetting(DpgSetting):
@@ -60,7 +62,7 @@ class OrderedItemSelection(DpgSetting):
 
     MIN_ITEM_WIDTH = 100
 
-    def __init__(self, descriptor, orderable=True, order_by="label", pin_items: dict[str, any] = None):
+    def __init__(self, descriptor: ThreespaceSettingDescriptor, orderable=True, order_by="label", pin_items: dict[str, any] = None):
         super().__init__(descriptor)
         self._item_map = self.params[0].descriptor.valid_values  # {label: value}
         self._value_to_key_map = { v: k for k, v in self._item_map.items() }
@@ -228,3 +230,97 @@ class ColorSetting(DpgSetting):
             dpg.bind_item_theme(self.color_picker, setting_structures.INVALID_FIELD_THEME)
         else:
             dpg.bind_item_theme(self.color_picker, None)
+
+from gui.streaming_menu import StreamingOptionSelectionMenu, ThreespaceStreamingOption
+
+@register_setting(r"^(stream|log)_slots$")
+class StreamingSelection(DpgSetting):
+
+    def __init__(self, descriptor: ThreespaceSettingDescriptor):
+        super().__init__(descriptor)
+        self.selection_menu: StreamingOptionSelectionMenu = None
+
+    def create_gui(self):
+        with dpg.group(horizontal=True):
+            self._key_label = dpg.add_text(self.descriptor.key)
+            self._add_help_tag()
+            self.failure_text = dpg.add_text("Failed to apply.", color=setting_structures.INVALID_COLOR, show=False)
+        self.selection_menu = StreamingOptionSelectionMenu(valid_options=self.params[0].descriptor.valid_values, 
+                                                           on_modified_callback=self.on_value_changed)
+
+        #Load initial value
+        if not self._ui_initialized:
+            self._ui_initialized = True
+            # Start with what has already been set, or default to everything in available
+            value = self._tmp_value or "255"
+            self.set_value(value)
+            self._tmp_value = None
+
+    def on_value_changed(self, menu: StreamingOptionSelectionMenu):
+        self._on_param_changed(None, self.get_value())
+
+    def get_value(self):
+        if self.selection_menu is None:
+            return self._tmp_value or "255"
+        options = self.selection_menu.get_options()
+        formatted_options = []
+        for option in options:
+            if option.param is None:
+                formatted_options.append(str(option.cmd.value))
+            else:
+                formatted_options.append(f"{option.cmd.value}:{option.param}")
+        if len(formatted_options) == 0:
+            return "255"  # Special case for empty set since an empty string is not valid for the setting
+        return ','.join(formatted_options)
+    
+    def set_value(self, value: str):
+        if not self._ui_initialized:
+            self._tmp_value = value
+            return
+        
+        value = value.strip()
+        if value == "":
+            value = "255"
+
+        str_options = value.split(',')
+        options: list[tuple] = []
+        for s in str_options:
+            cmd = s
+            param = None
+            if ':' in s:
+                cmd, param = s.split(':')
+            
+            #None option
+            if cmd == "255":
+                continue
+
+            try:
+                cmd = StreamableCommands(int(cmd))
+            except ValueError:
+                raise ValueError(f"Invalid command value: {cmd}")
+
+            if param is not None:
+                try:
+                    param = int(param)
+                except ValueError:
+                    raise ValueError(f"Invalid parameter value: {param}")
+            
+            options.append(ThreespaceStreamingOption(cmd, param))
+
+        #Nothing selected, use the special "none" value
+        if len(options) == 0:
+            options.append(ThreespaceStreamingOption(None, None))
+
+        self.selection_menu.overwrite_options(options)
+    
+    def pre_validate(self):
+        value = self.get_value()
+        valid = self.params[0].descriptor.validate(value)
+        self.mark_invalid(not valid)
+        return valid
+    
+    def mark_invalid(self, is_invalid):
+        if is_invalid:
+            dpg.show_item(self.failure_text)
+        else:
+            dpg.hide_item(self.failure_text)

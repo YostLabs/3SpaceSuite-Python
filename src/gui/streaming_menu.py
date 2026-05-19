@@ -10,13 +10,15 @@ from utility import Logger
 
 class StreamingOptionSelectionMenu:
 
-    def __init__(self, sensor: ThreespaceDevice = None, max_options=16, on_modified_callback: Callable[["StreamingOptionSelectionMenu"],None]=None):
+    def __init__(self, sensor: ThreespaceDevice = None, valid_options: list[data_charts.StreamOption] = None, max_options=16, on_modified_callback: Callable[["StreamingOptionSelectionMenu"],None]=None):
         self.device = sensor
         self.max_options = max_options
         self.callback = on_modified_callback
         
         if sensor is not None:
             self.valid_options = data_charts.get_all_options_from_device(sensor)
+        elif valid_options is not None:
+            self.valid_options = valid_options
         else:
             self.valid_options = data_charts.get_all_options()
 

@@ -4,6 +4,7 @@ for how some data will show up
 """
 from dataclasses import dataclass, field
 from devices import ThreespaceDevice, StreamableCommands, threespace_command_get_info, ThreespaceCommandInfo, ThreespaceStreamingOption
+from yostlabs.tss3 import ThreespaceSensor
 import re
 
 @dataclass
@@ -34,6 +35,19 @@ def get_all_options_from_device(sensor: ThreespaceDevice):
     options = get_options_from_list(streamable_commands)
     for option in options: #Load valid params from the sensor
         option.valid_params = get_valid_params(option.cmd, sensor)
+    return options
+
+def get_all_options_from_sensor(sensor: ThreespaceSensor):
+    commands = sensor.readStreamableCommands()
+    streamable_commands = []
+    for v in commands.split(','):
+        try:
+            streamable_commands.append(StreamableCommands(int(v)))
+        except:
+            pass
+    options = get_options_from_list(streamable_commands)
+    for option in options: #Load valid params from the sensor
+        option.valid_params = get_valid_params_from_sensor(option.cmd, sensor)
     return options
 
 def get_options_from_slots(slots: list[ThreespaceStreamingOption]):
@@ -76,14 +90,17 @@ def get_param_type(streamable_command: StreamableCommands):
     return None
 
 def get_valid_params(streamable_command: StreamableCommands, sensor: ThreespaceDevice):
+    return get_valid_params_from_sensor(streamable_command, sensor.sensor)
+
+def get_valid_params_from_sensor(streamable_command: StreamableCommands, sensor: ThreespaceSensor):
     if streamable_command in (StreamableCommands.GetBarometerAltitudeById, StreamableCommands.GetBarometerPressureById):
-        return sensor.get_available_baros()
+        return sensor.valid_baros.copy()
     elif streamable_command in (StreamableCommands.GetRawAccelVec, StreamableCommands.GetCorrectedAccelVec, StreamableCommands.GetNormalizedAccelVec):
-        return sensor.get_available_accels()
+        return sensor.valid_accels.copy()
     elif streamable_command in (StreamableCommands.GetRawGyroRate, StreamableCommands.GetCorrectedGyroRate, StreamableCommands.GetNormalizedGyroRate):
-        return sensor.get_available_gyros()
+        return sensor.valid_gyros.copy()
     elif streamable_command in (StreamableCommands.GetRawMagVec, StreamableCommands.GetCorrectedMagVec, StreamableCommands.GetNormalizedMagVec):
-        return sensor.get_available_mags()
+        return sensor.valid_mags.copy()
     return None
 
 #--------------------------------------------------Config information specific to data charts-------------------------------------------

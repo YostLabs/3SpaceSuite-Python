@@ -12,6 +12,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+import data_charts  # For loading stream/log slot options from the sensor
+
 INVALID_FIELD_THEME = None
 INVALID_SECTION_THEME = None
 _RESET_THEME = None
@@ -513,6 +515,12 @@ class DpgSettingMenu:
                 category = "Uncategorized"
                 description = None
             
+            if desc.key in ("stream_slots", "log_slots"):
+                # These are special and need additional info not immediately supplied by the API.
+                # So, we will add this information to the descriptor here.
+                valid_params = data_charts.get_all_options_from_sensor(self.sensor)
+                desc.param_descriptors[0].valid_values = valid_params
+
             self.add_item(category, desc, value, description)
 
     def create_gui(self):

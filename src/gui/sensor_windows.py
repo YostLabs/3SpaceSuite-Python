@@ -1214,10 +1214,27 @@ class SensorSettingsWindow(StagedView):
         self.popup = None
         self.reload_settings()
 
+    def __is_config_window_hovered(self):
+        """
+        Check if the config window or any descendant item is hovered (recursive).
+        This is necessary because a child window being hovered (EG: StreamSlots, PrimaryComponent...)
+        blocks the parent window from receiving hover events, so we need to check them manually to know where to route scroll events.
+        """
+        def _hovered(item) -> bool:
+            try:
+                if dpg.is_item_hovered(item):
+                    return True
+            except: pass
+            for child in dpg.get_item_children(item, 1):
+                if _hovered(child):
+                    return True
+            return False
+        return _hovered(self.setting_config_window)
+
     def __on_settings_scroll(self, sender, app_data):
         """Propagate scroll to the parent window when the inner settings child window hits its scroll limit."""
         delta = app_data  # positive = scroll up, negative = scroll down
-        if dpg.is_item_hovered(self.setting_config_window):
+        if self.__is_config_window_hovered():
             scroll_y = dpg.get_y_scroll(self.setting_config_window)
             scroll_max = dpg.get_y_scroll_max(self.setting_config_window)
 
