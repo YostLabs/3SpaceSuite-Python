@@ -45,7 +45,6 @@ class VectorSetting(DpgSetting):
             self.set_value(self._tmp_value)
             self._tmp_value = None
 
-@register_setting(r"^primary_(accel|gyro|mag)$")
 class OrderedItemSelection(DpgSetting):
     """Drag-and-drop ordered selection for primary sensor priority settings.
 
@@ -62,10 +61,14 @@ class OrderedItemSelection(DpgSetting):
 
     MIN_ITEM_WIDTH = 100
 
-    def __init__(self, descriptor: ThreespaceSettingDescriptor, orderable=True, order_by="label", pin_items: dict[str, any] = None):
+    def __init__(self, descriptor: ThreespaceSettingDescriptor, orderable=True, order_by="label",
+                 active_label="Active", inactive_label="Available", pin_items: dict[str, any] = None):
         super().__init__(descriptor)
         self._item_map = self.params[0].descriptor.valid_values  # {label: value}
         self._value_to_key_map = { v: k for k, v in self._item_map.items() }
+
+        self._active_label = active_label
+        self._inactive_label = inactive_label
 
         self._pinned_items = pin_items
         if self._pinned_items is not None:
@@ -88,7 +91,7 @@ class OrderedItemSelection(DpgSetting):
             self._add_help_tag()
         with dpg.group(horizontal=True, indent=24):
             with dpg.group():
-                dpg.add_text("Priority Order", color=(180, 180, 180))
+                dpg.add_text(self._active_label, color=(180, 180, 180))
                 self._active_list = DraggableList(
                     payload_type=self._payload_type,
                     width=self._item_width + 16,
@@ -102,7 +105,7 @@ class OrderedItemSelection(DpgSetting):
                     self._active_list.pin_items([( key, value ) for key, value in self._pinned_items.items()])
             dpg.add_text(" <-> ")
             with dpg.group():
-                dpg.add_text("Available", color=(180, 180, 180))
+                dpg.add_text(self._inactive_label, color=(180, 180, 180))
                 self._available_list = DraggableList(
                     payload_type=self._payload_type,
                     width=self._item_width + 16,
@@ -167,12 +170,20 @@ class OrderedItemSelection(DpgSetting):
             self._active_list.set_button_theme(button_theme)
             self._available_list.set_button_theme(button_theme)
 
+@register_setting(r"^primary_(accel|gyro|mag)$")
+class PrimaryComponentSelection(OrderedItemSelection):
+    """Special case of OrderedItemSelection for primary component selection settings, with a different default order and labels."""
+
+    def __init__(self, descriptor):
+        super().__init__(descriptor, active_label="Priority Order")
+
 @register_setting(r"^log_(start|stop)_event$")
 class LogEventSelection(OrderedItemSelection):
     """Same as OrderedItemSelection but with specific configuration"""
 
     def __init__(self, descriptor):
-        super().__init__(descriptor, orderable=False, order_by="value", pin_items={"Command": None})
+        super().__init__(descriptor, orderable=False, order_by="value", 
+                         active_label="Enabled", inactive_label="Disabled", pin_items={"Command": None})
 
 @register_setting(r"^led_rgb$")
 class ColorSetting(DpgSetting):

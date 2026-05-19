@@ -352,7 +352,7 @@ class DpgSettingParamFreeform(DpgSettingParamField):
         self.input = None
 
     def create_gui(self):
-        self.input = dpg.add_input_text(width=100, callback=self._dpg_callback)
+        self.input = dpg.add_input_text(width=200, callback=self._dpg_callback)
         if self.descriptor.unit:
             dpg.add_text(f"{self.descriptor.unit}")
 
@@ -541,7 +541,7 @@ class DpgSettingMenu:
                         subsection = get_subkey(documentation["key"], setting.descriptor.key) or "primary"
                         if subsection not in self.sections[section]["gui"]:
                             secondary = self.sections[section]["gui"]["secondary"]
-                            self.sections[section]["gui"][subsection] = dpg.add_tree_node(label=subsection, parent=secondary, default_open=True)
+                            self.sections[section]["gui"][subsection] = dpg.add_tree_node(label=subsection, parent=secondary, default_open=False)
                 except KeyError:
                     pass
                 dpg.show_item(self.sections[section]["gui"]["header"])
