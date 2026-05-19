@@ -52,18 +52,31 @@ class OrderedItemSelection(DpgSetting):
 
     Items can be dragged freely between the two panels and reordered within
     the active panel.  Implemented using two linked DraggableList instances.
+
+    If pin_items are supplied, these items will be permanently available in the active list and
+    not movable. The set is a dictionary of keys to values. If the value is None, it will attempt
+    to grab the value from the key map of the descriptors valid values for this setting.
     """
 
-    ITEM_WIDTH = 100
+    MIN_ITEM_WIDTH = 100
 
-    def __init__(self, descriptor):
+    def __init__(self, descriptor, orderable=True, order_by="label", pin_items: dict[str, any] = None):
         super().__init__(descriptor)
         self._item_map = self.params[0].descriptor.valid_values  # {label: value}
         self._value_to_key_map = { v: k for k, v in self._item_map.items() }
 
+        self._pinned_items = pin_items
+        if self._pinned_items is not None:
+            for key, value in self._pinned_items.items():
+                if value is None:
+                    self._pinned_items[key] = self._item_map.get(key)
+
         self._active_list: DraggableList | None = None
         self._available_list: DraggableList | None = None
+        self._orderable = orderable
+        self._order_by = order_by
 
+        self._item_width = max(self.MIN_ITEM_WIDTH, max((dpg.get_text_size(label)[0] for label in self._item_map), default=0) + 8)
         self._list_height = len(self._item_map) * DraggableList.ITEM_HEIGHT + DraggableList.PANEL_PADDING
         self._payload_type = f"ois_{descriptor.key}"
 
@@ -76,20 +89,25 @@ class OrderedItemSelection(DpgSetting):
                 dpg.add_text("Priority Order", color=(180, 180, 180))
                 self._active_list = DraggableList(
                     payload_type=self._payload_type,
-                    width=self.ITEM_WIDTH + 16,
+                    width=self._item_width + 16,
                     height=self._list_height,
-                    item_width=self.ITEM_WIDTH,
+                    item_width=self._item_width,
+                    reorderable=self._orderable,
+                    order_by=self._order_by
                 )
                 self._active_list.on_change.subscribe(lambda v: self._on_param_changed(None, v))
+                if self._pinned_items is not None:
+                    self._active_list.pin_items([( key, value ) for key, value in self._pinned_items.items()])
             dpg.add_text(" <-> ")
             with dpg.group():
                 dpg.add_text("Available", color=(180, 180, 180))
                 self._available_list = DraggableList(
                     payload_type=self._payload_type,
-                    width=self.ITEM_WIDTH + 16,
+                    width=self._item_width + 16,
                     height=self._list_height,
-                    item_width=self.ITEM_WIDTH,
-                    reorderable=False
+                    item_width=self._item_width,
+                    reorderable=False,
+                    order_by=self._order_by
                 )
 
         if not self._ui_initialized:
@@ -127,7 +145,7 @@ class OrderedItemSelection(DpgSetting):
         
         available_items = []
         for label, value in self._item_map.items():
-            if value not in active_values:
+            if value not in active_values and label not in self._pinned_items:
                 available_items.append((label, value))
 
         #Update the lists with the correct items
@@ -146,6 +164,13 @@ class OrderedItemSelection(DpgSetting):
             button_theme = setting_structures._RESET_THEME if is_invalid else None
             self._active_list.set_button_theme(button_theme)
             self._available_list.set_button_theme(button_theme)
+
+@register_setting(r"^log_(start|stop)_event$")
+class LogEventSelection(OrderedItemSelection):
+    """Same as OrderedItemSelection but with specific configuration"""
+
+    def __init__(self, descriptor):
+        super().__init__(descriptor, orderable=False, order_by="value", pin_items={"Command": None})
 
 @register_setting(r"^led_rgb$")
 class ColorSetting(DpgSetting):
