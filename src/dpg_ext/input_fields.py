@@ -1,6 +1,7 @@
 import dearpygui.dearpygui as dpg
 from utility import Callback
 import itertools
+from typing import Any
 
 
 class InputNumericPy:
@@ -244,11 +245,14 @@ class DraggableList:
         item_width: int = -1,
         parent: int | str = 0,
         reorderable: bool = True,
+        order_by: str = "label" # "label" or "value", only used if not reorderable
     ):
         self._payload_type = payload_type
         self._item_width = item_width if item_width != -1 else width - 16
         self._reorderable = reorderable
+        self._order_by = order_by
         self._button_theme = None
+
         # Each entry: {"id": int, "label": str, "value": any}
         self._items: list[dict] = []
 
@@ -294,19 +298,40 @@ class DraggableList:
 
     def set_items(self, items: list[tuple]):
         """Replace all items. Each element should be (label, value)."""
-        self._items = [{"id": next(self._id_counter), "label": lbl, "value": val}
-                       for lbl, val in items]
+        pinned_items = [item for item in self._items if item["pinned"]]
+        pinned_keys = [item["label"] for item in pinned_items]
+        self._items = pinned_items
+        for lbl, val in items:
+            if lbl in pinned_keys:
+                continue
+            self._items.append({"id": next(self._id_counter), "label": lbl, "value": val, "pinned": False})
+
+        if not self._reorderable:
+            self._sort()
+
+        self._rebuild()
+
+    def add_items(self, items: list[tuple], pin: bool = False):
+        """Append items to the end of the list."""
+        cur_items = {item["label"]: item for item in self._items}
+        for lbl, val in items:
+
+            #Item already added, only update pin status to true if attempting to pin,
+            if lbl in cur_items:
+                item = cur_items[lbl]
+                if not item["pinned"] and pin:
+                    item["pinned"] = True
+                continue
+            
+            #Item needs added
+            self._items.append({"id": next(self._id_counter), "label": lbl, "value": val, "pinned": pin})
+
         if not self._reorderable:
             self._sort()
         self._rebuild()
 
-    def add_items(self, items: list[tuple]):
-        """Append items to the end of the list."""
-        for lbl, val in items:
-            self._items.append({"id": next(self._id_counter), "label": lbl, "value": val})
-        if not self._reorderable:
-            self._sort()
-        self._rebuild()
+    def pin_items(self, items: list[tuple]):
+        self.add_items(items, pin=True)
 
     def clear(self):
         self._items.clear()
@@ -324,7 +349,7 @@ class DraggableList:
 
     def _sort(self):
         """Sort items alphabetically by label in-place."""
-        self._items.sort(key=lambda item: item["label"])
+        self._items.sort(key=lambda item: item[self._order_by])
 
     def _rebuild(self):
         dpg.delete_item(self._window, children_only=True)
@@ -333,28 +358,33 @@ class DraggableList:
             drop_cb = self._on_drop_item if self._reorderable else None
             pt = self._payload_type if self._reorderable else None
             btn = dpg.add_button(
-                label=f"  {item['label']}  ",
+                label=f"{item['label']}",
                 width=self._item_width,
                 parent=self._window,
                 drop_callback=drop_cb,
                 payload_type=pt,
                 user_data=item["id"],
+                enabled=not item["pinned"]
             )
-            with dpg.drag_payload(
-                parent=btn,
-                drag_data=(self, item["id"]),
-                payload_type=self._payload_type,
-            ) as payload:
-                dpg.add_text(item["label"])
+            if not item["pinned"]:
+                with dpg.drag_payload(
+                    parent=btn,
+                    drag_data=(self, item["id"]),
+                    payload_type=self._payload_type,
+                ) as payload:
+                    dpg.add_text(item["label"])
 
             if self._button_theme is not None:
                 dpg.bind_item_theme(btn, self._button_theme)
-                dpg.bind_item_theme(payload, self._button_theme)
+                if not item["pinned"]:
+                    dpg.bind_item_theme(payload, self._button_theme)
 
     def _take_by_id(self, item_id: int) -> dict:
         """Remove and return the item with the given id."""
         for i, item in enumerate(self._items):
             if item["id"] == item_id:
+                if item["pinned"]:
+                    raise ValueError(f"DraggableList: item with id {item_id} is pinned and cannot be moved")
                 item = self._items.pop(i)
                 self.on_change._notify(self.get_items())
                 return item
