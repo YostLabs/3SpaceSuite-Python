@@ -100,7 +100,7 @@ class OrderedItemSelection(DpgSetting):
                     reorderable=self._orderable,
                     order_by=self._order_by
                 )
-                self._active_list.on_change.subscribe(lambda v: self._on_param_changed(None, v))
+                self._active_list.on_change.subscribe(self.on_active_list_changed)
                 if self._pinned_items is not None:
                     self._active_list.pin_items([( key, value ) for key, value in self._pinned_items.items()])
             dpg.add_text(" <-> ")
@@ -121,6 +121,9 @@ class OrderedItemSelection(DpgSetting):
             value = self._tmp_value or []
             self.set_value(value)
             self._tmp_value = None
+
+    def on_active_list_changed(self, items):
+        self._on_param_changed(None, items)
 
     def get_value(self):
         return ",".join(str(value) for _label, value in self._active_list.get_items())

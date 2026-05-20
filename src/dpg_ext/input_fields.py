@@ -446,9 +446,9 @@ class DraggableList:
 
         #Put item at end of the list it was dropped on and re-render
         self._items.append(item)
-        self.on_change._notify(self.get_items())
         if not self._reorderable:
             self._sort()
+        self.on_change._notify(self.get_items())
         self._rebuild()
 
 
