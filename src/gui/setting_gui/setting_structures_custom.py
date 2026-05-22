@@ -16,7 +16,7 @@ class MatrixSetting(DpgSetting):
     def create_gui(self):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self._add_help_tag()
+            self.create_help_tag()
         with dpg.group(indent=self.INDENT):
             for row in range(3):
                 with dpg.group(horizontal=True):
@@ -36,7 +36,7 @@ class VectorSetting(DpgSetting):
     def create_gui(self):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self._add_help_tag()
+            self.create_help_tag()
         with dpg.group(horizontal=True, indent=self.INDENT):
             for param in self.params:
                 param.create_gui()
@@ -88,7 +88,7 @@ class OrderedItemSelection(DpgSetting):
     def create_gui(self):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self._add_help_tag()
+            self.create_help_tag()
         with dpg.group(horizontal=True, indent=24):
             with dpg.group():
                 dpg.add_text(self._active_label, color=(180, 180, 180))
@@ -103,7 +103,8 @@ class OrderedItemSelection(DpgSetting):
                 self._active_list.on_change.subscribe(self.on_active_list_changed)
                 if self._pinned_items is not None:
                     self._active_list.pin_items([( key, value ) for key, value in self._pinned_items.items()])
-            dpg.add_text(" <-> ")
+            with dpg.group():
+                dpg.add_text(" <-> ")
             with dpg.group():
                 dpg.add_text(self._inactive_label, color=(180, 180, 180))
                 self._available_list = DraggableList(
@@ -114,6 +115,7 @@ class OrderedItemSelection(DpgSetting):
                     reorderable=False,
                     order_by=self._order_by
                 )
+        dpg.add_text("Drag and drop items between lists.", indent=24)
 
         if not self._ui_initialized:
             self._ui_initialized = True
@@ -257,7 +259,7 @@ class StreamingSelection(DpgSetting):
     def create_gui(self):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self._add_help_tag()
+            self.create_help_tag()
             self.failure_text = dpg.add_text("Failed to apply.", color=setting_structures.INVALID_COLOR, show=False)
         self.selection_menu = StreamingOptionSelectionMenu(valid_options=self.params[0].descriptor.valid_values, 
                                                            on_modified_callback=self.on_value_changed)

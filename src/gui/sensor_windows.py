@@ -1102,7 +1102,7 @@ DEFAULT_FIRMWARE_FOLDER = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FO
 DEFAULT_FIRMWARE_KEY = "firmware_folder"
 COMMIT_POPUP_ENABLED_KEY = "confirm_commit"
 
-from gui.setting_gui.setting_structures import DpgSettingMenu
+from gui.setting_gui.setting_structures import DpgSettingMenuGui
 from gui.setting_gui.setting_structures_custom import * #Simply loading this causes the custom types to be registered
 from third_party.file_dialog.fdialog import FileDialog
 import threading
@@ -1195,7 +1195,7 @@ class SensorSettingsWindow(StagedView):
                     dpg.add_button(label="Reload", callback=self.reload_settings)
                 dpg.add_spacer(height=4)
                 with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
-                    self.settings_menu = DpgSettingMenu(device.sensor)
+                    self.settings_menu = DpgSettingMenuGui(device.sensor)
                     self.settings_menu.create_hierarchy()
                     self.settings_menu.create_gui()
 

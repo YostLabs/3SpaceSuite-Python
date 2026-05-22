@@ -10,6 +10,7 @@ from utility import Callback
 import re
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any
 
 import data_charts  # For loading stream/log slot options from the sensor
@@ -87,7 +88,7 @@ class DpgSetting:
         for param in self.params:
             param.on_change.subscribe(self._on_param_changed)
 
-    def _add_help_tag(self):
+    def create_help_tag(self):
         """Add the '?' help tooltip next to the current cursor position, if a description is set."""
         if self.description:
             help_tag = dpg.add_text(" ?", color=(120, 170, 255))
@@ -96,14 +97,29 @@ class DpgSetting:
 
     def create_gui(self):
         with dpg.group(horizontal=True):
-            self._key_label = dpg.add_text(self.descriptor.key)
-            for param in self.params:
-                param.create_gui()
-            self._add_help_tag()
+            label_text = dpg.add_text(self.descriptor.key)
+            self.create_param_gui()
+            self.create_help_tag()
+
+        self.init_gui(label_text)
+
         self._ui_initialized = True
         if self._tmp_value is not None:
             self.set_value(self._tmp_value)
             self._tmp_value = None
+
+    def create_param_gui(self):
+        for param in self.params:
+            param.create_gui()
+
+    def init_gui(self, label_text):
+        """
+        A way of assigning the GUI elements to the required variables after creation.
+        This can be used to manually create the gui instead of calling create_gui and 
+        then assign the UI elements.
+        """
+        self._key_label = label_text
+
 
     def _on_param_changed(self, param: "DpgSettingParamField", value: Any):
         """Called when any param changes; fires the setting-level on_change callback."""
@@ -384,123 +400,337 @@ def get_subkey(pattern_key: str, concrete_key: str) -> str | None:
     digits = concrete_key[len(prefix): len(concrete_key) - len(suffix) if suffix else None]
     return component_type + digits  # e.g. "accel3"
 
+@dataclass
+class SectionData:
+    """Data stored per section in DpgSettingMenu."""
+    settings: list["DpgSetting"] = field(default_factory=list)
+    all_valid: bool = True
+    dirty: bool = False
+
 class DpgSettingMenu:
+    """
+    A data-only settings menu that organises DpgSetting objects into named sections.
+
+    Usage
+    -----
+    - Call ``add_section(name)`` up-front to register sections in a desired order.
+    - Call ``add_setting(setting, category)`` to place a setting into a section.
+      If *category* is omitted the setting goes into ``"Unspecified"``.
+    - The special ``stream_slots`` / ``log_slots`` settings automatically have their
+      ``valid_values`` patched with live sensor options when ``sensor`` is supplied.
+
+    This class intentionally has no GUI code; see ``DpgSettingMenuGui`` for that.
+    """
+
+    _DEFAULT_CATEGORY = "Unspecified"
 
     def __init__(self, sensor: ThreespaceSensor):
-        #Sections will be displayed in the order of this list if they exist.
-        #Any additional sections will be displayed after in an undefined order.
-        self.section_order = [ 
-            "System", 
-            "Power Management", 
-            "Streaming",
-            "Data Logger",
-            "Components",
-            "Filter", 
-            "Embedded", 
-            "Battery", 
-            "BLE", 
-            "GPS",
-            "Debug", 
-            "EEPTS",
-        ]
-
-        self.sections: dict[str, dict[str, dict[str, int]] | dict[str, list[DpgSetting]]] = {}
-        self.settings: list[DpgSetting] = []
-        self._setting_category: dict[str, str] = {}
-        self.documentation = SettingsDocumentationTable()
-
         self.sensor = sensor
 
-    def __update_all_section_themes(self):
-        for section in self.sections:
-            self.__update_section_theme(section)
+        self.sections: dict[str, SectionData] = {}
+        self.documentation = SettingsDocumentationTable()
 
-    def __update_section_theme(self, section_name: str):
-        if section_name not in self.sections:
+    # ------------------------------------------------------------------
+    # Section management
+    # ------------------------------------------------------------------
+
+    def add_section(self, name: str):
+        """Register a section.  If it already exists this is a no-op."""
+        if name in self.sections:
             return
-        section = self.sections[section_name]
-        is_invalid = not section["all_valid"]
-        dirty = section["dirty"]
-        if is_invalid:
-            dpg.bind_item_theme(section["gui"]["header"], INVALID_SECTION_THEME)
-            dpg.bind_item_theme(section["gui"]["primary"], _RESET_THEME)
-            dpg.bind_item_theme(section["gui"]["secondary"], _RESET_THEME)
-        elif dirty:
-            dpg.bind_item_theme(section["gui"]["header"], CACHED_VALUE_SECTION_THEME)
-            dpg.bind_item_theme(section["gui"]["primary"], _RESET_THEME)
-            dpg.bind_item_theme(section["gui"]["secondary"], _RESET_THEME)
-        else:
-            dpg.bind_item_theme(section["gui"]["header"], None)
-            dpg.bind_item_theme(section["gui"]["primary"], None)
-            dpg.bind_item_theme(section["gui"]["secondary"], None)
+        self.sections[name] = SectionData()
+
+    @property
+    def settings(self) -> "list[DpgSetting]":
+        """Flat view of every setting across all sections, in insertion order."""
+        return [s for section in self.sections.values() for s in section.settings]
+
+    # ------------------------------------------------------------------
+    # Adding settings
+    # ------------------------------------------------------------------
+
+    def add_setting(self, setting: "DpgSetting", category: str | None = None):
+        """Add a pre-built DpgSetting to the menu under *category*.
+
+        If *category* is ``None`` the setting goes into ``"Unspecified"``.
+        If the section does not yet exist it is created on demand.
+        """
+        if category is None:
+            category = self._DEFAULT_CATEGORY
+        if category not in self.sections:
+            self.add_section(category)
+
+        # Patch stream/log slot valid_values with live sensor data.
+        if setting.descriptor.key in ("stream_slots", "log_slots"):
+            valid_params = data_charts.get_all_options_from_sensor(self.sensor)
+            setting.descriptor.param_descriptors[0].valid_values = valid_params
+
+        self.sections[category].settings.append(setting)
+        setting.on_change.subscribe(self._on_setting_changed)
+
+    # ------------------------------------------------------------------
+    # Section state queries
+    # ------------------------------------------------------------------
+
+    def is_section_dirty(self, section_name: str) -> bool:
+        """Return True if any setting in *section_name* has an unapplied change."""
+        if section_name not in self.sections:
+            return False
+        return self.sections[section_name].dirty
+
+    def is_section_valid(self, section_name: str) -> bool:
+        """Return True if all settings in *section_name* are currently valid."""
+        if section_name not in self.sections:
+            return True
+        return self.sections[section_name].all_valid
 
     def set_section_invalid(self, section_name: str, is_invalid: bool):
         if section_name not in self.sections:
             return
-        self.sections[section_name]["all_valid"] = not is_invalid
-        self.__update_section_theme(section_name)
+        self.sections[section_name].all_valid = not is_invalid
+        self._on_section_state_changed(section_name)
+
+    # ------------------------------------------------------------------
+    # Internal change handler
+    # ------------------------------------------------------------------
+
+    def _on_section_state_changed(self, section_name: str):
+        """Called whenever a section's validity or dirty state may have changed.
+        Subclasses can override to react (e.g. update themes)."""
+        pass
+
+    def _find_setting(self, key: str) -> "tuple[str, SectionData, DpgSetting] | tuple[None, None, None]":
+        """Return (section_name, section, setting) for the given key, or (None, None, None)."""
+        for section_name, section in self.sections.items():
+            for setting in section.settings:
+                if setting.descriptor.key == key:
+                    return section_name, section, setting
+        return None, None, None
+
+    def _on_setting_changed(self, key: str, new_value: Any):
+        category, section, setting = self._find_setting(key)
+        if category is None:
+            return
+
+        state_changed = False
+
+        # Validity: only rescan if this setting's validity could flip the section state
+        setting_valid = setting.pre_validate()
+        if not setting_valid and section.all_valid:
+            # Section just became invalid
+            section.all_valid = False
+            state_changed = True
+        elif setting_valid and not section.all_valid:
+            # This setting recovered — rescan to see if section is fully valid again
+            if all(s.pre_validate() for s in section.settings):
+                section.all_valid = True
+                state_changed = True
+
+        # Dirty: only rescan if this setting's dirty state could flip the section state
+        setting_dirty = setting.is_dirty()
+        if setting_dirty and not section.dirty:
+            # Section just became dirty
+            section.dirty = True
+            state_changed = True
+        elif not setting_dirty and section.dirty:
+            # This setting cleaned up — rescan to see if section is fully clean
+            if not any(s.is_dirty() for s in section.settings):
+                section.dirty = False
+                state_changed = True
+
+        if state_changed:
+            self._on_section_state_changed(category)
+
+    # ------------------------------------------------------------------
+    # Bulk operations
+    # ------------------------------------------------------------------
+
+    def validate_all(self) -> bool:
+        """Validate every setting and update section validity flags."""
+        all_valid = True
+        for name, section in self.sections.items():
+            section.all_valid = True
+            for setting in section.settings:
+                valid = setting.pre_validate()
+                if not valid:
+                    print(f"Invalid setting: {setting.descriptor.key} in section {name}")
+                section.all_valid = section.all_valid and valid
+                all_valid = all_valid and valid
+            self._on_section_state_changed(name)
+        print("All Valid:", all_valid)
+        return all_valid
+
+    def cache_all_values(self):
+        """Snapshot the current UI values as the cached baseline for all settings."""
+        for setting in self.settings:
+            setting.cache_value()
+        for name, section in self.sections.items():
+            section.dirty = False
+            self._on_section_state_changed(name)
+
+    def apply_all(self, dirty_only: bool = True) -> bool:
+        """Write all (or only dirty) settings to the sensor."""
+        all_success = True
+        for name, section in self.sections.items():
+            section.all_valid = True
+            for setting in section.settings:
+                if dirty_only and not setting.is_dirty():
+                    continue
+                success = setting.apply(self.sensor)
+                if not success:
+                    print(f"Failed to apply setting: {setting.descriptor.key} in section {name}")
+                all_success = all_success and success
+                section.all_valid = section.all_valid and success
+            if section.all_valid:
+                section.dirty = False
+            self._on_section_state_changed(name)
+        return all_success
+
+    def set_setting_enabled(self, key: str, enabled: bool = True):
+        """Enable or disable the input fields for the setting with the given key."""
+        setting = next((s for s in self.settings if s.descriptor.key == key), None)
+        if setting is not None:
+            setting.set_enabled(enabled)
+
+    def reload_values(self):
+        """Re-read all writable settings from the sensor and update the UI values."""
+        writeable_settings = self.sensor.readAllWritableSettings()
+        for setting in self.settings:
+            key = setting.descriptor.key
+            if key in writeable_settings:
+                setting.set_value(writeable_settings[key])
+        self.cache_all_values()
+        self.validate_all()
+
+
+@dataclass
+class SectionDataGui(SectionData):
+    """Extends SectionData with DearPyGui widget IDs for DpgSettingMenuGui.
+
+    ``gui`` maps the fixed keys ``"header"``, ``"primary"``, ``"secondary"``
+    (and any dynamic subsection keys) to DPG item IDs (int) or None before
+    the widgets are created.
+    """
+    gui: dict[str, int | None] = field(
+        default_factory=lambda: {"header": None, "primary": None, "secondary": None}
+    )
+
+
+class DpgSettingMenuGui(DpgSettingMenu):
+    """
+    A DpgSettingMenu that also owns the DearPyGui widgets for each section.
+
+    Default section order matches the TSS-3 documentation layout.  Call
+    ``add_section`` before adding settings to guarantee a specific ordering;
+    any section that does not yet exist when a setting is added will be
+    appended automatically.
+
+    Call ``create_gui()`` once (after all settings have been added) to
+    materialise the collapsing-header hierarchy.
+    """
+
+    DEFAULT_SECTION_ORDER = [
+        "System",
+        "Power Management",
+        "Streaming",
+        "Data Logger",
+        "Components",
+        "Filter",
+        "Embedded",
+        "Battery",
+        "BLE",
+        "GPS",
+        "Debug",
+        "EEPTS",
+    ]
+
+    def __init__(self, sensor: ThreespaceSensor):
+        super().__init__(sensor)
+        self.sections: dict[str, SectionDataGui]  # narrow the base annotation
+        # Pre-register sections in the desired display order.
+        for section in self.DEFAULT_SECTION_ORDER:
+            self.add_section(section)
+
+    # ------------------------------------------------------------------
+    # Section management (extends base to add GUI slot)
+    # ------------------------------------------------------------------
 
     def add_section(self, name: str):
         if name in self.sections:
             return
-        self.sections[name] = { "gui": {"header": None, "primary": None, "secondary": None }, "settings": [], "all_valid": True, "dirty": False }
+        self.sections[name] = SectionDataGui()
 
-    def add_item(self, category: str, descriptor: ThreespaceSettingDescriptor, value: Any, description: str | None):
-        if category not in self.sections:
-            self.add_section(category)
-        setting = DpgSetting.create(descriptor)
-        setting.set_value(value)
-        setting.set_description(description)
-        self.sections[category]["settings"].append(setting)
-        self.settings.append(setting)
-        self._setting_category[descriptor.key] = category
-        setting.on_change.subscribe(self._on_setting_changed)
+    # ------------------------------------------------------------------
+    # Theme helpers
+    # ------------------------------------------------------------------
 
-    def _on_setting_changed(self, key: str, new_value: Any):
-        category = self._setting_category.get(key)
-        if category is None:
+    def _update_all_section_themes(self):
+        for section in self.sections:
+            self._update_section_theme(section)
+
+    def _update_section_theme(self, section_name: str):
+        if section_name not in self.sections:
             return
-        section = self.sections[category]
+        section = self.sections[section_name]
+        if section.gui.get("header") is None:
+            return  # GUI not yet created
+        is_invalid = not section.all_valid
+        dirty = section.dirty
+        if is_invalid:
+            dpg.bind_item_theme(section.gui["header"], INVALID_SECTION_THEME)
+            dpg.bind_item_theme(section.gui["primary"], _RESET_THEME)
+            dpg.bind_item_theme(section.gui["secondary"], _RESET_THEME)
+        elif dirty:
+            dpg.bind_item_theme(section.gui["header"], CACHED_VALUE_SECTION_THEME)
+            dpg.bind_item_theme(section.gui["primary"], _RESET_THEME)
+            dpg.bind_item_theme(section.gui["secondary"], _RESET_THEME)
+        else:
+            dpg.bind_item_theme(section.gui["header"], None)
+            dpg.bind_item_theme(section.gui["primary"], None)
+            dpg.bind_item_theme(section.gui["secondary"], None)
 
-        # Find the setting by key
-        setting = next((s for s in section["settings"] if s.descriptor.key == key), None)
-        if setting is None:
-            return
+    def _on_section_state_changed(self, section_name: str):
+        """Update the section's theme whenever its validity or dirty state changes."""
+        self._update_section_theme(section_name)
 
-        theme_dirty = False
+    # ------------------------------------------------------------------
+    # GUI construction
+    # ------------------------------------------------------------------
 
-        # Validity: only rescan if this setting's validity could flip the section state
-        setting_valid = setting.pre_validate()
-        if not setting_valid and section["all_valid"]:
-            # Section just became invalid
-            section["all_valid"] = False
-            theme_dirty = True
-        elif setting_valid and not section["all_valid"]:
-            # This setting recovered — rescan to see if section is fully valid again
-            if all(s.pre_validate() for s in section["settings"]):
-                section["all_valid"] = True
-                theme_dirty = True
+    def create_gui(self):
+        for section_name, section in self.sections.items():
+            header = dpg.add_collapsing_header(label=section_name, default_open=False, show=False)
+            primary = dpg.add_group(parent=header)
+            secondary = dpg.add_group(parent=header)
+            section.gui["header"] = header
+            section.gui["primary"] = primary
+            section.gui["secondary"] = secondary
+            self._update_section_theme(section_name)
 
-        # Dirty: only rescan if this setting's dirty state could flip the section state
-        setting_dirty = setting.is_dirty()
-        if setting_dirty and not section["dirty"]:
-            # Section just became dirty
-            section["dirty"] = True
-            theme_dirty = True
-        elif not setting_dirty and section["dirty"]:
-            # This setting cleaned up — rescan to see if section is fully clean
-            if not any(s.is_dirty() for s in section["settings"]):
-                section["dirty"] = False
-                theme_dirty = True
+            for setting in section.settings:
+                subsection = "primary"
+                try:
+                    documentation = self.documentation[setting.descriptor.key]
+                    if "%d" in documentation["key"]:
+                        subsection = get_subkey(documentation["key"], setting.descriptor.key) or "primary"
+                        if subsection not in section.gui:
+                            section.gui[subsection] = dpg.add_tree_node(
+                                label=subsection, parent=secondary, default_open=False
+                            )
+                except KeyError:
+                    pass
+                dpg.show_item(section.gui["header"])
+                dpg.push_container_stack(section.gui[subsection])
+                setting.create_gui()
+                dpg.pop_container_stack()
+        self.cache_all_values()
 
-        if theme_dirty:
-            self.__update_section_theme(category)
+    # ------------------------------------------------------------------
+    # Convenience: build hierarchy from sensor (mirrors old create_hierarchy)
+    # ------------------------------------------------------------------
 
     def create_hierarchy(self):
-        #Create all the section headers first to ensure correct ordering.
-        for section in self.section_order:
-            self.add_section(section)
-
+        """Read all writable settings from the sensor and populate the menu."""
         descriptors = self.sensor.get_all_setting_descriptions()
         writeable_settings = self.sensor.readAllWritableSettings()
         writeable_settings.pop("cat", None)
@@ -514,93 +744,8 @@ class DpgSettingMenu:
             except KeyError:
                 category = "Uncategorized"
                 description = None
-            
-            if desc.key in ("stream_slots", "log_slots"):
-                # These are special and need additional info not immediately supplied by the API.
-                # So, we will add this information to the descriptor here.
-                valid_params = data_charts.get_all_options_from_sensor(self.sensor)
-                desc.param_descriptors[0].valid_values = valid_params
 
-            self.add_item(category, desc, value, description)
-
-    def create_gui(self):
-        for section in self.sections:
-            header = dpg.add_collapsing_header(label=section, default_open=False, show=False)
-            primary = dpg.add_group(parent=header)
-            secondary = dpg.add_group(parent=header)
-            self.sections[section]["gui"]["header"] = header
-            self.sections[section]["gui"]["primary"] = primary
-            self.sections[section]["gui"]["secondary"] = secondary
-            self.__update_section_theme(section)
-
-            for setting in self.sections[section]["settings"]:
-                subsection = "primary"
-                try:
-                    documentation = self.documentation[setting.descriptor.key]
-                    if "%d" in documentation["key"]:
-                        subsection = get_subkey(documentation["key"], setting.descriptor.key) or "primary"
-                        if subsection not in self.sections[section]["gui"]:
-                            secondary = self.sections[section]["gui"]["secondary"]
-                            self.sections[section]["gui"][subsection] = dpg.add_tree_node(label=subsection, parent=secondary, default_open=False)
-                except KeyError:
-                    pass
-                dpg.show_item(self.sections[section]["gui"]["header"])
-                dpg.push_container_stack(self.sections[section]["gui"][subsection])
-                setting.create_gui()
-                dpg.pop_container_stack()
-        self.cache_all_values()
-    
-    def validate_all(self):
-        all_valid = True
-        for name, section in self.sections.items():
-            section["all_valid"] = True
-            for setting in section["settings"]:
-                valid = setting.pre_validate()
-                if not valid:
-                    print(f"Invalid setting: {setting.descriptor.key} in section {name}")
-                section["all_valid"] = section["all_valid"] and valid
-                all_valid = all_valid and valid
-        self.__update_all_section_themes()
-        print("All Valid:", all_valid)
-        return all_valid
-    
-    def cache_all_values(self):
-        """Snapshot the current UI values as the cached baseline for all settings."""
-        for setting in self.settings:
-            setting.cache_value()
-        for section in self.sections:
-            self.sections[section]["dirty"] = False
-        self.__update_all_section_themes()
-
-    def apply_all(self, dirty_only=True):
-        all_success = True
-        for name, section in self.sections.items():
-            section["all_valid"] = True
-            for setting in section["settings"]:
-                if dirty_only and not setting.is_dirty():
-                    continue
-                success = setting.apply(self.sensor)  # caches value internally on success
-                if not success:
-                    print(f"Failed to apply setting: {setting.descriptor.key} in section {name}")
-                all_success = all_success and success
-                section["all_valid"] = section["all_valid"] and success
-            if section["all_valid"]:
-                section["dirty"] = False
-        self.__update_all_section_themes()
-        return all_success
-
-    def set_setting_enabled(self, key: str, enabled: bool = True):
-        """Enable or disable the input fields for the setting with the given key."""
-        setting = next((s for s in self.settings if s.descriptor.key == key), None)
-        if setting is not None:
-            setting.set_enabled(enabled)
-
-    def reload_values(self):
-        """Re-read all writable settings from the sensor and update the GUI values."""
-        writeable_settings = self.sensor.readAllWritableSettings()
-        for setting in self.settings:
-            key = setting.descriptor.key
-            if key in writeable_settings:
-                setting.set_value(writeable_settings[key])
-        self.cache_all_values()
-        self.validate_all()
+            setting = DpgSetting.create(desc)
+            setting.set_value(value)
+            setting.set_description(description)
+            self.add_setting(setting, category)
