@@ -1171,6 +1171,10 @@ class SensorSettingsWindow(StagedView):
 
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Data Logging Config Wizard", callback=self.__open_data_logging_wizard)
+                dpg.add_spacer(height=12)
+                dpg.add_separator()
                 dpg.add_spacer(height=2)
                 with dpg.group(horizontal=True):
                     dpg.add_text("Settings")
@@ -1316,6 +1320,10 @@ class SensorSettingsWindow(StagedView):
         else:
             #Unknown Error
             self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
+
+    def __open_data_logging_wizard(self):
+        from gui.setting_gui.config_wizard.datalogging import DataLoggingConfigWizard
+        wizard = DataLoggingConfigWizard(self.device.sensor)
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()

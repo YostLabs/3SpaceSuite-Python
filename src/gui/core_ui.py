@@ -117,7 +117,7 @@ class DynamicViewport(StagedView):
     def __init__(self):
         with dpg.stage(label="Dynamic Viewport Stage") as self._stage_id:
             self.viewport = dpg.add_child_window(label="Viewport Window", height=-2)
-        self.current_view = None
+        self.current_view: StagedView = None
     
     def set_view(self, staged_view: StagedView):
         if self.current_view is not None:
@@ -137,18 +137,23 @@ class DpgWizard:
         with dpg.window(modal=True, no_move=True, no_resize=True, no_close=True, autosize=True, **kwargs) as self.modal:
             pass
         
+        self.page_destination = self.modal
+
         self.visible_handler = None
         if always_centered:
             with dpg.item_handler_registry() as self.visible_handler:
                 dpg.add_item_visible_handler(callback=center_window_handler_callback, user_data=self.modal)
             dpg.bind_item_handler_registry(self.modal, self.visible_handler)
 
+    def set_page_destination(self, destination):
+        self.page_destination = destination
+
     def set_window(self, window: StagedView):
         if self.cur_window is not None:
             self.cur_window.notify_closed(window)
-            dpg.delete_item(self.modal, children_only=True)
+            dpg.delete_item(self.page_destination, children_only=True)
         if window is not None:
-            window.submit(self.modal)
+            window.submit(self.page_destination)
             window.notify_opened(self.cur_window)
         self.cur_window = window
     
@@ -156,3 +161,4 @@ class DpgWizard:
         if self.visible_handler is not None:
             dpg.delete_item(self.visible_handler)
         dpg.delete_item(self.modal)
+
