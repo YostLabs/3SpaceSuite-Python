@@ -13,7 +13,7 @@ from utility import Logger, MainLoopEventQueue
 from dataclasses import dataclass, field
 from typing import Callable
 
-from gui.core_ui import FontManager, DpgWizard
+from gui.core_ui import FontManager, DpgWizardViewer
 import gui.resources.theme_lib as theme_lib, gui.resources.texture_lib as texture_lib
 
 import math
@@ -2647,7 +2647,7 @@ class EeptsConfigWizard:
 
     def __init__(self, device: ThreespaceDevice):
         self.device = device
-        self.wizard = DpgWizard(always_centered=True, label="EEPTS Config")
+        self.wizard = DpgWizardViewer(always_centered=True, label="EEPTS Config")
         self.base_config = EeptsBaseConfigWizardWindow(self)
         self.static_heading_config = EeptsStaticHeadingConfig(self)
 
