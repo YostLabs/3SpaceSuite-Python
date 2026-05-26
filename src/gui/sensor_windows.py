@@ -1428,6 +1428,7 @@ class SensorSettingsWindow(StagedView):
     def delete(self):
         self.close_firmware_selector()
         dpg.delete_item(self.scroll_handler)
+        self.settings_menu.cleanup()
         super().delete()
 
 class SensorCalibrationWindow(StagedView):

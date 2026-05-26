@@ -200,6 +200,11 @@ class DpgSetting:
         for param in self.params:
             param.set_enabled(enabled)
 
+    def cleanup(self):
+        """Clean up any resources (e.g. GUI elements) used by this setting."""
+        for param in self.params:
+            param.cleanup()
+
     @staticmethod
     def create(descriptor: ThreespaceSettingDescriptor):
         for pattern, cls in _SETTING_REGISTRY:
@@ -257,6 +262,9 @@ class DpgSettingParamField(ABC):
 
     @abstractmethod
     def set_enabled(self, enabled: bool):
+        pass
+
+    def cleanup(self):
         pass
 
 class DpgSettingParamEnum(DpgSettingParamField):
@@ -749,3 +757,7 @@ class DpgSettingMenuGui(DpgSettingMenu):
             setting.set_value(value)
             setting.set_description(description)
             self.add_setting(setting, category)
+    
+    def cleanup(self):
+        for setting in self.settings:
+            setting.cleanup()

@@ -340,3 +340,6 @@ class StreamingSelection(DpgSetting):
             dpg.show_item(self.failure_text)
         else:
             dpg.hide_item(self.failure_text)
+
+    def cleanup(self):
+        self.selection_menu.delete()
