@@ -131,10 +131,14 @@ class DynamicViewport(StagedView):
 #Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
 class DpgWizardViewer:
 
-    def __init__(self, always_centered=False, **kwargs):
-        
+    def __init__(self, always_centered=False, modal=True, **kwargs):
+        if "no_close" not in kwargs:
+            kwargs["no_close"] = True
+        if "autosize" not in kwargs:
+            kwargs["autosize"] = True
+
         self.cur_window: StagedView = None
-        with dpg.window(modal=True, no_move=True, no_resize=True, no_close=True, autosize=True, **kwargs) as self.modal:
+        with dpg.window(modal=modal, no_move=True, no_resize=True, no_collapse=True, **kwargs) as self.modal:
             pass
         
         self.page_destination = self.modal
@@ -164,8 +168,8 @@ class DpgWizardViewer:
 
 class DpgWizard(DpgWizardViewer):
 
-    def __init__(self, always_centered=True, **kwargs):
-        super().__init__(always_centered=always_centered, **kwargs)
+    def __init__(self, always_centered=True, modal=True, **kwargs):
+        super().__init__(always_centered=always_centered, modal=modal, **kwargs)
 
         self.page_index = -1
         self.pages: list[DpgWizardPageEmpty] = []
@@ -175,13 +179,17 @@ class DpgWizard(DpgWizardViewer):
     def go_next_page(self):
         if self.page_index < len(self.pages) - 1:
             if self.cur_window is not None:
-                self.cur_window.on_next()
+                response = self.cur_window.on_next()
+                if response is False:
+                    return
             self.set_page(self.page_index + 1)
     
     def go_previous_page(self):
         if self.page_index > 0:
             if self.cur_window is not None:
-                self.cur_window.on_back()
+                response = self.cur_window.on_back()
+                if response is False:
+                    return
             self.set_page(self.page_index - 1)
 
     @property
@@ -239,19 +247,25 @@ class DpgWizardPageEmpty(StagedView):
 
 class DpgWizardPageBasic(DpgWizardPageEmpty):
 
-    def __init__(self, title: str = "Title", next_button_label: str = "Next", back_button_label: str = "Back", auto_finish: bool = True):
+    def __init__(self, title: str = "Title", width=-1, height=-1,
+                 next_button_label: str = "Next", back_button_label: str = "Back", auto_finish: bool = True,
+                 **kwargs):
         super().__init__()
 
         self.title = title
+        self.width = width
+        self.height = height
         self.next_button_label = next_button_label
         self.back_button_label = back_button_label
         self.back_button = None
         self.next_button = None
         self.auto_finish = auto_finish
+
+        self.kwargs = kwargs
     
     def create_view(self):
         dpg.push_container_stack(super().create_view())
-        with dpg.child_window(width=480, height=380, border=False) as self.basic_window:
+        with dpg.child_window(width=self.width, height=self.height, border=False, **self.kwargs) as self.basic_window:
             #Title Space
             if self.title is not None:
                 self.title_text = dpg.add_text(self.title, color=(120, 170, 255))

@@ -103,11 +103,6 @@ class DpgSetting:
 
         self.init_gui(label_text)
 
-        self._ui_initialized = True
-        if self._tmp_value is not None:
-            self.set_value(self._tmp_value)
-            self._tmp_value = None
-
     def create_param_gui(self):
         for param in self.params:
             param.create_gui()
@@ -119,7 +114,11 @@ class DpgSetting:
         then assign the UI elements.
         """
         self._key_label = label_text
+        self._ui_initialized = True
 
+        if self._tmp_value is not None:
+            self.set_value(self._tmp_value)
+            self._tmp_value = None
 
     def _on_param_changed(self, param: "DpgSettingParamField", value: Any):
         """Called when any param changes; fires the setting-level on_change callback."""
@@ -476,6 +475,23 @@ class DpgSettingMenu:
         self.sections[category].settings.append(setting)
         setting.on_change.subscribe(self._on_setting_changed)
 
+    def populate_setting_description(self, setting: "DpgSetting") -> str | None:
+        """Populate *setting* description from documentation and return it.
+
+        Returns ``None`` if no documentation exists for the setting key.
+        """
+        try:
+            description = self.documentation[setting.descriptor.key]["description"]
+        except KeyError:
+            description = None
+        setting.set_description(description)
+        return description
+
+    def populate_all_setting_descriptions(self):
+        """Populate descriptions for all registered settings from documentation."""
+        for setting in self.settings:
+            self.populate_setting_description(setting)
+
     # ------------------------------------------------------------------
     # Section state queries
     # ------------------------------------------------------------------
@@ -600,14 +616,15 @@ class DpgSettingMenu:
         if setting is not None:
             setting.set_enabled(enabled)
 
-    def reload_values(self):
+    def reload_values(self, cache=True):
         """Re-read all writable settings from the sensor and update the UI values."""
         writeable_settings = self.sensor.readAllWritableSettings()
         for setting in self.settings:
             key = setting.descriptor.key
             if key in writeable_settings:
                 setting.set_value(writeable_settings[key])
-        self.cache_all_values()
+        if cache:
+            self.cache_all_values()
         self.validate_all()
 
 
@@ -748,14 +765,12 @@ class DpgSettingMenuGui(DpgSettingMenu):
             try:
                 doc_row = self.documentation[key]
                 category = doc_row["category"]
-                description = doc_row["description"]
             except KeyError:
                 category = "Uncategorized"
-                description = None
 
             setting = DpgSetting.create(desc)
             setting.set_value(value)
-            setting.set_description(description)
+            self.populate_setting_description(setting)
             self.add_setting(setting, category)
     
     def cleanup(self):

@@ -125,7 +125,7 @@ class OrderedItemSelection(DpgSetting):
             self._tmp_value = None
 
     def on_active_list_changed(self, items):
-        self._on_param_changed(None, items)
+        self._on_param_changed(None, self._active_list.get_items())
 
     def get_value(self):
         return ",".join(str(value) for _label, value in self._active_list.get_items())
