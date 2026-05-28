@@ -1,4 +1,5 @@
 import dearpygui.dearpygui as dpg
+from datetime import datetime, timedelta
 from gui.setting_gui.setting_structures import DpgSetting
 from gui.setting_gui.setting_structures_custom import *
 from yostlabs.tss3 import ThreespaceSensor
@@ -110,6 +111,7 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
 
         self.log_style_setting = DpgSetting.create(descriptors["log_style"])
         self.log_style_setting.on_change.subscribe(self.__on_log_style_changed)
+        self.log_style_setting.on_change.subscribe(self.__on_filename_related_setting_changed)
         self.setting_menu.add_setting(self.log_style_setting)
 
         self.log_periodic_capture_setting = DpgSetting.create(descriptors["log_periodic_capture_time"])
@@ -118,15 +120,19 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
         self.setting_menu.add_setting(self.log_rest_time_setting)
 
         self.log_base_filename_setting = DpgSetting.create(descriptors["log_base_filename"])
+        self.log_base_filename_setting.on_change.subscribe(self.__on_filename_related_setting_changed)
         self.setting_menu.add_setting(self.log_base_filename_setting)
 
         self.log_folder_mode_setting = DpgSetting.create(descriptors["log_folder_mode"])
+        self.log_folder_mode_setting.on_change.subscribe(self.__on_filename_related_setting_changed)
         self.setting_menu.add_setting(self.log_folder_mode_setting)
 
         self.log_file_mode_setting = DpgSetting.create(descriptors["log_file_mode"])
+        self.log_file_mode_setting.on_change.subscribe(self.__on_filename_related_setting_changed)
         self.setting_menu.add_setting(self.log_file_mode_setting)
 
         self.log_data_mode_setting = DpgSetting.create(descriptors["log_data_mode"])
+        self.log_data_mode_setting.on_change.subscribe(self.__on_filename_related_setting_changed)
         self.setting_menu.add_setting(self.log_data_mode_setting)
 
         self.setting_menu.populate_all_setting_descriptions()
@@ -166,15 +172,6 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
 
         dpg.add_separator()
 
-        # Base Filename
-        with dpg.group(horizontal=True):
-            self.log_base_filename_setting.create_param_gui()
-            text = dpg.add_text(self.FRIENDLY_LABELS["log_base_filename"])
-            self.log_base_filename_setting.create_help_tag()
-            self.log_base_filename_setting.init_gui(text)
-
-        dpg.add_spacer(height=6)
-
         # Folder Mode
         with dpg.group(horizontal=True):
             self.log_folder_mode_setting.create_param_gui()
@@ -196,16 +193,61 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
             self.log_data_mode_setting.create_help_tag()
             self.log_data_mode_setting.init_gui(text)
 
+        dpg.add_spacer(height=6)
+
+        # Base Filename
+        with dpg.group(horizontal=True):
+            self.log_base_filename_setting.create_param_gui()
+            text = dpg.add_text(self.FRIENDLY_LABELS["log_base_filename"])
+            self.log_base_filename_setting.create_help_tag()
+            self.log_base_filename_setting.init_gui(text)
+
+        dpg.add_spacer(height=6)
+
+        with dpg.group(horizontal=True):
+            dpg.add_text("Example Files:")
+            with dpg.group() as self.filename_example_group:
+                dpg.add_text("data0.csv") #Placeholder, updated in __update_filename_example
+
         dpg.pop_container_stack()
 
         self.setting_menu.reload_values(cache=False)
         self.__update_conditional_fields(self.log_style_setting.get_value())
+        self.__update_filename_example()
 
     def on_next(self):
         all_valid = self.setting_menu.validate_all()
         if not all_valid:
             return False
         return True
+
+    def __on_filename_related_setting_changed(self, key, new_value):
+        self.__update_filename_example()
+
+    def __update_filename_example(self):
+        dpg.delete_item(self.filename_example_group, children_only=True)
+        dpg.push_container_stack(self.filename_example_group)
+        
+        extension = ".csv" if self.log_data_mode_setting.get_value() == 1 else ".bin"
+        basename = self.log_base_filename_setting.get_value()
+
+        #Session Number
+        if self.log_folder_mode_setting.get_value() == 0:
+            session_first_folder= "session-01"
+            session_second_folder = "session-02"       
+        else: #Date Time
+            now = datetime.now()
+            session_first_folder = now.strftime("%Y-%m-%d_%H-%M-%S")
+            session_second_folder = (now + timedelta(days=1, hours=12, minutes=18, seconds=27)).strftime("%Y-%m-%d_%H-%M-%S")
+             
+        dpg.add_text(f"{session_first_folder}/{basename}0{extension}", wrap=0)
+        #Log Style = Periodic && New File Mode
+        if self.log_style_setting.get_value() == 1 and self.log_file_mode_setting.get_value() == 1:
+            dpg.add_text(f"{session_first_folder}/{basename}1{extension}", wrap=0)
+        dpg.add_text(f"{session_second_folder}/{basename}0{extension}", wrap=0)
+        dpg.add_text("...")
+        
+        dpg.pop_container_stack()
 
     def __on_log_style_changed(self, key, new_value):
         self.__update_conditional_fields(new_value)
