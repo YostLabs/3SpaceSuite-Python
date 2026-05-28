@@ -508,14 +508,15 @@ class DataLoggingConfigWizard(DpgWizard):
 
     def finish(self):
         if self.on_completion is not None:
-            self.on_completion()
+            self.on_completion(True)
         return super().finish()
 
     def cancel(self):
         self.__restore_initial_settings()
         if self.on_completion is not None:
-            self.on_completion()
+            self.on_completion(False)
         super().cancel()
+        
 
     #This only occurs on the X being pressed, not on the window closing from the Finish or Cancel buttons
     def __on_window_closed(self, sender, app_data, user_data):

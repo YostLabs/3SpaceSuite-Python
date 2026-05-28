@@ -214,13 +214,16 @@ class DpgWizard(DpgWizardViewer):
     def set_window(self, window: "DpgWizardPageEmpty"):
         super().set_window(window)
 
-    def finish(self):
+    def close(self):
         for page in self.pages:
             page.delete()
         self.delete()
 
+    def finish(self):
+        self.close()
+
     def cancel(self):
-        self.finish()
+        self.close()
 
 class DpgWizardPageEmpty(StagedView):
 
