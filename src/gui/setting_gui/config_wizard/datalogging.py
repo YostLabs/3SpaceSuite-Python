@@ -456,7 +456,7 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
 
 class DataLoggingConfigWizard(DpgWizard):
     
-    def __init__(self, sensor: ThreespaceSensor):
+    def __init__(self, sensor: ThreespaceSensor, on_completion=None):
         #Sadly, this can't be modal because it uses the FilteredDropdown which
         #creates a floating window for the dropdown list. This window does not work
         #when there is a modal window present.
@@ -466,6 +466,7 @@ class DataLoggingConfigWizard(DpgWizard):
                          on_close=self.__on_window_closed)
 
         self.sensor = sensor
+        self.on_completion = on_completion
         self.initial_tracked_values: dict[str, Any] = {}
 
         descriptors = sensor.get_all_setting_descriptions()
@@ -489,8 +490,15 @@ class DataLoggingConfigWizard(DpgWizard):
 
         self.set_page(0)
 
+    def finish(self):
+        if self.on_completion is not None:
+            self.on_completion()
+        return super().finish()
+
     def cancel(self):
         self.__restore_initial_settings()
+        if self.on_completion is not None:
+            self.on_completion()
         super().cancel()
 
     #This only occurs on the X being pressed, not on the window closing from the Finish or Cancel buttons

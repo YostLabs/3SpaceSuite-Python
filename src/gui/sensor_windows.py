@@ -1104,6 +1104,7 @@ COMMIT_POPUP_ENABLED_KEY = "confirm_commit"
 
 from gui.setting_gui.setting_structures import DpgSettingMenuGui
 from gui.setting_gui.setting_structures_custom import * #Simply loading this causes the custom types to be registered
+from gui.setting_gui.config_wizard.datalogging import DataLoggingConfigWizard
 from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
@@ -1316,8 +1317,7 @@ class SensorSettingsWindow(StagedView):
             self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
 
     def __open_data_logging_wizard(self):
-        from gui.setting_gui.config_wizard.datalogging import DataLoggingConfigWizard
-        wizard = DataLoggingConfigWizard(self.device.sensor)
+        wizard = DataLoggingConfigWizard(self.device.sensor, on_completion=self.reload_settings)
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()
