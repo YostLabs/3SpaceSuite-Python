@@ -46,38 +46,52 @@ Power Management,pm_mode,"Sets processor speed and component data rates based on
 Power Management,pm_idle_enabled,"Enables CPU power saving during idle time. 
 1: Enabled (Default)
 0: Disabled",R/W,U8,
-Streaming,stream_slots,Configures data output slots for streaming mode. Accepts a list of up to 16 commands (comma seperated U8). Every streaming iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
+Streaming,stream_slots,Configures data output slots for streaming mode. Accepts a list of up to 16 commands (comma separated U8). Every streaming iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
 Streaming,stream_interval,Time in microseconds between each streaming output. Values lower than 500 will be clamped to 500.,R/W,U64,stream_hz
 Streaming,stream_hz,Output rate when streaming in hertz. Max value of 2000. Will clamp to closest microsecond value.,R/W,Float,stream_interval
 Streaming,stream_duration,Length of time to stream in seconds. Duration of 0 will stream until stopped.,R/W,Float,
 Streaming,stream_delay,Length of time in seconds the sensor will wait after recieving the start streaming command to return the first data packet.,R/W,Float,
 Streaming,stream_mode,Controls whether stream_duration or stream_count will be used to end streaming.,R/W,U8,
 Streaming,stream_count,A value greater than 1. Streaming will end after this many samples are output.,R/W,U64,
-Streaming,streamable_commands,A comma seperated list of all available streaming commands,R,String,
+Streaming,streamable_commands,A comma separated list of all available streaming commands,R,String,
 Debug,debug_level,"Bitfield representing the currently active debug levels.
 0x1: Error
 0x2: Warning
 0x4: Information
 
 Default Value: 0x1",R/W,U32,
-Debug,debug_module,Bitfield representing the currently enabled debug module. For full list of available module see Debug Section.,R/W,U32,
+Debug,debug_module,Bitfield representing the currently enabled debug module. For full list of available modules see the Debug Section of the user manual.,R/W,U32,
 Debug,debug_mode,"0: All debug messages will be buffered until Command 127 is called.
-1: Immedieate output for all debug messages. Will also output any buffered messages.",R/W,U8,
+1: Immediate output for all debug messages. Will also output any buffered messages.",R/W,U8,
 Debug,debug_led,Enable Debug LED event when debug messages are available.,R/W,U8,
 Debug,debug_fault,"When set to 1, if a hard fault occurs the sensor will enter a debug state.",R/W,U8,
 Debug,debug_wdt,"When set to 1, if a WDT occurs the sensor will enter a debug state.",R/W,U8,
-Filter,axis_order,"View the ""Axis Management"" section for details.",R/W,String,
-Filter,axis_order_c,"View the ""Axis Management"" section for details.",R/W,String,
+Filter,axis_order,"Configures how the axes map to the physical sensor using XYZ terminology.
+Example values:
+XYZ
+ZYX
+Y-XZ
+View the ""Axis Management"" section of the user manual for more details.",R/W,String,
+Filter,axis_order_c,"Configures how the axes map to the physical sensor using compass direction terminology.
+Example values:
+NED
+ENU
+DSW
+View the ""Axis Management"" section of the user manual for details.",R/W,String,
 Filter,axis_offset_enabled,"If enabled, applied offset will affect the data axes as well instead of only the orientation.",R/W,U8,
 Filter,euler_order,The decomposition order used when retrieving orientation as Euler Angles.,R/W,String,
 Filter,update_rate_filter,Reads the amount of time taken by the last filter update step in microseconds.,R,U32,
 Filter,update_rate_sms,Reads the amount of time taken by the last component manager update in microseconds.,R,U32,
-Filter,offset,"View the ""Tare and Offset"" section for details.",R/W,Float Float Float Float,
-Filter,base_offset,"View the ""Tare and Offset"" section for details.",R/W,Float Float Float Float,
-Filter,tare_quat,"View the ""Tare and Offset"" section for details.",R/W,Float Float Float Float,
-Filter,tare_auto_base,"View the ""Tare and Offset"" section for details.",R/W,U8,
-Filter,base_tare,"View the ""Tare and Offset"" section for details.",R/W,Float Float Float Float,
-Filter,tare_mat,"View the ""Tare and Offset"" section for details.",R/W,Float Float Float Float Float Float Float Float Float,
+Filter,offset,"The offset quaternion used in the computation of the tared orientation. View the ""Tare and Offset"" section of the user manual for more details.",R/W,Float Float Float Float,
+Filter,base_offset,"The reference offset quaternion used when sending the ""Offset with Current Orientation"" command. View the ""Tare and Offset"" section for more details.",R/W,Float Float Float Float,
+Filter,tare_quat,"The tare quaternion used in the computation of the tared orientation. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float,
+Filter,tare_auto_base,"If enabled, the base_tare will automatically be set when offsetting the sensor with the current orientation so that taring results in the identity orientation. View the ""Tare and Offset"" section for more details.
+",R/W,U8,
+Filter,base_tare,"The reference tare quaternion used when sending the ""Tare with Current Orientation"" command. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float,
+Filter,tare_mat,"The tare value used in the computation of the tared orientation, but in matrix form. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float Float Float Float Float Float,
 Filter,running_avg_orient,A smoothing factor in the range 0 to 1. ,R/W,Float,
 Filter,filter_mode,"The method of orientation calculation:
 0 - IMU Mode
@@ -310,9 +324,9 @@ Data Logger,power_initial_hold_state,The initial value power_hold_state gets set
 Data Logger,fs_cfg_load,Applies the settings contained in the <Root>:/CONFIG/sensor.cfg file.,W,,
 Data Logger,fs_msc_enabled,Enable or disable the mass storage controller.,R/W,U8,
 Data Logger,fs_msc_auto,"View the ""Auto Mass Storage Control"" section for details.",R/W,U8,
-Data Logger,log_slots,Configures data output slots for logging. Accepts a list of up to 16 commands (comma seperated U8). Every log iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
+Data Logger,log_slots,Configures data output slots for logging. Accepts a list of up to 16 commands (comma separated U8). Every log iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
 Data Logger,log_interval,Set the time between data logging packets in microseconds.,R/W,U64,
-Data Logger,log_hz,Set the data logging rate in Hertz.,R/W,Float,
+Data Logger,log_hz,Set the data logging rate in samples per second (Hz).,R/W,Float,
 Data Logger,log_start_event,"Enum for the logging start event. 
 0- Button
 1- Accel Event Threshold
@@ -320,8 +334,8 @@ Data Logger,log_start_event,"Enum for the logging start event.
 3- On GPS Fix
 4- On Power
 
-Pass in any combination as a comma seperated list.",R/W,String,
-Data Logger,log_start_motion_threshold,Threshold value used for the Accel Event Threshold start event.,R/W,Float,
+Pass in any combination as a comma separated list.",R/W,String,
+Data Logger,log_start_motion_threshold,Threshold value used for the Accel Event Threshold start event. Logging starts when the change in acceleration magnitude within a 0.1 second window exceeds this value.,R/W,Float,
 Data Logger,log_stop_event,"Enum for the logging stop event.
 0- Button
 1- Accel Event Threshold
@@ -330,21 +344,21 @@ Data Logger,log_stop_event,"Enum for the logging stop event.
 4- Capture Count
 5- Period Count
 
-Pass in any combination as a comma seperated list.",R/W,String,
-Data Logger,log_stop_motion_threshold,Threshold value used for the Accel Event Threshold stop event.,R/W,Float,
-Data Logger,log_stop_motion_delay,Time the motion value needs to be below the motion threshold for the stop event to trigger.,R/W,Float,
-Data Logger,log_stop_count,Value used for the Capture Count stop event.,R/W,U64,
-Data Logger,log_stop_duration,Value used for the Duration stop event.,R/W,Float,
-Data Logger,log_stop_period_count,Number of periods that need to happen before the Period Count stop event will trigger.,R/W,U32,
+Pass in any combination as a comma separated list.",R/W,String,
+Data Logger,log_stop_motion_threshold,Threshold value used for the Accel Event Threshold stop event. Logging stops when the change in acceleration magnitude within a 0.1 second window is continously beneath this value for the time specified by log_stop_motion_delay.,R/W,Float,
+Data Logger,log_stop_motion_delay,Time in seconds the change in acceleration magnitude within a 0.1 second window needs to be below the motion threshold for the stop event to trigger.,R/W,Float,
+Data Logger,log_stop_count,Value used for the Capture Count stop event. Logging stops when this number of samples have been gathered.,R/W,U64,
+Data Logger,log_stop_duration,"Value used for the Duration stop event. Logging stops when this duration, in seconds, has elapsed.",R/W,Float,
+Data Logger,log_stop_period_count,Value used for the Period Count stop event. Logging stops when this number of periods have been logged.,R/W,U32,
 Data Logger,log_style,"Enum for determining the method of data logging.
-0- Continous - Single logging session for each capture session.
-1- Periodic - Multiple logging session for a capture session. ",R/W,U8,
+0- Continous - Single logging period for each capture session.
+1- Periodic - Multiple logging periods for a capture session. ",R/W,U8,
 Data Logger,log_periodic_capture_time,Amount of time each period will log while in periodic mode.,R/W,Float,
 Data Logger,log_periodic_rest_time,Time to wait between each capture period.,R/W,Float,
-Data Logger,log_base_filename,Filename used for every data file.,R/W,String,
+Data Logger,log_base_filename,"Base filename used for each data file. The final filename will be ""{log_base_filename}{N}.[csv|bin]"" where N is an incrementing file count and csv or bin is based on log_data_mode. N starts at 0 during a session for all logging modes, and will increase for each additional file when log_file_mode is set to ""New"" instead of ""Append"".",R/W,String,
 Data Logger,log_file_mode,"Enum for how new data is logged during logging sessions in periodic mode.
-0- Append- Append data to already created capture session file.
-1- New- Create a new log file for every logging session/period",R/W,U8,
+0- Append - Append data from subsequent perioids to a single capture session file.
+1- New - Create a new log file for every period during the logging session.",R/W,U8,
 Data Logger,log_data_mode,"Enum for determining ascii or binary logging.
 1- Ascii 
 2- Binary",R/W,U8,
@@ -374,7 +388,7 @@ rtc_hour,
 rtc_minute,
 rtc_second
 "
-Battery,bat_chg_rate,"Typical charge rate in mAh. Note that the set charge rate may differ from the actual charge rate to some degree. If different, a debug message will be generated when this is set.",R/W,U16,
+Battery,bat_chg_rate,"Typical charge rate in mA. Note that the set charge rate may differ from the actual charge rate to some degree. If different, a debug message will be generated when this is set.",R/W,U16,
 Battery,bat_cold_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,R/W,Float Float,
 Battery,bat_warm_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,"R/W
 ",Float Float,
@@ -390,7 +404,7 @@ BLE,ble_connected,"Returns the connection status of the BLE module.
 -1: Not available",R,S8,
 BLE,ble_disconnect,Disconnects from whatever BLE device is connected to the sensor.,W,,
 GPS,gps_standby,"If set to 1, the GPS will be in standby mode. If set to 0, the GPS will be active. 
-Defaults to 1.",R/W,U8,
+Defaults to 0.",R/W,U8,
 GPS,gps_led,"If set to 1, the led will appear green while the GPS has a fix.",R/W,U8,
 Deprecated_Hidden,sd_cfg_load,Applies the settings contained in the <Root>:/CONFIG/sensor.cfg file.,W,,
 Deprecated_Hidden,sd_msc_enabled,Enable or disable the mass storage controller.,R/W,U8,
