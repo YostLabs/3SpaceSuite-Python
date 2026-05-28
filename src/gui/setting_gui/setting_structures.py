@@ -158,6 +158,7 @@ class DpgSetting:
 
     def _update_dirty_theme(self, *args):
         """Color the key label yellow when dirty, white when clean."""
+        if not self._ui_initialized: return
         if self._key_label is None:
             return
         if self.is_dirty():
@@ -616,16 +617,20 @@ class DpgSettingMenu:
         if setting is not None:
             setting.set_enabled(enabled)
 
-    def reload_values(self, cache=True):
+    def reload_values(self, cache=True, validate=True, current_values: dict[str, Any] | None = None):
         """Re-read all writable settings from the sensor and update the UI values."""
-        writeable_settings = self.sensor.readAllWritableSettings()
+        if current_values is None:
+            current_values = self.sensor.readAllWritableSettings()
         for setting in self.settings:
             key = setting.descriptor.key
-            if key in writeable_settings:
-                setting.set_value(writeable_settings[key])
+            if key in current_values:
+                setting.set_value(current_values[key])
+            else:
+                print("Failed to find key result for setting:", key)
         if cache:
             self.cache_all_values()
-        self.validate_all()
+        if validate:
+            self.validate_all()
 
 
 @dataclass

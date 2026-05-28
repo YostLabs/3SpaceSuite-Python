@@ -1,5 +1,6 @@
 import dearpygui.dearpygui as dpg
 from datetime import datetime, timedelta
+from typing import Any
 from gui.setting_gui.setting_structures import DpgSetting
 from gui.setting_gui.setting_structures_custom import *
 from yostlabs.tss3 import ThreespaceSensor
@@ -11,7 +12,7 @@ class LogDataSelectionPage(DpgWizardPageBasic):
 
     HEADER_SETTINGS = ["header_status", "header_timestamp", "header_echo", "header_checksum", "header_serial", "header_length"]
 
-    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], **kwargs):
+    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], current_values: dict[str, Any] | None = None, **kwargs):
         super().__init__(title="Data Selection", **kwargs)
 
         self.descriptors = descriptors
@@ -36,6 +37,8 @@ class LogDataSelectionPage(DpgWizardPageBasic):
                 label = key.split('_')[1].capitalize()
                 self.header_settings.append((label, setting))
                 self.setting_menu.add_setting(setting)
+
+        self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
 
     def create_view(self):
         dpg.push_container_stack(super().create_view())
@@ -78,8 +81,6 @@ class LogDataSelectionPage(DpgWizardPageBasic):
 
         dpg.pop_container_stack()
 
-        self.setting_menu.reload_values(cache=False)
-
     def on_next(self):
         all_valid = self.setting_menu.validate_all()
         if not all_valid:
@@ -102,7 +103,7 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
         "log_data_mode": "Data Mode",
     }
 
-    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], **kwargs):
+    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], current_values: dict[str, Any] | None = None, **kwargs):
         super().__init__(title="Format Selection", **kwargs)
         self.descriptors = descriptors
 
@@ -136,6 +137,8 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
         self.setting_menu.add_setting(self.log_data_mode_setting)
 
         self.setting_menu.populate_all_setting_descriptions()
+
+        self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
 
         # For hiding/showing conditional fields
         self.periodic_group = None
@@ -211,7 +214,6 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
 
         dpg.pop_container_stack()
 
-        self.setting_menu.reload_values(cache=False)
         self.__update_conditional_fields(self.log_style_setting.get_value())
         self.__update_filename_example()
 
@@ -292,7 +294,7 @@ class LogTriggerSelectionPage(DpgWizardPageBasic):
         "log_stop_period_count",
     ]
     
-    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], **kwargs):
+    def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], current_values: dict[str, Any] | None = None, **kwargs):
         super().__init__(title="Trigger Selection", **kwargs)
 
         self.descriptors = descriptors
@@ -322,6 +324,8 @@ class LogTriggerSelectionPage(DpgWizardPageBasic):
 
         self.start_dependent_rows: dict[str, int] = {}
         self.stop_dependent_rows: dict[str, int] = {}
+
+        self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
 
     @classmethod
     def __ensure_disabled_row_theme(cls):
@@ -383,8 +387,6 @@ class LogTriggerSelectionPage(DpgWizardPageBasic):
 
         dpg.pop_container_stack()
 
-        self.setting_menu.reload_values(cache=False)
-
         self.__update_start_event_enabled_state(self.start_event_setting.get_value())
         self.__update_stop_event_enabled_state(self.stop_event_setting.get_value())
 
@@ -445,10 +447,11 @@ class DataLoggingConfigWizard(DpgWizard):
                          modal=False, no_close=False)
 
         descriptors = sensor.get_all_setting_descriptions()
+        current_values = sensor.readAllWritableSettings()
 
-        self.add_page(LogDataSelectionPage(sensor, descriptors))
-        self.add_page(LogFormatSelectionPage(sensor, descriptors))
-        self.add_page(LogTriggerSelectionPage(sensor, descriptors))
+        self.add_page(LogDataSelectionPage(sensor, descriptors, current_values=current_values))
+        self.add_page(LogFormatSelectionPage(sensor, descriptors, current_values=current_values))
+        self.add_page(LogTriggerSelectionPage(sensor, descriptors, current_values=current_values))
 
         self.set_page(0)
 

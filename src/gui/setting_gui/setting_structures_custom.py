@@ -128,6 +128,8 @@ class OrderedItemSelection(DpgSetting):
         self._on_param_changed(None, self._active_list.get_items())
 
     def get_value(self):
+        if self._tmp_value is not None:
+            return self._tmp_value
         return ",".join(str(value) for _label, value in self._active_list.get_items())
 
     def set_value(self, value):
