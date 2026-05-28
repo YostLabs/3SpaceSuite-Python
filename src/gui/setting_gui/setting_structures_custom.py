@@ -13,10 +13,11 @@ class MatrixSetting(DpgSetting):
 
     INDENT = 24
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self.create_help_tag()
+            if help_tag:
+                self.create_help_tag()
         with dpg.group(indent=self.INDENT):
             for row in range(3):
                 with dpg.group(horizontal=True):
@@ -33,10 +34,11 @@ class VectorSetting(DpgSetting):
 
     INDENT = 24
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self.create_help_tag()
+            if help_tag:
+                self.create_help_tag()
         with dpg.group(horizontal=True, indent=self.INDENT):
             for param in self.params:
                 param.create_gui()
@@ -85,10 +87,11 @@ class OrderedItemSelection(DpgSetting):
         self._list_height = len(self._item_map) * DraggableList.ITEM_HEIGHT + DraggableList.PANEL_PADDING
         self._payload_type = f"ois_{descriptor.key}"
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self.create_help_tag()
+            if help_tag:
+                self.create_help_tag()
         with dpg.group(horizontal=True, indent=24):
             with dpg.group():
                 dpg.add_text(self._active_label, color=(180, 180, 180))
@@ -200,17 +203,15 @@ class ColorSetting(DpgSetting):
         self.color_picker = None
         self.description = description
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
             self.color_picker = dpg.add_color_edit(
                 label="", default_value=self.cached_value, 
                 no_alpha=True, display_type=dpg.mvColorEdit_float,
                 width=200, callback=lambda: self._on_param_changed(None, self.get_value()))
-            if self.description:
-                help_tag = dpg.add_text(" ?", color=(120, 170, 255))
-                with dpg.tooltip(parent=help_tag):
-                    dpg.add_text(self.description, wrap=700)
+            if help_tag:
+                self.create_help_tag()
 
     def get_value(self):
         """
@@ -258,10 +259,11 @@ class StreamingSelection(DpgSetting):
         super().__init__(descriptor)
         self.selection_menu: StreamingOptionSelectionMenu = None
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             self._key_label = dpg.add_text(self.descriptor.key)
-            self.create_help_tag()
+            if help_tag:
+                self.create_help_tag()
             self.failure_text = dpg.add_text("Failed to apply.", color=setting_structures.INVALID_COLOR, show=False)
         self.selection_menu = StreamingOptionSelectionMenu(valid_options=self.params[0].descriptor.valid_values, 
                                                            on_modified_callback=self.on_value_changed)

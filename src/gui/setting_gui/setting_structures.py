@@ -95,12 +95,12 @@ class DpgSetting:
             with dpg.tooltip(parent=help_tag):
                 dpg.add_text(self.description, wrap=700)
 
-    def create_gui(self):
+    def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
             label_text = dpg.add_text(self.descriptor.key)
             self.create_param_gui()
-            self.create_help_tag()
-
+            if help_tag:
+                self.create_help_tag()
         self.init_gui(label_text)
 
     def create_param_gui(self):
