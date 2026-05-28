@@ -111,23 +111,23 @@ class PopupWindow:
         """
         dpg.configure_item(self.window, autosize=enabled)
 
-    def set_confirm_box(self, text: str = "", title: str="Confirmation", on_cancel: Callable = None, on_confirm: Callable = None, close_on_selection: bool = True, confirm_text="Confirm", cancel_text="Cancel"):
+    def set_confirm_box(self, text: str = "", title: str="Confirmation", on_cancel: Callable = None, on_confirm: Callable = None, confirm_text="Confirm", cancel_text="Cancel", close_on_confirm=True, close_on_cancel=True, confirm_kwargs={}, cancel_kwargs={}):
         self.clear()
         dpg.configure_item(self.window, label=title)
         if text:
             self.add_text(text)
 
-        self.add_buttons([PopupButton(label=confirm_text, callback=on_confirm, close_on_select=True), 
-                          PopupButton(label=cancel_text, callback=on_cancel, close_on_select=True)])
+        self.add_buttons([PopupButton(label=confirm_text, callback=on_confirm, close_on_select=close_on_confirm, **confirm_kwargs), 
+                          PopupButton(label=cancel_text, callback=on_cancel, close_on_select=close_on_cancel, **cancel_kwargs)])
         
         return self
     
-    def set_message_box(self, text: str = "", title: str = ""):
+    def set_message_box(self, text: str = "", title: str = "", callback: Callable = None, close_on_press: bool = True, button_text: str = "Ok", button_kwargs: dict = {}):
         self.clear()
         dpg.configure_item(self.window, label=title)
         dpg.configure_item(self.window, autosize=True)
         self.add_text(text)
-        self.add_buttons([PopupButton("Ok", close_on_select=True)])
+        self.add_buttons([PopupButton(button_text, close_on_select=close_on_press, callback=callback, **button_kwargs)])
 
         return self
 

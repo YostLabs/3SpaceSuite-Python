@@ -1297,27 +1297,77 @@ class SensorSettingsWindow(StagedView):
             settings[COMMIT_POPUP_ENABLED_KEY] = enabled
             GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
-    def __do_commit(self):
-
+    def __do_commit(self, callback: Callable[[bool], None] = None):
         try:
             err = self.device.commit_settings()
         except Exception as e:
             self.device.report_error(e)
-            return
-        
+            err = None
+
+        # Handle success
         if err == 0:
-            #Success!
-            self.popup.set_message_box("Successfully commited settings.", title="Success")
+            if callback is None:
+                self.popup.set_message_box("Successfully commited settings.", title="Success")
+            else:
+                self.popup.set_message_box(
+                    "Successfully commited settings.",
+                    title="Success",
+                    callback=lambda: callback(True),
+                    close_on_press=False,
+                    button_kwargs={"width": 60}
+                )
+            return
+
+        # Build error message first, then prompt retry in a separate step
+        if err is None:
+            error_text = "Failed to commit settings. See error log for details."
         elif err == threespace_consts.THREESPACE_ERR_COMMIT_FS_LOCKED:
-            #SD card was locked
             self.popup.configure(width=450)
-            self.popup.set_message_box("Failed to commit settings to the SD Card.\nEject the mass storage device and try again.", title="Error")
+            error_text = "Failed to commit settings to the SD Card.\nEject the mass storage device and try again."
         else:
-            #Unknown Error
-            self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
+            error_text = f"Err commiting settings: {err}"
+
+        self.popup.set_message_box(
+            error_text,
+            title="Commit Failed",
+            callback=lambda: self.__on_commit_error_acknowledged(callback),
+            close_on_press=False,
+            button_kwargs={"width": 60}
+        )
+
+    def __on_commit_error_acknowledged(self, callback: Callable[[bool], None] = None):
+        self.popup.configure(width=350)
+        self.popup.set_confirm_box(
+            title="Try Again?",
+            text="Would you like to try committing settings again?",
+            confirm_text="Retry",
+            cancel_text="Close",
+            on_confirm=lambda: self.__do_commit(callback=callback),
+            on_cancel=(None if callback is None else lambda: callback(False)),
+            close_on_confirm=False,
+            close_on_cancel=True,
+            confirm_kwargs={"width": 60},
+            cancel_kwargs={"width": 60}
+        )
 
     def __open_data_logging_wizard(self):
-        wizard = DataLoggingConfigWizard(self.device.sensor, on_completion=self.reload_settings)
+        DataLoggingConfigWizard(self.device.sensor, on_completion=self.__on_data_logging_wizard_closed)
+
+    def __on_data_logging_wizard_closed(self, completed: bool):
+        self.reload_settings()
+
+        if not completed:
+            return
+        
+        self.popup = dpg_ext.create_confirm_popup(
+            title="Commit Settings", 
+            text="Would you like to commit these settings to the sensor?",
+            confirm_text="Yes", cancel_text="No",
+            on_confirm=self.__do_commit,
+            close_on_confirm=False,
+            confirm_kwargs={"width": 60},
+            cancel_kwargs={"width": 60}
+        )
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()
