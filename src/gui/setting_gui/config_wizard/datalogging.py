@@ -8,7 +8,13 @@ from gui.core_ui import DpgWizard, DpgWizardPageBasic
 
 from gui.setting_gui.setting_structures import DpgSettingMenu
 
-class LogDataSelectionPage(DpgWizardPageBasic):
+class DpgSettingWizardPageBasic(DpgWizardPageBasic):
+
+    def __init__(self, title: str, **kwargs):
+        super().__init__(title=title, **kwargs)
+        self.setting_menu: DpgSettingMenu | None = None
+
+class LogDataSelectionPage(DpgSettingWizardPageBasic):
 
     HEADER_SETTINGS = ["header_status", "header_timestamp", "header_echo", "header_checksum", "header_serial", "header_length"]
 
@@ -81,9 +87,15 @@ class LogDataSelectionPage(DpgWizardPageBasic):
 
         dpg.pop_container_stack()
 
+        #Update the state of the header bit checkboxes based on the current value of the header enabled setting
+        self.__on_header_enabled_changed(None, self.header_enabled_setting.get_value())
+
     def on_next(self):
         all_valid = self.setting_menu.validate_all()
         if not all_valid:
+            return False
+        all_applied = self.setting_menu.apply_all(dirty_only=False, cache_values=False)
+        if not all_applied:
             return False
         return True
 
@@ -91,7 +103,7 @@ class LogDataSelectionPage(DpgWizardPageBasic):
         dpg.configure_item(self.header_bits, show=bool(new_value))
             
 
-class LogFormatSelectionPage(DpgWizardPageBasic):
+class LogFormatSelectionPage(DpgSettingWizardPageBasic):
     
     FRIENDLY_LABELS = {
         "log_style": "Log Style",
@@ -221,6 +233,9 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
         all_valid = self.setting_menu.validate_all()
         if not all_valid:
             return False
+        all_applied = self.setting_menu.apply_all(dirty_only=False, cache_values=False)
+        if not all_applied:
+            return False
         return True
 
     def __on_filename_related_setting_changed(self, key, new_value):
@@ -258,7 +273,7 @@ class LogFormatSelectionPage(DpgWizardPageBasic):
         #If using periodic mode, show the periodic capture/rest time settings. Otherwise, hide them.
         dpg.configure_item(self.periodic_group, show=log_style_value == 1)
 
-class LogTriggerSelectionPage(DpgWizardPageBasic):
+class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
 
     DISABLED_ROW_THEME = None
 
@@ -394,6 +409,9 @@ class LogTriggerSelectionPage(DpgWizardPageBasic):
         all_valid = self.setting_menu.validate_all()
         if not all_valid:
             return False
+        all_applied = self.setting_menu.apply_all(dirty_only=False, cache_values=False)
+        if not all_applied:
+            return False
         return True
 
     def __on_start_event_changed(self, key: str, new_value: str):
@@ -444,14 +462,45 @@ class DataLoggingConfigWizard(DpgWizard):
         #when there is a modal window present.
         super().__init__(label="Data Logging Setup", 
                          min_size=(550, 525), max_size=(550, 800),
-                         modal=False, no_close=False)
+                         modal=False, no_close=False,
+                         on_close=self.__on_window_closed)
+
+        self.sensor = sensor
+        self.initial_tracked_values: dict[str, Any] = {}
 
         descriptors = sensor.get_all_setting_descriptions()
         current_values = sensor.readAllWritableSettings()
 
-        self.add_page(LogDataSelectionPage(sensor, descriptors, current_values=current_values))
-        self.add_page(LogFormatSelectionPage(sensor, descriptors, current_values=current_values))
-        self.add_page(LogTriggerSelectionPage(sensor, descriptors, current_values=current_values))
+        data_selection_page = LogDataSelectionPage(sensor, descriptors, current_values=current_values)
+        format_selection_page = LogFormatSelectionPage(sensor, descriptors, current_values=current_values)
+        trigger_selection_page = LogTriggerSelectionPage(sensor, descriptors, current_values=current_values)
+
+        self.add_page(data_selection_page)
+        self.add_page(format_selection_page)
+        self.add_page(trigger_selection_page)
+        
+        setting_pages: list[DpgSettingWizardPageBasic] = [data_selection_page, format_selection_page, trigger_selection_page]
+
+        #Save off the initial values of settings affected by this wizard so they can be restored if the user cancels.
+        tracked_keys = set()
+        for page in setting_pages:
+            tracked_keys.update(setting.descriptor.key for setting in page.setting_menu.settings)
+        self.initial_tracked_values = {key: current_values[key] for key in tracked_keys if key in current_values}
 
         self.set_page(0)
+
+    def cancel(self):
+        self.__restore_initial_settings()
+        super().cancel()
+
+    #This only occurs on the X being pressed, not on the window closing from the Finish or Cancel buttons
+    def __on_window_closed(self, sender, app_data, user_data):
+        self.cancel()
+
+    def __restore_initial_settings(self):
+        for key, value in self.initial_tracked_values.items():
+            try:
+                self.sensor.write_settings(**{key: value})
+            except Exception:
+                pass
 
