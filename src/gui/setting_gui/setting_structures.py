@@ -185,13 +185,13 @@ class DpgSetting:
         for param in self.params:
             param.mark_invalid(is_invalid)
 
-    def apply(self, sensor: ThreespaceSensor):
+    def apply(self, sensor: ThreespaceSensor, cache_value: bool = True):
         try:
             err, num_successes = sensor.write_settings(**{self.descriptor.key: self.get_value()})
         except:
             err = -256
         self.mark_invalid(err != 0)
-        if not err:
+        if not err and cache_value:
             self.cache_value()
         return not err
 
@@ -593,7 +593,7 @@ class DpgSettingMenu:
             section.dirty = False
             self._on_section_state_changed(name)
 
-    def apply_all(self, dirty_only: bool = True) -> bool:
+    def apply_all(self, dirty_only: bool = True, cache_values: bool = True) -> bool:
         """Write all (or only dirty) settings to the sensor."""
         all_success = True
         for name, section in self.sections.items():
@@ -601,7 +601,7 @@ class DpgSettingMenu:
             for setting in section.settings:
                 if dirty_only and not setting.is_dirty():
                     continue
-                success = setting.apply(self.sensor)
+                success = setting.apply(self.sensor, cache_value=cache_values)
                 if not success:
                     print(f"Failed to apply setting: {setting.descriptor.key} in section {name}")
                 all_success = all_success and success
