@@ -77,18 +77,21 @@ class InputNumericPy:
         self._last_valid = new_value
         dpg.set_value(self._field, str(new_value))
 
+    def to_display(self, value: Any) -> str:
+        return str(value)
+    
     def set_range(self, min_value=None, max_value=None):
         """Set the valid range. The current value will be clamped to the new range."""
         self.min_value = min_value
         self.max_value = max_value
         self.set_value(self._last_valid)
 
-    def get_required_width_by_current_range(self, char_width=8, padding=16):
+    def get_required_width_by_current_range(self, char_width=10, padding=16):
         """Return the widget width based on the maximum number of characters in the valid range.
         Returns None if either min_value or max_value is None."""
         if self.min_value is None or self.max_value is None:
             return None
-        max_chars = max(len(str(self.min_value)), len(str(self.max_value)))
+        max_chars = max(len(self.to_display(self.min_value)), len(self.to_display(self.max_value)))
         return max_chars * char_width + padding
 
     def set_width(self, width: int):
@@ -134,19 +137,20 @@ class InputIntPy(InputNumericPy):
         super().__init__(*args, **kwargs)
         # Re-display default value in hex if needed (super().__init__ used str())
         if hex_display:
-            dpg.set_value(self._field, self._to_display(self._last_valid))
+            dpg.set_value(self._field, self.to_display(self._last_valid))
 
     def set_display_mode(self, mode: str):
         if mode == "hex":
             self.hex_display = True
-            dpg.set_value(self._field, self._to_display(self._last_valid))
+            dpg.set_value(self._field, self.to_display(self._last_valid))
             dpg.configure_item(self._field, decimal=False)
         else:
             self.hex_display = False
             dpg.set_value(self._field, str(self._last_valid))
             dpg.configure_item(self._field, decimal=True)
 
-    def _to_display(self, value: int) -> str:
+
+    def to_display(self, value: int) -> str:
         """Format an integer for display."""
         if self.hex_display:
             return hex(value)  # e.g. '0x1f'
@@ -155,18 +159,7 @@ class InputIntPy(InputNumericPy):
     def set_value(self, new_value):
         new_value = self._clamp(int(new_value))
         self._last_valid = new_value
-        dpg.set_value(self._field, self._to_display(new_value))
-
-    def get_required_width_by_current_range(self, char_width=8, padding=16):
-        """Return widget width based on the widest possible display string in the valid range.
-        Returns None if either min_value or max_value is None."""
-        if self.min_value is None or self.max_value is None:
-            return None
-        if self.hex_display:
-            max_chars = max(len(hex(self.min_value)), len(hex(self.max_value)))
-        else:
-            max_chars = max(len(str(self.min_value)), len(str(self.max_value)))
-        return max_chars * char_width + padding
+        dpg.set_value(self._field, self.to_display(new_value))
 
     @staticmethod
     def _on_deactivated(handler, sender, user_data):
@@ -176,9 +169,9 @@ class InputIntPy(InputNumericPy):
             # Accept both '0x1f' hex and plain decimal
             parsed = instance._clamp(int(raw, 0) if instance.hex_display else int(raw))
             instance._last_valid = parsed
-            dpg.set_value(sender, instance._to_display(parsed))
+            dpg.set_value(sender, instance.to_display(parsed))
         except (ValueError, TypeError):
-            dpg.set_value(sender, instance._to_display(instance._last_valid))
+            dpg.set_value(sender, instance.to_display(instance._last_valid))
             return
 
         if instance.callback:
@@ -192,13 +185,13 @@ class InputFloatPy(InputNumericPy):
     CAST = float
     DECIMAL_PLACES = 6
 
-    def _to_display(self, value: float) -> str:
+    def to_display(self, value: float) -> str:
         return f"{value:.{self.DECIMAL_PLACES}f}"
 
     def set_value(self, new_value):
         new_value = self._clamp(float(new_value))
         self._last_valid = new_value
-        dpg.set_value(self._field, self._to_display(new_value))
+        dpg.set_value(self._field, self.to_display(new_value))
 
     @staticmethod
     def _on_deactivated(handler, sender, user_data):
@@ -207,9 +200,9 @@ class InputFloatPy(InputNumericPy):
         try:
             parsed = instance._clamp(float(raw))
             instance._last_valid = parsed
-            dpg.set_value(sender, instance._to_display(parsed))
+            dpg.set_value(sender, instance.to_display(parsed))
         except (ValueError, TypeError):
-            dpg.set_value(sender, instance._to_display(instance._last_valid))
+            dpg.set_value(sender, instance.to_display(instance._last_valid))
             return
 
         if instance.callback:
