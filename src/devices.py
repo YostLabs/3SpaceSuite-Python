@@ -81,7 +81,6 @@ class ThreespaceDevice:
         self.streaming_manager: ThreespaceStreamingManager = None
 
         #These will be loaded when initially opened
-        #self.dirty = False
         self.cached_serial_number = None
         self.cached_axis_order = None
 
@@ -503,7 +502,6 @@ class ThreespaceDevice:
         return bool(self.__api.readMagEnabled())
 
     def set_cached_settings_dirty(self):
-        #self.dirty = True
         self.__api.set_cached_settings_dirty()
 
     def send_ascii_command(self, ascii: str):

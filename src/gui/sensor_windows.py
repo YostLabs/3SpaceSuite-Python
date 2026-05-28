@@ -1202,12 +1202,6 @@ class SensorSettingsWindow(StagedView):
                     self.settings_menu = DpgSettingMenuGui(device.sensor)
                     self.settings_menu.create_hierarchy()
                     self.settings_menu.create_gui()
-
-                    #These settings are required by the underlying API to function, and are force re-enabled if changed.
-                    #This prevents the user from thinking they disabled them when they will be immediately reapplied for functionality.
-                    #To actually change these, they would need to use the terminal
-                    for key in ("header_echo", "header_checksum", "header_length"):
-                        self.settings_menu.set_setting_enabled(key, False)
         
         #Custom scroll handler to allow desired scrolling logic.
         #This is why scroll with mouse is disabled for both windows
