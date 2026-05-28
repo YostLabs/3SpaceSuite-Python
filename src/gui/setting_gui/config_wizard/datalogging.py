@@ -50,6 +50,7 @@ class LogDataSelectionPage(DpgSettingWizardPageBasic):
                 self.setting_menu.add_setting(setting)
 
         self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
+        self.setting_menu.populate_all_setting_descriptions()
 
     def create_view(self):
         dpg.push_container_stack(super().create_view())
@@ -83,12 +84,19 @@ class LogDataSelectionPage(DpgSettingWizardPageBasic):
             self.rate_setting.descriptor.param_descriptors[0].unit = ""
             self.rate_setting.create_param_gui()
             text = dpg.add_text("Logging Rate (Hz)")
+            self.rate_setting.description = self.rate_setting.description + \
+            "\n\nNote: The actual logging rate may be lower than the configured rate if the "   \
+            "sensor cannot keep up with the amount of data being logged. For higher data rates, "   \
+            "it is recommended to set the data mode to binary, and/or increase the cpu_speed setting "  \
+            "in the 'Power Management' section of the settings menu."
+
+            self.rate_setting.create_help_tag()
             self.rate_setting.init_gui(text)
 
         dpg.add_separator()
 
         # Log slots selection
-        self.log_slots_setting.create_gui()
+        self.log_slots_setting.create_gui(help_tag=False)
 
         dpg.pop_container_stack()
 
@@ -346,6 +354,7 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
         self.stop_dependent_rows: dict[str, int] = {}
 
         self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
+        self.setting_menu.populate_all_setting_descriptions()
 
     @classmethod
     def __ensure_disabled_row_theme(cls):
@@ -372,7 +381,7 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
         self.__ensure_disabled_row_theme()
         dpg.push_container_stack(super().create_view())
         
-        self.start_event_setting.create_gui()
+        self.start_event_setting.create_gui(help_tag=False)
         if self.start_event_setting._key_label is not None:
             dpg.set_value(self.start_event_setting._key_label, "Enabled Start Events")
         dpg.add_spacer(height=6)
@@ -384,13 +393,14 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
                     setting.descriptor.param_descriptors[0].unit = "" 
                     setting.create_param_gui()
                     text = dpg.add_text(self.FRIENDLY_LABELS.get(key, key))
+                    setting.create_help_tag()
                     setting.init_gui(text)
             self.start_dependent_rows[key] = row
 
         dpg.add_spacer(height=6)
         dpg.add_separator()
 
-        self.stop_event_setting.create_gui()
+        self.stop_event_setting.create_gui(help_tag=False)
         if self.stop_event_setting._key_label is not None:
             dpg.set_value(self.stop_event_setting._key_label, "Enabled Stop Events")
         dpg.add_spacer(height=6)
@@ -402,6 +412,7 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
                     setting.descriptor.param_descriptors[0].unit = "" 
                     setting.create_param_gui()
                     text = dpg.add_text(self.FRIENDLY_LABELS.get(key, key))
+                    setting.create_help_tag()
                     setting.init_gui(text)
             self.stop_dependent_rows[key] = row
 
