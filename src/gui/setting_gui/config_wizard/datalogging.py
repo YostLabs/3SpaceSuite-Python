@@ -16,7 +16,12 @@ class DpgSettingWizardPageBasic(DpgWizardPageBasic):
 
 class LogDataSelectionPage(DpgSettingWizardPageBasic):
 
-    HEADER_SETTINGS = ["header_status", "header_timestamp", "header_echo", "header_checksum", "header_serial", "header_length"]
+    HEADER_SETTINGS = { "header_status": "Status",
+                        "header_timestamp": "Timestamp",
+                        "header_echo": "Echo",
+                        "header_checksum": "Checksum",
+                        "header_serial": "Serial #",
+                        "header_length": "Length" }
 
     def __init__(self, sensor: ThreespaceSensor, descriptors: dict[str, ThreespaceSettingDescriptor], current_values: dict[str, Any] | None = None, **kwargs):
         super().__init__(title="Data Selection", **kwargs)
@@ -38,9 +43,9 @@ class LogDataSelectionPage(DpgSettingWizardPageBasic):
         self.header_settings: list[tuple[str, DpgSetting]] = []
 
         for row_start in range(0, len(self.HEADER_SETTINGS), 3):
-            for key in self.HEADER_SETTINGS[row_start:row_start + 3]:
+            for key in list(self.HEADER_SETTINGS.keys())[row_start:row_start + 3]:
                 setting = DpgSetting.create(self.descriptors[key])
-                label = key.split('_')[1].capitalize()
+                label = self.HEADER_SETTINGS[key]
                 self.header_settings.append((label, setting))
                 self.setting_menu.add_setting(setting)
 
