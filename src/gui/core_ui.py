@@ -196,6 +196,10 @@ class DpgWizard(DpgWizardViewer):
     def on_last_page(self):
         return self.page_index == len(self.pages) - 1
 
+    @property
+    def on_first_page(self):
+        return self.page_index == 0
+
     def set_page(self, page_index: int):
         if page_index < 0 or page_index >= len(self.pages):
             return
@@ -214,6 +218,9 @@ class DpgWizard(DpgWizardViewer):
         for page in self.pages:
             page.delete()
         self.delete()
+
+    def cancel(self):
+        self.finish()
 
 class DpgWizardPageEmpty(StagedView):
 
@@ -248,7 +255,8 @@ class DpgWizardPageEmpty(StagedView):
 class DpgWizardPageBasic(DpgWizardPageEmpty):
 
     def __init__(self, title: str = "Title", width=-1, height=-1,
-                 next_button_label: str = "Next", back_button_label: str = "Back", auto_finish: bool = True,
+                 next_button_label: str = "Next", back_button_label: str = "Back", 
+                 auto_finish: bool = True, auto_cancel: bool = True,
                  **kwargs):
         super().__init__()
 
@@ -260,6 +268,7 @@ class DpgWizardPageBasic(DpgWizardPageEmpty):
         self.back_button = None
         self.next_button = None
         self.auto_finish = auto_finish
+        self.auto_cancel = auto_cancel
 
         self.kwargs = kwargs
     
@@ -301,12 +310,19 @@ class DpgWizardPageBasic(DpgWizardPageEmpty):
 
     def _next_button_pressed(self, sender, app_data, user_data):
         if self.auto_finish and self.wizard.on_last_page:
+            #Check the on_next response before finishing to allow the page to still have its own interaction first
+            response = self.on_next()
+            if response is False:
+                return
             self.wizard.finish()
         else:
             self.wizard.go_next_page()
     
     def _back_button_pressed(self, sender, app_data, user_data):
-        self.wizard.go_previous_page()
+        if self.auto_cancel and self.wizard.on_first_page:
+            self.wizard.cancel()
+        else:   
+            self.wizard.go_previous_page()
 
     def notify_opened(self, old_view):
         super().notify_opened(old_view)
@@ -315,3 +331,9 @@ class DpgWizardPageBasic(DpgWizardPageEmpty):
                 dpg.configure_item(self.next_button, label="Finish")
             else:
                 dpg.configure_item(self.next_button, label=self.next_button_label)
+        
+        if self.back_button is not None:
+            if self.wizard.on_first_page:
+                dpg.configure_item(self.back_button, label="Cancel")
+            else:
+                dpg.configure_item(self.back_button, label=self.back_button_label)
