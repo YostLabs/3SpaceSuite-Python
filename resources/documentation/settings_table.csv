@@ -6,7 +6,9 @@ System,all,Returns all writable settings.,R,Aggregate,
 System,settings,Returns all writable settings but excludes aliases.,R,Aggregate,
 System,serial_number,Returns the sensors full serial number.,R,U64,
 System,timestamp,Timestamp in microseconds from sensor power. ,R/W,U64,
-System,led_mode,"Allows finer-grained control over the sensor LED. Accepts a single parameter that can be 0 for standard, which displays all standard LED status indicators or 1 for static, which displays only the LED color as specified by the led_rgb setting.",R/W,U8,
+System,led_mode,"Allows finer-grained control over the sensor LED. 
+0: Dynamic - the LED updates based on the status of the device
+1: Static - the LED only shows the color specified by the led_rgb setting",R/W,U8,
 System,led_rgb,Sets the idle color of the LED on the sensor to the specified RGB color.,R/W,Float Float Float,
 System,version_firmware,Returns a string indicating the current firmware version.,R,String,
 System,version_hardware,Returns a string indicating the hardware version of the sensor.,R,String,
@@ -51,7 +53,9 @@ Streaming,stream_interval,Time in microseconds between each streaming output. Va
 Streaming,stream_hz,Output rate when streaming in hertz. Max value of 2000. Will clamp to closest microsecond value.,R/W,Float,stream_interval
 Streaming,stream_duration,Length of time to stream in seconds. Duration of 0 will stream until stopped.,R/W,Float,
 Streaming,stream_delay,Length of time in seconds the sensor will wait after recieving the start streaming command to return the first data packet.,R/W,Float,
-Streaming,stream_mode,Controls whether stream_duration or stream_count will be used to end streaming.,R/W,U8,
+Streaming,stream_mode,"Controls how stream duration is handled.
+0: Duration - controlled via the stream_duration setting
+1: Count - controlled via the stream_count setting",R/W,U8,
 Streaming,stream_count,A value greater than 1. Streaming will end after this many samples are output.,R/W,U64,
 Streaming,streamable_commands,A comma separated list of all available streaming commands,R,String,
 Debug,debug_level,"Bitfield representing the currently active debug levels.
@@ -61,8 +65,8 @@ Debug,debug_level,"Bitfield representing the currently active debug levels.
 
 Default Value: 0x1",R/W,U32,
 Debug,debug_module,Bitfield representing the currently enabled debug module. For full list of available modules see the Debug Section of the user manual.,R/W,U32,
-Debug,debug_mode,"0: All debug messages will be buffered until Command 127 is called.
-1: Immediate output for all debug messages. Will also output any buffered messages.",R/W,U8,
+Debug,debug_mode,"0: Buffered - All debug messages will be buffered until Command 127 is called.
+1: Immediate - All debug messages will be immediately output when generated. Will also immediately output any messages currently buffered when this mode is set.",R/W,U8,
 Debug,debug_led,Enable Debug LED event when debug messages are available.,R/W,U8,
 Debug,debug_fault,"When set to 1, if a hard fault occurs the sensor will enter a debug state.",R/W,U8,
 Debug,debug_wdt,"When set to 1, if a WDT occurs the sensor will enter a debug state.",R/W,U8,
@@ -94,14 +98,14 @@ Filter,tare_mat,"The tare value used in the computation of the tared orientation
 ",R/W,Float Float Float Float Float Float Float Float Float,
 Filter,running_avg_orient,A smoothing factor in the range 0 to 1. ,R/W,Float,
 Filter,filter_mode,"The method of orientation calculation:
-0 - IMU Mode
-1 - QGrad3
-2 - Extended Kalman Filter",R/W,U8,
+0: IMU Mode
+1: QGrad3
+2: Extended Kalman Filter",R/W,U8,
 Filter,filter_mref_mode,"Sets the method for which the sensor will obtain the magnetic reference vector (MRV):
-0: Will only use the MRV currently stored in settings.
-1: Will use the mrv set by user if it exists, else will attempt to automatically get a new MRV on startup.
-2: Will always attempt to automatically get a new MRV on startup.
-3: Will get MRV via GPS reading and WMM (world magnetic model).",R/W,U8,
+0: Manual - Will only use the MRV currently stored in settings.
+1: Semi-Auto - Will use the mrv set by user if it exists, else will attempt to automatically get a new MRV on startup.
+2: Auto - Will always attempt to automatically get a new MRV on startup.
+3: GPS - Will get MRV via GPS reading and WMM (world magnetic model), WIP.",R/W,U8,
 Filter,filter_mref,The magnetic reference as a vector. This should be the expected reading of the magnetometer when the sensor is facing north.,R/W,Float Float Float,
 Filter,filter_mref_gps,Sets the magnetic reference vector via the WMM (world magnetic model) at the given GPS location.,W,Double Double,filter_mref
 Filter,filter_mref_dip,Sets the magnetic reference vector via the expected magnetic dip.,R/W,Float,filter_mref
@@ -119,9 +123,9 @@ Components,primary_gyro,Currently selected component(s) to use for the primary g
 Components,primary_mag,Currently selected component(s) to use for the primary mag data output commands.,R/W,String,
 Components,primary_sensor_rfade,"On sensors with multiple of the same component type, this value adjusts the threshold percentage for when one component will fade to the other. Must be between 0.0 and 1.0, inclusive. Example: 16G and 100G accelerometer, will start fading to higher range sensor at readings of 14.4G and 90G. Default value: 0.1",R/W,Float,
 Components,mag_bias_mode,"Determines the behavior of the Auto Mag Bias calculator:
-0: Magnetometer bias is only manually set.
-1: Magnetometer bias will be automatically calibrated once on startup or when this is set.
-2: Magnetometer bias will be continuously automatically updated.",R/W,U8,
+0: Manual - Magnetometer bias is only manually set.
+1: Auto Single - Magnetometer bias will be automatically calibrated once on startup or when this is set.
+2: Auto Continuous - Magnetometer bias will be continuously automatically updated.",R/W,U8,
 Components,odr_all,"Sets the ODR (output data rate / sample rate) of all aliased (accel, gyro, mag, baro) components. Each component will attempt to set the ODR as close as possible. If it is not possible to reach the desired ODR, the ODR will be set to the maximum valid ODR that component supports.",W,U32,"odr_accel,
 odr_gyro,
 odr_mag,
@@ -335,7 +339,9 @@ Data Logger,log_start_event,"Enum for the logging start event.
 4- On Power
 
 Pass in any combination as a comma separated list.",R/W,String,
-Data Logger,log_start_motion_threshold,Threshold value used for the Accel Event Threshold start event. Logging starts when the change in acceleration magnitude within a 0.1 second window exceeds this value.,R/W,Float,
+Data Logger,log_start_motion_threshold,"Threshold value used for the Accel Event Threshold start event. Logging starts when the change in acceleration (g) magnitude within a 0.1 second window exceeds this value.
+
+In general, smaller values will require less motion to start, and larger values will require more motion to start.",R/W,Float,
 Data Logger,log_stop_event,"Enum for the logging stop event.
 0- Button
 1- Accel Event Threshold
@@ -345,33 +351,35 @@ Data Logger,log_stop_event,"Enum for the logging stop event.
 5- Period Count
 
 Pass in any combination as a comma separated list.",R/W,String,
-Data Logger,log_stop_motion_threshold,Threshold value used for the Accel Event Threshold stop event. Logging stops when the change in acceleration magnitude within a 0.1 second window is continously beneath this value for the time specified by log_stop_motion_delay.,R/W,Float,
+Data Logger,log_stop_motion_threshold,"Threshold value used for the Accel Event Threshold stop event. Logging stops when the change in acceleration magnitude within a 0.1 second window is continously beneath this value for the time specified by log_stop_motion_delay.
+
+In general, larger values will stop more easily while experiencing larger motion, and smaller values will require the sensor to be more motionless to stop.",R/W,Float,
 Data Logger,log_stop_motion_delay,Time in seconds the change in acceleration magnitude within a 0.1 second window needs to be below the motion threshold for the stop event to trigger.,R/W,Float,
 Data Logger,log_stop_count,Value used for the Capture Count stop event. Logging stops when this number of samples have been gathered.,R/W,U64,
 Data Logger,log_stop_duration,"Value used for the Duration stop event. Logging stops when this duration, in seconds, has elapsed.",R/W,Float,
 Data Logger,log_stop_period_count,Value used for the Period Count stop event. Logging stops when this number of periods have been logged.,R/W,U32,
 Data Logger,log_style,"Enum for determining the method of data logging.
-0- Continous - Single logging period for each capture session.
-1- Periodic - Multiple logging periods for a capture session. ",R/W,U8,
+0: Continous - Single logging period for each capture session.
+1: Periodic - Multiple logging periods for a capture session. ",R/W,U8,
 Data Logger,log_periodic_capture_time,Amount of time each period will log while in periodic mode.,R/W,Float,
 Data Logger,log_periodic_rest_time,Time to wait between each capture period.,R/W,Float,
 Data Logger,log_base_filename,"Base filename used for each data file. The final filename will be ""{log_base_filename}{N}.[csv|bin]"" where N is an incrementing file count and csv or bin is based on log_data_mode. N starts at 0 during a session for all logging modes, and will increase for each additional file when log_file_mode is set to ""New"" instead of ""Append"".",R/W,String,
 Data Logger,log_file_mode,"Enum for how new data is logged during logging sessions in periodic mode.
-0- Append - Append data from subsequent perioids to a single capture session file.
-1- New - Create a new log file for every period during the logging session.",R/W,U8,
+0: Append - Append data from subsequent perioids to a single capture session file.
+1: New - Create a new log file for every period during the logging session.",R/W,U8,
 Data Logger,log_data_mode,"Enum for determining ascii or binary logging.
-1- Ascii 
-2- Binary",R/W,U8,
+1: Ascii 
+2: Binary",R/W,U8,
 Data Logger,log_output_settings,If set to 1 a setting file will be created at the start of a capture session to capture the settings used during that capture session.,R/W,U8,
 Data Logger,log_header_enabled,"If set to 1, the response header will be included in the log results.",R/W,U8,
-Data Logger,log_folder_mode,"0: Name folders based on session index.
-1: Name folders based on current date time read from RTC. Default",R/W,U8,
+Data Logger,log_folder_mode,"0: Session - Name folders based on an auto incrementing session index.
+1: Date Time - Name folders based on current date time read from RTC.",R/W,U8,
 Data Logger,log_immediate_output,"If set to 1, the data being logged will be streamed out at the same time using the file streaming protocol.",R/W,U8,
 Data Logger,log_immediate_output_header_enabled,"If set to 1, the header will be prepended to each file stream packet while log_immediate_output is enabled.",R/W,U8,
 Data Logger,log_immediate_output_header_mode,"Controls what protocol mode the immediate_output_header uses.
-0 - Matches log_data_mode
-1 - Ascii
-2 - Binary",R/W,U8,
+0: Match - uses the mode specified by the log_data_mode setting
+1: Ascii
+2: Binary",R/W,U8,
 Data Logger,rtc_year,The current year of the RTC,R/W,U16,rtc_datetime
 Data Logger,rtc_month,The current month of the RTC (1-12),"R/W
 ",U8,"rtc_datetime
