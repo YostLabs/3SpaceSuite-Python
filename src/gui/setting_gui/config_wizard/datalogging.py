@@ -8,6 +8,29 @@ from gui.core_ui import DpgWizard, DpgWizardPageBasic
 
 from gui.setting_gui.setting_structures import DpgSettingMenu
 
+DISABLED_ROW_THEME = None
+
+def ensure_disabled_row_theme():
+    global DISABLED_ROW_THEME
+    if DISABLED_ROW_THEME is not None:
+        return
+
+    with dpg.theme() as DISABLED_ROW_THEME:
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (145, 145, 145, 255))
+
+        for component in [dpg.mvInputInt, dpg.mvInputFloat, dpg.mvInputDouble, dpg.mvInputText, dpg.mvCombo]:
+            with dpg.theme_component(component):
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (44, 44, 44, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (44, 44, 44, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (44, 44, 44, 255))
+
+        with dpg.theme_component(dpg.mvCheckbox):
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (145, 145, 145, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (44, 44, 44, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (44, 44, 44, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (44, 44, 44, 255))
+
 class DpgSettingWizardPageBasic(DpgWizardPageBasic):
 
     def __init__(self, title: str, **kwargs):
@@ -171,8 +194,10 @@ class LogFormatSelectionPage(DpgSettingWizardPageBasic):
 
         # For hiding/showing conditional fields
         self.periodic_group = None
+        self.log_file_mode_row = None
 
     def create_view(self):
+        ensure_disabled_row_theme()
         dpg.push_container_stack(super().create_view())
 
         # Log Style
@@ -212,7 +237,7 @@ class LogFormatSelectionPage(DpgSettingWizardPageBasic):
             self.log_folder_mode_setting.init_gui(text)
 
         # File Mode
-        with dpg.group(horizontal=True):
+        with dpg.group(horizontal=True) as self.log_file_mode_row:
             self.log_file_mode_setting.create_param_gui()
             text = dpg.add_text(self.FRIENDLY_LABELS["log_file_mode"])
             self.log_file_mode_setting.create_help_tag()
@@ -288,15 +313,18 @@ class LogFormatSelectionPage(DpgSettingWizardPageBasic):
 
     def __update_conditional_fields(self, log_style_value):
         #If using periodic mode, show the periodic capture/rest time settings. Otherwise, hide them.
-        dpg.configure_item(self.periodic_group, show=log_style_value == 1)
+        is_periodic = (log_style_value == 1)
+        dpg.configure_item(self.periodic_group, show=is_periodic)
+        self.log_file_mode_setting.set_enabled(is_periodic)
+        if self.log_file_mode_row is not None:
+            dpg.configure_item(self.log_file_mode_row, enabled=is_periodic)
+            dpg.bind_item_theme(self.log_file_mode_row, None if is_periodic else DISABLED_ROW_THEME)
 
     def delete(self):
         self.setting_menu.cleanup()
         super().delete()
 
 class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
-
-    DISABLED_ROW_THEME = None
 
     START_EVENT_DEPENDENCIES = {
         1: ["log_start_motion_threshold"],
@@ -364,29 +392,8 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
         self.setting_menu.reload_values(cache=False, validate=False, current_values=current_values)
         self.setting_menu.populate_all_setting_descriptions()
 
-    @classmethod
-    def __ensure_disabled_row_theme(cls):
-        if cls.DISABLED_ROW_THEME is not None:
-            return
-
-        with dpg.theme() as cls.DISABLED_ROW_THEME:
-            with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(dpg.mvThemeCol_Text, (145, 145, 145, 255))
-
-            for component in [dpg.mvInputInt, dpg.mvInputFloat, dpg.mvInputDouble, dpg.mvInputText, dpg.mvCombo]:
-                with dpg.theme_component(component):
-                    dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (44, 44, 44, 255))
-                    dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (44, 44, 44, 255))
-                    dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (44, 44, 44, 255))
-
-            with dpg.theme_component(dpg.mvCheckbox):
-                dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (145, 145, 145, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (44, 44, 44, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (44, 44, 44, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (44, 44, 44, 255))
-
     def create_view(self):
-        self.__ensure_disabled_row_theme()
+        ensure_disabled_row_theme()
         dpg.push_container_stack(super().create_view())
         
         self.start_event_setting.create_gui(help_tag=False)
@@ -461,7 +468,7 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
             setting.set_enabled(is_enabled)
             row = dependent_rows.get(key)
             if row is not None:
-                dpg.bind_item_theme(row, None if is_enabled else self.DISABLED_ROW_THEME)
+                dpg.bind_item_theme(row, None if is_enabled else DISABLED_ROW_THEME)
 
     def __parse_event_values(self, value: str) -> set[int]:
         if value is None or value == "":
