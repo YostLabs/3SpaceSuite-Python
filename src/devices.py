@@ -701,8 +701,16 @@ class ThreespaceDevice:
                 default_name = f"{hardware_version.family_name} {hardware_version.id:03X}"
         return default_name
     
+    @property
     def type(self):
-        return self._type
+        sn = self.get_serial_number()
+        hardware_version = ThreespaceHardwareVersion.from_serial_number(sn)
+        family_name = hardware_version.family_name
+        if family_name == "Unknown":
+            suffix = self.type_suffix
+            if suffix is not None:
+                family_name = suffix
+        return family_name
 
     @name.setter
     def name(self, name):

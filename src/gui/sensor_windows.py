@@ -1173,8 +1173,9 @@ class SensorSettingsWindow(StagedView):
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 with dpg.group(horizontal=True):
-                    wizard_button = dpg.add_button(label="Data Logging Config Wizard", callback=self.__open_data_logging_wizard)
-                    dpg.bind_item_theme(wizard_button, theme_lib.data_logging_wizard_button_theme)
+                    if device.type == "DL":
+                        wizard_button = dpg.add_button(label="Data Logging Config Wizard", callback=self.__open_data_logging_wizard)
+                        dpg.bind_item_theme(wizard_button, theme_lib.data_logging_wizard_button_theme)
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=2)
