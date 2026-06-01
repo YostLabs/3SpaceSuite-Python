@@ -62,6 +62,7 @@ class OrderedItemSelection(DpgSetting):
     """
 
     MIN_ITEM_WIDTH = 100
+    _instance_index = 0
 
     def __init__(self, descriptor: ThreespaceSettingDescriptor, orderable=True, order_by="label",
                  active_label="Active", inactive_label="Available", pin_items: dict[str, any] = None):
@@ -85,7 +86,8 @@ class OrderedItemSelection(DpgSetting):
 
         self._item_width = max(self.MIN_ITEM_WIDTH, max((dpg.get_text_size(label)[0] for label in self._item_map), default=0) + 8)
         self._list_height = len(self._item_map) * DraggableList.ITEM_HEIGHT + DraggableList.PANEL_PADDING
-        self._payload_type = f"ois_{descriptor.key}"
+        self._payload_type = f"ois_{descriptor.key}_{OrderedItemSelection._instance_index}"
+        OrderedItemSelection._instance_index += 1
 
     def create_gui(self, help_tag=True):
         with dpg.group(horizontal=True):
