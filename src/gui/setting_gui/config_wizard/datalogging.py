@@ -114,6 +114,10 @@ class LogDataSelectionPage(DpgSettingWizardPageBasic):
 
     def __on_header_enabled_changed(self, key, new_value):
         dpg.configure_item(self.header_bits, show=bool(new_value))
+
+    def delete(self):
+        self.setting_menu.cleanup()
+        super().delete()
             
 
 class LogFormatSelectionPage(DpgSettingWizardPageBasic):
@@ -285,6 +289,10 @@ class LogFormatSelectionPage(DpgSettingWizardPageBasic):
     def __update_conditional_fields(self, log_style_value):
         #If using periodic mode, show the periodic capture/rest time settings. Otherwise, hide them.
         dpg.configure_item(self.periodic_group, show=log_style_value == 1)
+
+    def delete(self):
+        self.setting_menu.cleanup()
+        super().delete()
 
 class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
 
@@ -469,6 +477,10 @@ class LogTriggerSelectionPage(DpgSettingWizardPageBasic):
             except ValueError:
                 continue
         return set(values)        
+
+    def delete(self):
+        self.setting_menu.cleanup()
+        super().delete()
 
 class DataLoggingConfigWizard(DpgWizard):
     

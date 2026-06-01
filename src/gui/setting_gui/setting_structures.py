@@ -632,6 +632,10 @@ class DpgSettingMenu:
         if validate:
             self.validate_all()
 
+    def cleanup(self):
+        for setting in self.settings:
+            setting.cleanup()
+
 
 @dataclass
 class SectionDataGui(SectionData):
@@ -777,7 +781,3 @@ class DpgSettingMenuGui(DpgSettingMenu):
             setting.set_value(value)
             self.populate_setting_description(setting)
             self.add_setting(setting, category)
-    
-    def cleanup(self):
-        for setting in self.settings:
-            setting.cleanup()

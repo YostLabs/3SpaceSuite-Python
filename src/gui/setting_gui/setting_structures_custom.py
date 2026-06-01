@@ -346,4 +346,6 @@ class StreamingSelection(DpgSetting):
             dpg.hide_item(self.failure_text)
 
     def cleanup(self):
-        self.selection_menu.delete()
+        if self.selection_menu is not None:
+            self.selection_menu.delete()
+            self.selection_menu = None
