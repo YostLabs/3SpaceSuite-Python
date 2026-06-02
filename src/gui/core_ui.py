@@ -4,6 +4,23 @@ from dpg_ext.staged_view import StagedView
 from dpg_ext.extension_functions import center_window_handler_callback
 import dearpygui.dearpygui as dpg
 
+PRIMARY_WINDOW = None
+
+
+def set_primary_window_cached(window):
+    global PRIMARY_WINDOW
+    previous = PRIMARY_WINDOW
+    if previous is not None and previous is not window and dpg.does_item_exist(previous):
+        dpg.hide_item(previous)
+    if dpg.does_item_exist(window):
+        dpg.show_item(window)
+    dpg.set_primary_window(window, True)
+    PRIMARY_WINDOW = window
+
+
+def get_primary_window_cached():
+    return PRIMARY_WINDOW
+
 class FontManager:
 
     DEFAULT_FONT = None
@@ -117,7 +134,7 @@ class DynamicViewport(StagedView):
     def __init__(self):
         with dpg.stage(label="Dynamic Viewport Stage") as self._stage_id:
             self.viewport = dpg.add_child_window(label="Viewport Window", height=-2)
-        self.current_view = None
+        self.current_view: StagedView = None
     
     def set_view(self, staged_view: StagedView):
         if self.current_view is not None:
@@ -128,31 +145,264 @@ class DynamicViewport(StagedView):
             staged_view.notify_opened(self.current_view)
         self.current_view = staged_view
 
-#Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
-class DpgWizard:
 
-    def __init__(self, always_centered=False, **kwargs):
-        
+# Large enough to cover any practical viewport during live resize without needing
+# a resize callback.
+_SHIELD_SIZE = 10000
+
+#Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
+class DpgWizardViewer:
+    transparent_window_theme = None
+
+    @classmethod
+    def get_transparent_window_theme(cls):
+        if cls.transparent_window_theme is None:
+            with dpg.theme() as cls.transparent_window_theme:
+                with dpg.theme_component(dpg.mvWindowAppItem):
+                    dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [30, 30, 30, 100], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowBorderSize, 0, category=dpg.mvThemeCat_Core)
+        return cls.transparent_window_theme
+
+    def __init__(self, always_centered=False, modal=True, full_viewport=False, pseudo_modal=False, **kwargs):
+        self.full_viewport = full_viewport
+        self.pseudo_modal = pseudo_modal
+        self.previous_primary_window = None
+        if "no_close" not in kwargs:
+            kwargs["no_close"] = True
+        if "autosize" not in kwargs:
+            kwargs["autosize"] = True
+
         self.cur_window: StagedView = None
-        with dpg.window(modal=True, no_move=True, no_resize=True, no_close=True, autosize=True, **kwargs) as self.modal:
+        self.shield = None
+
+        if self.pseudo_modal:
+            with dpg.window(
+                tag=f"{id(self)}_pseudo_modal_shield",
+                show=True,
+                no_title_bar=True,
+                no_resize=True,
+                no_move=True,
+                no_scrollbar=True,
+                no_bring_to_front_on_focus=False,
+                width=_SHIELD_SIZE,
+                height=_SHIELD_SIZE,
+                pos=(0, 0),
+            ) as self.shield:
+                pass
+            dpg.bind_item_theme(self.shield, self.get_transparent_window_theme())
+            #Allow the window to be created and rendered before setting no_bring_to_front_on_focus
+            #to ensure it is initially brought to the front before being locked in place.
+            dpg.render_dearpygui_frame()
+            dpg.configure_item(self.shield, no_bring_to_front_on_focus=True)
+
+        with dpg.window(modal=modal and not self.pseudo_modal, no_move=True, no_resize=True, no_collapse=True, **kwargs) as self.modal:
             pass
         
+        self.page_destination = self.modal
+
+        if self.full_viewport:
+            self.previous_primary_window = get_primary_window_cached()
+            set_primary_window_cached(self.modal)
+
         self.visible_handler = None
         if always_centered:
             with dpg.item_handler_registry() as self.visible_handler:
                 dpg.add_item_visible_handler(callback=center_window_handler_callback, user_data=self.modal)
             dpg.bind_item_handler_registry(self.modal, self.visible_handler)
 
+    def set_page_destination(self, destination):
+        self.page_destination = destination
+
     def set_window(self, window: StagedView):
         if self.cur_window is not None:
             self.cur_window.notify_closed(window)
-            dpg.delete_item(self.modal, children_only=True)
+            dpg.delete_item(self.page_destination, children_only=True)
         if window is not None:
-            window.submit(self.modal)
+            window.submit(self.page_destination)
             window.notify_opened(self.cur_window)
         self.cur_window = window
     
     def delete(self):
         if self.visible_handler is not None:
             dpg.delete_item(self.visible_handler)
+        if self.shield is not None and dpg.does_item_exist(self.shield):
+            dpg.delete_item(self.shield)
+        if self.full_viewport and self.previous_primary_window is not None and dpg.does_item_exist(self.previous_primary_window):
+            set_primary_window_cached(self.previous_primary_window)
+            self.previous_primary_window = None
         dpg.delete_item(self.modal)
+
+class DpgWizard(DpgWizardViewer):
+
+    def __init__(self, always_centered=True, modal=True, full_viewport=False, pseudo_modal=False, **kwargs):
+        super().__init__(always_centered=always_centered, modal=modal, full_viewport=full_viewport, pseudo_modal=pseudo_modal, **kwargs)
+
+        self.page_index = -1
+        self.pages: list[DpgWizardPageEmpty] = []
+
+        self.cur_window: DpgWizardPageEmpty
+
+    def go_next_page(self):
+        if self.page_index < len(self.pages) - 1:
+            if self.cur_window is not None:
+                response = self.cur_window.on_next()
+                if response is False:
+                    return
+            self.set_page(self.page_index + 1)
+    
+    def go_previous_page(self):
+        if self.page_index > 0:
+            if self.cur_window is not None:
+                response = self.cur_window.on_back()
+                if response is False:
+                    return
+            self.set_page(self.page_index - 1)
+
+    @property
+    def on_last_page(self):
+        return self.page_index == len(self.pages) - 1
+
+    @property
+    def on_first_page(self):
+        return self.page_index == 0
+
+    def set_page(self, page_index: int):
+        if page_index < 0 or page_index >= len(self.pages):
+            return
+        self.page_index = page_index
+        self.set_window(self.pages[page_index])
+
+    def add_page(self, page: "DpgWizardPageEmpty"):
+        page.wizard = self
+        page.ensure_view()
+        self.pages.append(page)
+
+    def set_window(self, window: "DpgWizardPageEmpty"):
+        super().set_window(window)
+
+    def close(self):
+        for page in self.pages:
+            page.delete()
+        self.delete()
+
+    def finish(self):
+        self.close()
+
+    def cancel(self):
+        self.close()
+
+class DpgWizardPageEmpty(StagedView):
+
+    def __init__(self):
+        super().__init__()
+
+        # This will be set by the add page call in the wizard.
+        # This allows the page to call methods on the wizard such as go_next_page or 
+        #   go_previous_page without needing to worry about how the page is being used
+        self.wizard: DpgWizard = None
+        self._stage_id = None
+
+    def create_view(self):
+        """
+        Returns the parent container that a subclass should put its content into.
+        If no additional content is expected to be added to the page layout, return
+        None (or just don't return anything)
+        """
+        self._stage_id = dpg.add_stage()
+        return self._stage_id
+
+    def ensure_view(self):
+        if self._stage_id is None:
+            self.create_view()
+
+    def on_next(self):
+        pass
+
+    def on_back(self):
+        pass
+
+class DpgWizardPageBasic(DpgWizardPageEmpty):
+
+    def __init__(self, title: str = "Title", width=-1, height=-1,
+                 next_button_label: str = "Next", back_button_label: str = "Back", 
+                 auto_finish: bool = True, auto_cancel: bool = True,
+                 **kwargs):
+        super().__init__()
+
+        self.title = title
+        self.width = width
+        self.height = height
+        self.next_button_label = next_button_label
+        self.back_button_label = back_button_label
+        self.back_button = None
+        self.next_button = None
+        self.auto_finish = auto_finish
+        self.auto_cancel = auto_cancel
+
+        self.kwargs = kwargs
+    
+    def create_view(self):
+        dpg.push_container_stack(super().create_view())
+        with dpg.child_window(width=self.width, height=self.height, border=False, **self.kwargs) as self.basic_window:
+            #Title Space
+            if self.title is not None:
+                self.title_text = dpg.add_text(self.title, color=(120, 170, 255))
+                dpg.add_separator()
+                dpg.add_spacer(height=8)
+            
+            #User Space
+            with dpg.child_window(height=-48, border=False) as self.user_space:
+                pass
+            
+            #Footer Next/Back Buttons
+            if self.next_button_label is not None or self.back_button_label is not None:
+                dpg.add_spacer(height=8)
+                dpg.add_separator()
+
+                with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False, borders_innerV=False, borders_outerV=False):
+                    dpg.add_table_column()
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=150)
+                    with dpg.table_row():
+                        dpg.add_table_cell()
+                        with dpg.group(horizontal=True):
+                            self.back_button = dpg.add_button(
+                                label=self.back_button_label, 
+                                callback=self._back_button_pressed, 
+                                width=70)
+                            self.next_button = dpg.add_button(
+                                label=self.next_button_label, 
+                                callback=self._next_button_pressed, 
+                                width=70)
+        dpg.pop_container_stack()
+
+        return self.user_space
+
+    def _next_button_pressed(self, sender, app_data, user_data):
+        if self.auto_finish and self.wizard.on_last_page:
+            #Check the on_next response before finishing to allow the page to still have its own interaction first
+            response = self.on_next()
+            if response is False:
+                return
+            self.wizard.finish()
+        else:
+            self.wizard.go_next_page()
+    
+    def _back_button_pressed(self, sender, app_data, user_data):
+        if self.auto_cancel and self.wizard.on_first_page:
+            self.wizard.cancel()
+        else:   
+            self.wizard.go_previous_page()
+
+    def notify_opened(self, old_view):
+        super().notify_opened(old_view)
+        if self.next_button is not None:
+            if self.wizard.on_last_page:
+                dpg.configure_item(self.next_button, label="Finish")
+            else:
+                dpg.configure_item(self.next_button, label=self.next_button_label)
+        
+        if self.back_button is not None:
+            if self.wizard.on_first_page:
+                dpg.configure_item(self.back_button, label="Cancel")
+            else:
+                dpg.configure_item(self.back_button, label=self.back_button_label)

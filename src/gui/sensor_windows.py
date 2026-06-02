@@ -13,7 +13,7 @@ from utility import Logger, MainLoopEventQueue
 from dataclasses import dataclass, field
 from typing import Callable
 
-from gui.core_ui import FontManager, DpgWizard
+from gui.core_ui import FontManager, DpgWizardViewer
 import gui.resources.theme_lib as theme_lib, gui.resources.texture_lib as texture_lib
 
 import math
@@ -175,7 +175,6 @@ class SensorConnectionWindow(StagedView):
         self.base_scene.model.set_rotation_quat(quaternion.angles_to_quaternion([-45, 45], "YX"))
         base_scale = self.base_scene.model.scale
         new_scale = [1.2 * v for v in base_scale]
-        print(f"{base_scale=}")
         self.base_scene.model.set_scale(new_scale)
 
         self.dpg_scene = DpgScene(self.texture_width, self.texture_height, self.base_scene)
@@ -1102,6 +1101,9 @@ DEFAULT_FIRMWARE_FOLDER = PLATFORM_FOLDERS.user_downloads_path or APPLICATION_FO
 DEFAULT_FIRMWARE_KEY = "firmware_folder"
 COMMIT_POPUP_ENABLED_KEY = "confirm_commit"
 
+from gui.setting_gui.setting_structures import DpgSettingMenuGui
+from gui.setting_gui.setting_structures_custom import * #Simply loading this causes the custom types to be registered
+from gui.setting_gui.config_wizard.datalogging import DataLoggingConfigWizard
 from third_party.file_dialog.fdialog import FileDialog
 import threading
 import time
@@ -1118,18 +1120,18 @@ class SensorSettingsWindow(StagedView):
                 device.report_error(e)
                 return
 
-            with dpg.child_window():
+            with dpg.child_window(no_scroll_with_mouse=True) as self.window:
                 with dpg.group(horizontal=True):
                     dpg.add_text(f"Serial#:")
-                    self.serial_number_text = dpg.add_text(f"0x{serial_number:016X}") 
+                    self.serial_number_text = dpg.add_text(f"0x{serial_number:016X}")
                 with dpg.group(horizontal=True):
                     dpg.add_text(f"Hardware Version:")
                     dpg.add_text(hardware_version)
                 with dpg.group(horizontal=True):
                     dpg.add_text("Firmware Version:")
-                    self.version_firmware_text = dpg.add_text()     
+                    self.version_firmware_text = dpg.add_text()
                     dpg.add_spacer(width=50)
-                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)          
+                    dpg.add_button(label="Upload Firmware", callback=self.open_firmware_selector)
                 dpg.add_spacer(height=12)
                 dpg.add_separator()
                 dpg.add_spacer(height=12)
@@ -1164,12 +1166,106 @@ class SensorSettingsWindow(StagedView):
                                    callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restore factory settings?", 
                                                                          on_confirm=self.restore_factory_settings))
                     dpg.add_button(label="Restart",
-                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?", 
+                                   callback=lambda: dpg_ext.create_confirm_popup("Are you sure you want to restart the device?",
                                                                          on_confirm=self.restart_sensor))
+
+                dpg.add_spacer(height=12)
+                dpg.add_separator()
+                with dpg.group(horizontal=True):
+                    if device.type == "DL":
+                        wizard_button = dpg.add_button(label="Data Logging Config Wizard", callback=self.__open_data_logging_wizard)
+                        dpg.bind_item_theme(wizard_button, theme_lib.data_logging_wizard_button_theme)
+                dpg.add_spacer(height=12)
+                dpg.add_separator()
+                dpg.add_spacer(height=2)
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Settings")
+                    WIDTH = 600
+                    self._settings_help_text = dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(self._settings_help_text):
+                        dpg.add_text("Navigating away from this tab, restoring factory settings, or restarting the sensor will discard any unapplied changes.", wrap=WIDTH)
+                        dpg.add_text("After applying, you must Commit settings to make changes persist across power cycles.", wrap=WIDTH)
+                        dpg.add_separator()
+                        dpg.add_text("Color Indicators:", wrap=WIDTH)
+                        with dpg.group(horizontal=True):
+                            dpg.add_text("Yellow", color=setting_structures.DIRTY_COLOR)
+                            dpg.add_text("-")
+                            dpg.add_text("Setting has been changed from the current on-sensor value.", wrap=WIDTH - dpg.get_text_size("Yellow - ")[0])
+                        with dpg.group(horizontal=True):
+                            dpg.add_text("Red", color=setting_structures.INVALID_COLOR)
+                            dpg.add_text("-")
+                            dpg.add_text("Setting has an invalid value or failed to apply.", wrap=WIDTH - dpg.get_text_size("Red - ")[0])
+                        
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Apply", callback=self.__on_settings_apply)
+                    dpg.add_button(label="Reload", callback=self.reload_settings)
+                dpg.add_spacer(height=4)
+                with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
+                    self.settings_menu = DpgSettingMenuGui(device.sensor)
+                    self.settings_menu.create_hierarchy()
+                    self.settings_menu.create_gui()
         
+        #Custom scroll handler to allow desired scrolling logic.
+        #This is why scroll with mouse is disabled for both windows
+        with dpg.handler_registry() as self.scroll_handler:
+            dpg.add_mouse_wheel_handler(callback=self.__on_settings_scroll)
+
         self.device = device
         self.popup = None
         self.reload_settings()
+
+    def __is_config_window_hovered(self):
+        """
+        Check if the config window or any descendant item is hovered (recursive).
+        This is necessary because a child window being hovered (EG: StreamSlots, PrimaryComponent...)
+        blocks the parent window from receiving hover events, so we need to check them manually to know where to route scroll events.
+        """
+        def _hovered(item) -> bool:
+            try:
+                if dpg.is_item_hovered(item):
+                    return True
+            except: pass
+            for child in dpg.get_item_children(item, 1):
+                if _hovered(child):
+                    return True
+            return False
+        return _hovered(self.setting_config_window)
+
+    def __on_settings_scroll(self, sender, app_data):
+        """Propagate scroll to the parent window when the inner settings child window hits its scroll limit."""
+        delta = app_data  # positive = scroll up, negative = scroll down
+        if self.__is_config_window_hovered():
+            scroll_y = dpg.get_y_scroll(self.setting_config_window)
+            scroll_max = dpg.get_y_scroll_max(self.setting_config_window)
+
+            scrolling_past_top = delta > 0 and scroll_y == 0
+            scrolling_past_bottom = delta < 0 and scroll_y == scroll_max
+        
+            if scrolling_past_top or scrolling_past_bottom:
+                self.__scroll_outer_window(delta)
+            else:
+                # If not scrolling past limits, scroll the inner window
+                new_scroll = max(0, min(scroll_max, scroll_y - delta * 90))  # Adjust scroll speed as needed
+                dpg.set_y_scroll(self.setting_config_window, new_scroll)
+        elif dpg.is_item_hovered(self.window):
+            self.__scroll_outer_window(delta)
+    
+    def __scroll_outer_window(self, delta: int):
+        parent_scroll = dpg.get_y_scroll(self.window)
+        parent_scroll_max = dpg.get_y_scroll_max(self.window)
+        new_parent_scroll = max(0, min(parent_scroll_max, parent_scroll - delta * 90))
+        dpg.set_y_scroll(self.window, new_parent_scroll)
+
+    def __on_settings_apply(self):
+        try:
+            success = self.settings_menu.apply_all()
+        except Exception as e:
+            self.device.report_error(e)
+        else:
+            if success:
+                dpg_ext.create_popup_message("Successfully applied settings. To save changes across power cycles, commit the settings.", title="Success")
+            else:
+                dpg_ext.create_popup_message("Failed to apply all settings. Check highlighted red errors below.", title="Error")
 
     def __on_commit_button(self, sender, app_data):
         #Check/initialize settings for if popup should appear
@@ -1202,25 +1298,77 @@ class SensorSettingsWindow(StagedView):
             settings[COMMIT_POPUP_ENABLED_KEY] = enabled
             GenericSettingsManager.save_local(SENSOR_SETTINGS_KEY)
 
-    def __do_commit(self):
-
+    def __do_commit(self, callback: Callable[[bool], None] = None):
         try:
             err = self.device.commit_settings()
         except Exception as e:
             self.device.report_error(e)
+            err = None
+
+        # Handle success
+        if err == 0:
+            if callback is None:
+                self.popup.set_message_box("Successfully commited settings.", title="Success")
+            else:
+                self.popup.set_message_box(
+                    "Successfully commited settings.",
+                    title="Success",
+                    callback=lambda: callback(True),
+                    close_on_press=False,
+                    button_kwargs={"width": 60}
+                )
+            return
+
+        # Build error message first, then prompt retry in a separate step
+        if err is None:
+            error_text = "Failed to commit settings. See error log for details."
+        elif err == threespace_consts.THREESPACE_ERR_COMMIT_FS_LOCKED:
+            self.popup.configure(width=450)
+            error_text = "Failed to commit settings to the SD Card.\nEject the mass storage device and try again."
+        else:
+            error_text = f"Err commiting settings: {err}"
+
+        self.popup.set_message_box(
+            error_text,
+            title="Commit Failed",
+            callback=lambda: self.__on_commit_error_acknowledged(callback),
+            close_on_press=False,
+            button_kwargs={"width": 60}
+        )
+
+    def __on_commit_error_acknowledged(self, callback: Callable[[bool], None] = None):
+        self.popup.configure(width=350)
+        self.popup.set_confirm_box(
+            title="Try Again?",
+            text="Would you like to try committing settings again?",
+            confirm_text="Retry",
+            cancel_text="Close",
+            on_confirm=lambda: self.__do_commit(callback=callback),
+            on_cancel=(None if callback is None else lambda: callback(False)),
+            close_on_confirm=False,
+            close_on_cancel=True,
+            confirm_kwargs={"width": 60},
+            cancel_kwargs={"width": 60}
+        )
+
+    def __open_data_logging_wizard(self):
+        DataLoggingConfigWizard(self.device.sensor, on_completion=self.__on_settings_wizard_closed)
+
+    def __on_settings_wizard_closed(self, completed: bool):
+        self.reload_settings()
+
+        if not completed:
             return
         
-        if err == 0:
-            #Success!
-            self.popup.set_message_box("Successfully commited settings.", title="Success")
-        elif err == threespace_consts.THREESPACE_ERR_COMMIT_FS_LOCKED:
-            #SD card was locked
-            self.popup.configure(width=450)
-            self.popup.set_message_box("Failed to commit settings to the SD Card.\nEject the mass storage device and try again.", title="Error")
-        else:
-            #Unknown Error
-            self.popup.set_message_box(f"Err commiting settings: {err}", title="Error")
-
+        self.popup = dpg_ext.create_confirm_popup(
+            title="Commit Settings", 
+            text="Would you like to commit these settings to the sensor?",
+            confirm_text="Yes", cancel_text="No",
+            on_confirm=self.__do_commit,
+            close_on_confirm=False,
+            confirm_kwargs={"width": 60},
+            cancel_kwargs={"width": 60}
+        )
 
     def __set_date_time(self, sender, app_data):
         now = datetime.now()
@@ -1234,12 +1382,14 @@ class SensorSettingsWindow(StagedView):
     def restart_sensor(self):
         try:
             self.device.restart_sensor()
+            self.reload_settings()
         except Exception as e:
             self.device.report_error(e)
 
     def restore_factory_settings(self):
         try:
             self.device.restore_factory_settings()
+            self.reload_settings()
         except Exception as e:
             self.device.report_error(e)
 
@@ -1250,6 +1400,8 @@ class SensorSettingsWindow(StagedView):
             dpg.set_value(self.accel_detected_text, ' '.join(self.device.get_available_accels_str()))
             dpg.set_value(self.mag_detected_text, ' '.join(self.device.get_available_mags_str()))
             dpg.set_value(self.filter_mode_text, self.device.get_filter_mode())
+
+            self.settings_menu.reload_values()
         except Exception as e:
             self.device.report_error(e)
         
@@ -1316,15 +1468,12 @@ class SensorSettingsWindow(StagedView):
         self.firmware_selector = None
 
     def notify_opened(self, old_view):
-        try:
-            filter_mode = self.device.get_filter_mode()
-        except Exception as e:
-            self.device.report_error(e)
-            return
-        dpg.set_value(self.filter_mode_text, filter_mode)
+        self.reload_settings()
 
     def delete(self):
         self.close_firmware_selector()
+        dpg.delete_item(self.scroll_handler)
+        self.settings_menu.cleanup()
         super().delete()
 
 class SensorCalibrationWindow(StagedView):
@@ -2543,7 +2692,7 @@ class EeptsConfigWizard:
 
     def __init__(self, device: ThreespaceDevice):
         self.device = device
-        self.wizard = DpgWizard(always_centered=True, label="EEPTS Config")
+        self.wizard = DpgWizardViewer(always_centered=True, label="EEPTS Config")
         self.base_config = EeptsBaseConfigWizardWindow(self)
         self.static_heading_config = EeptsStaticHeadingConfig(self)
 

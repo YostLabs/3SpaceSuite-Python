@@ -1,0 +1,421 @@
+Category,Settings Key,Description,Permission,Data Type,Alias
+System,default,Resets all settings to factory defaults when written. Must call commit for settings to persist over power cycle.,W,,
+System,commit,"Commits all current sensor settings to non-volatile flash memory, which will persist after the sensor is powered off.",W,,
+System,reboot,Resets the sensor.,W,,
+System,all,Returns all writable settings.,R,Aggregate,
+System,settings,Returns all writable settings but excludes aliases.,R,Aggregate,
+System,serial_number,Returns the sensors full serial number.,R,U64,
+System,timestamp,Timestamp in microseconds from sensor power. ,R/W,U64,
+System,led_mode,"Allows finer-grained control over the sensor LED. 
+0: Dynamic - the LED updates based on the status of the device
+1: Static - the LED only shows the color specified by the led_rgb setting",R/W,U8,
+System,led_rgb,Sets the idle color of the LED on the sensor to the specified RGB color.,R/W,Float Float Float,
+System,version_firmware,Returns a string indicating the current firmware version.,R,String,
+System,version_hardware,Returns a string indicating the hardware version of the sensor.,R,String,
+System,update_rate_sensor,Reads the amount of time taken by the sensors main loop in microseconds.,R,U32,
+System,header,"Configures the response header for data returned over a wired connection. The only parameter is a  bitfield that determines which data is prepended to all data responses. The following bits are used: 
+0x1: (1 byte) Success/Failure, with non-zero values representing failure. 
+0x2: (4 bytes) Timestamp, in microseconds. 
+0x4: (1 byte) Command echo—outputs the called command. 
+0x8: (1 byte) Additive checksum over returned data, but not including response header. 
+0x20: (4 bytes) Serial number. For the full 8 byte serial number the serial_number setting must be read.
+0x40: (2 byte) Data length, returns the length of the requested data, not including response header.",R/W,U8,"header_status, header_timestamp, header_echo, header_checksum, header_serial, header_length"
+System,header_status,"Alias setting to allow for easy setting of the status field in the header.
+Status: Success/Failure, with non-zero values representing failure.",R/W,U8,header
+System,header_timestamp,"Alias setting to allow for easy setting of the timestamp field in the header.
+Timestamp: time since sensor start in microseconds.",R/W,U8,header
+System,header_echo,"Alias setting to allow for easy setting of the command echo field in the header.
+Command Echo: Outputs the called command. 
+",R/W,U8,header
+System,header_checksum,"Alias setting to allow for easy setting of the Checksum field in the header.
+Checksum: Additive checksum over returned data, but not including response header.",R/W,U8,header
+System,header_serial,Alias setting to allow for easy setting of the Serial Number field in the header.,R/W,U8,header
+System,header_length,"Alias setting to allow for easy setting of the Data Length field in the header.
+Data Length: Returns the length of the requested data, not including response header.",R/W,U8,header
+System,valid_commands,Returns a comma separated list of valid command numbers.,R,String,
+Power Management,cpu_speed,"The speed that the sensors main processor is set to run at.
+Valid speeds:
+48MHz, 96MHz, 144MHz, 192MHz
+
+Requires sensor restart to take effect.
+Does not require commit to persist across power cycles.",R/W,U32,
+Power Management,cpu_speed_cur,The current speed of the sensor's main processor in MHz.,R,U32,
+Power Management,pm_mode,"Sets processor speed and component data rates based on presets.
+0: Low Power - CPU = 48MHz, Max ODR = 500Hz
+1: Normal - CPU = 96MHz, Max ODR = 1000Hz
+2: High Performance - CPU = 144MHz, Max ODR = 1500Hz
+3: Turbo - CPU = 192MHz, Max ODR = 2000Hz",W,U8,
+Power Management,pm_idle_enabled,"Enables CPU power saving during idle time. 
+1: Enabled (Default)
+0: Disabled",R/W,U8,
+Streaming,stream_slots,Configures data output slots for streaming mode. Accepts a list of up to 16 commands (comma separated U8). Every streaming iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
+Streaming,stream_interval,Time in microseconds between each streaming output. Values lower than 500 will be clamped to 500.,R/W,U64,stream_hz
+Streaming,stream_hz,Output rate when streaming in hertz. Max value of 2000. Will clamp to closest microsecond value.,R/W,Float,stream_interval
+Streaming,stream_duration,Length of time to stream in seconds. Duration of 0 will stream until stopped.,R/W,Float,
+Streaming,stream_delay,Length of time in seconds the sensor will wait after recieving the start streaming command to return the first data packet.,R/W,Float,
+Streaming,stream_mode,"Controls how stream duration is handled.
+0: Duration - controlled via the stream_duration setting
+1: Count - controlled via the stream_count setting",R/W,U8,
+Streaming,stream_count,A value greater than 1. Streaming will end after this many samples are output.,R/W,U64,
+Streaming,streamable_commands,A comma separated list of all available streaming commands,R,String,
+Debug,debug_level,"Bitfield representing the currently active debug levels.
+0x1: Error
+0x2: Warning
+0x4: Information
+
+Default Value: 0x1",R/W,U32,
+Debug,debug_module,Bitfield representing the currently enabled debug module. For full list of available modules see the Debug Section of the user manual.,R/W,U32,
+Debug,debug_mode,"0: Buffered - All debug messages will be buffered until Command 127 is called.
+1: Immediate - All debug messages will be immediately output when generated. Will also immediately output any messages currently buffered when this mode is set.",R/W,U8,
+Debug,debug_led,Enable Debug LED event when debug messages are available.,R/W,U8,
+Debug,debug_fault,"When set to 1, if a hard fault occurs the sensor will enter a debug state.",R/W,U8,
+Debug,debug_wdt,"When set to 1, if a WDT occurs the sensor will enter a debug state.",R/W,U8,
+Filter,axis_order,"Configures how the axes map to the physical sensor using XYZ terminology.
+Example values:
+XYZ
+ZYX
+Y-XZ
+View the ""Axis Management"" section of the user manual for more details.",R/W,String,
+Filter,axis_order_c,"Configures how the axes map to the physical sensor using compass direction terminology.
+Example values:
+NED
+ENU
+DSW
+View the ""Axis Management"" section of the user manual for details.",R/W,String,
+Filter,axis_offset_enabled,"If enabled, applied offset will affect the data axes as well instead of only the orientation.",R/W,U8,
+Filter,euler_order,The decomposition order used when retrieving orientation as Euler Angles.,R/W,String,
+Filter,update_rate_filter,Reads the amount of time taken by the last filter update step in microseconds.,R,U32,
+Filter,update_rate_sms,Reads the amount of time taken by the last component manager update in microseconds.,R,U32,
+Filter,offset,"The offset quaternion used in the computation of the tared orientation. View the ""Tare and Offset"" section of the user manual for more details.",R/W,Float Float Float Float,
+Filter,base_offset,"The reference offset quaternion used when sending the ""Offset with Current Orientation"" command. View the ""Tare and Offset"" section for more details.",R/W,Float Float Float Float,
+Filter,tare_quat,"The tare quaternion used in the computation of the tared orientation. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float,
+Filter,tare_auto_base,"If enabled, the base_tare will automatically be set when offsetting the sensor with the current orientation so that taring results in the identity orientation. View the ""Tare and Offset"" section for more details.
+",R/W,U8,
+Filter,base_tare,"The reference tare quaternion used when sending the ""Tare with Current Orientation"" command. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float,
+Filter,tare_mat,"The tare value used in the computation of the tared orientation, but in matrix form. View the ""Tare and Offset"" section for more details.
+",R/W,Float Float Float Float Float Float Float Float Float,
+Filter,running_avg_orient,A smoothing factor in the range 0 to 1. ,R/W,Float,
+Filter,filter_mode,"The method of orientation calculation:
+0: IMU Mode
+1: QGrad3
+2: Extended Kalman Filter",R/W,U8,
+Filter,filter_mref_mode,"Sets the method for which the sensor will obtain the magnetic reference vector (MRV):
+0: Manual - Will only use the MRV currently stored in settings.
+1: Semi-Auto - Will use the mrv set by user if it exists, else will attempt to automatically get a new MRV on startup.
+2: Auto - Will always attempt to automatically get a new MRV on startup.
+3: GPS - Will get MRV via GPS reading and WMM (world magnetic model), WIP.",R/W,U8,
+Filter,filter_mref,The magnetic reference as a vector. This should be the expected reading of the magnetometer when the sensor is facing north.,R/W,Float Float Float,
+Filter,filter_mref_gps,Sets the magnetic reference vector via the WMM (world magnetic model) at the given GPS location.,W,Double Double,filter_mref
+Filter,filter_mref_dip,Sets the magnetic reference vector via the expected magnetic dip.,R/W,Float,filter_mref
+Filter,filter_conf_thresholds,"Returns the thresholds used by motionless confidence factor for determining motion based on noise. All values are in units of Standard Deviations:
+min: Completely motionless until above this
+max: Completely in motion when above this
+cap: Controls how much the noise term can grow. Influences settling time back to motionless. ",R/W,Float Float Float,
+Components,valid_accels,Returns list of detected Accelerometers.,R,String,
+Components,valid_gyros,Returns list of detected Gyroscopes.,R,String,
+Components,valid_mags,Returns list of detected Magnetometers.,R,String,
+Components,valid_baros,Returns list of detected Barometers.,R,String,
+Components,valid_components,Returns list of all detected components.,R,String,
+Components,primary_accel,Currently selected component(s) to use for the primary accel data output commands.,R/W,String,
+Components,primary_gyro,Currently selected component(s) to use for the primary gyro data output commands.,R/W,String,
+Components,primary_mag,Currently selected component(s) to use for the primary mag data output commands.,R/W,String,
+Components,primary_sensor_rfade,"On sensors with multiple of the same component type, this value adjusts the threshold percentage for when one component will fade to the other. Must be between 0.0 and 1.0, inclusive. Example: 16G and 100G accelerometer, will start fading to higher range sensor at readings of 14.4G and 90G. Default value: 0.1",R/W,Float,
+Components,mag_bias_mode,"Determines the behavior of the Auto Mag Bias calculator:
+0: Manual - Magnetometer bias is only manually set.
+1: Auto Single - Magnetometer bias will be automatically calibrated once on startup or when this is set.
+2: Auto Continuous - Magnetometer bias will be continuously automatically updated.",R/W,U8,
+Components,odr_all,"Sets the ODR (output data rate / sample rate) of all aliased (accel, gyro, mag, baro) components. Each component will attempt to set the ODR as close as possible. If it is not possible to reach the desired ODR, the ODR will be set to the maximum valid ODR that component supports.",W,U32,"odr_accel,
+odr_gyro,
+odr_mag,
+odr_baro"
+Components,odr_accel,Sets the ODR (output data rate / sample rate) of all accelerometers.,W,U32,
+Components,odr_gyro,Sets the ODR (output data rate / sample rate) of all gyroscopes.,W,U32,
+Components,odr_mag,Sets the ODR (output data rate / sample rate) of all magnetometers.,W,U32,
+Components,odr_baro,Sets the ODR (output data rate / sample rate) of all barometers.,W,U32,
+Components,accel_enabled,"Removes the accelerometer component from the QGRAD3 orientation calculation.
+
+The accelerometer component stays active and data can still be read with the appropriate commands.",R/W,U8,
+Components,gyro_enabled,"Removes the gyroscope component from the QGRAD3 orientation calculation.
+
+The gyroscope component stays active and data can still be read with the appropriate commands.",R/W,U8,
+Components,mag_enabled,"Removes the magnetometer component from the QGRAD3 orientation calculation.
+
+The magnetometer component stays active and data can still be read with the appropriate commands.",R/W,U8,
+Components,calib_mat_accel%d,The matrix correction for accelerometer X. Replace the X in the command with the number that represents the desired accelerometer.,R/W,Float Float Float Float Float Float Float Float Float,
+Components,calib_bias_accel%d,The bias correction for accelerometer X. Replace the X in the command with the number that represents the desired accelerometer.,R/W,Float Float Float,
+Components,range_accel%d,The range for accelerometer X in (g). Replace the X in the command with the number that represents the desired accelerometer.,R/W,U16,
+Components,valid_ranges_accel%d,A list of valid ranges for accelerometer X. Replace the X in the command with the number that represents the desired accelerometer.,R,String,
+Components,oversample_accel%d,"The oversample for accelerometer X. Readings from the accel will only update after this many samples are taken, and its value will be the average of all those samples. Replace the X in the command with the number that represents the desired accelerometer.",R/W,U16,
+Components,running_avg_accel%d,The smoothing factor for accelerometer X in range of 0 to 1. Replace the X in the command with the number that represents the desired accelerometer.,R/W,Float,
+Components,odr_accel%d,Sets the ODR (output data rate / sample rate) for accelerometer X. Replace the X in the command with the number that represents the desired accelerometer.,R/W,U32,
+Components,update_rate_accel%d,Gets the current observed update rate for accelerometer X. Replace the X in the command with the number that represents the desired accelerometer.,R,Float,
+Components,noise_profile_accel%d,"Gets the reported noise density, variance, bandwidth, sensitivity, and true ODR for accelerometer X. Replace the X in the command with the number that respresents the desired accelerometer.",R,Float Float Float Float U32,
+Components,calib_mat_gyro%d,The matrix correction for gyroscope X. Replace the X in the command with the number that represents the desired gyroscope.,R/W,Float Float Float Float Float Float Float Float Float,
+Components,calib_bias_gyro%d,The bias correction for gyroscope X. Replace the X in the command with the number that represents the desired gyroscope.,R/W,Float Float Float,
+Components,range_gyro%d,The range for gyroscope X in DPS (degrees per second). Replace the X in the command with the number that represents the desired gyroscope.,R/W,U16,
+Components,valid_ranges_gyro%d,A list of valid ranges for gyroscope X. Replace the X in the command with the number that represents the desired gyroscope.,R,String,
+Components,oversample_gyro%d,"The oversample for gyroscope X. Readings from the gyroscope will only update after this many samples are taken, and its value will be the average of all those samples. Replace the X in the command with the number that represents the desired gyroscope.",R/W,U16,
+Components,running_avg_gyro%d,The smoothing factor for gyroscope X in range of 0 to 1. Replace the X in the command with the number that represents the desired gyroscope.,R/W,Float,
+Components,odr_gyro%d,Sets the ODR (output data rate / sample rate) for gyroscope X. Replace the X in the command with the number that represents the desired gyroscope.,R/W,U32,
+Components,update_rate_gyro%d,Gets the current observed update rate for gyroscope X. Replace the X in the command with the number that represents the desired gyroscope.,R,Float,
+Components,noise_profile_gyro%d,"Gets the reported noise density, variance, bandwidth, sensitivity, and true ODR for gyroscope X. Replace the X in the command with the number that respresents the desired gyroscope.",R,Float Float Float Float U32,
+Components,calib_mat_mag%d,The matrix correction for magnetometer X. Replace the X in the command with the number that represents the desired magnetometer.,R/W,Float Float Float Float Float Float Float Float Float,
+Components,calib_bias_mag%d,The bias correction for magnetometer X. Replace the X in the command with the number that represents the desired magnetometer.,R/W,Float Float Float,
+Components,range_mag%d,The range for magnetometer X in G (gauss). Replace the X in the command with the number that represents the desired magnetometer.,R/W,U16,
+Components,valid_ranges_mag%d,A list of valid ranges for magnetometer X. Replace the X in the command with the number that represents the desired magnetometer.,R,String,
+Components,oversample_mag%d,"The oversample for magnetometer X. Readings from the magnetometer will only update after this many samples are taken, and its value will be the average of all those samples. Replace the X in the command with the number that represents the desired magnetometer.",R/W,U16,
+Components,running_avg_mag%d,The smoothing factor for magnetometer X in range of 0 to 1. Replace the X in the command with the number that represents the desired magnetometer.,R/W,Float,
+Components,odr_mag%d,Sets the ODR (output data rate / sample rate) for magnetometer X. Replace the X in the command with the number that represents the desired magnetometer.,R/W,U32,
+Components,update_rate_mag%d,Gets the current observed update rate for mag X. Replace the X in the command with the number that represents the desired mag.,R,Float,
+Components,noise_profile_mag%d,"Gets the reported noise density, variance, bandwidth, sensitivity, and true ODR for mag X. Replace the X in the command with the number that respresents the desired mag.",R,Float Float Float Float U32,
+Components,calib_bias_baro%d,An offset applied to the barometer X. Replace the X in the command with the number that represents the desired barometer.,R/W,Float,
+Components,calib_altitude_baro%d,Sets the offset for barometer X by passing in the current altitude. Replace the X in the command with the number that represents the desired barometer.,W,Float,calib_bias_baroX
+Components,odr_baro%d,Sets the ODR (output data rate / sample rate) for barometer X. Replace the X in the command with the number that represents the desired barometer.,R/W,U32,
+Components,update_rate_baro%d,Gets the current observed update rate for baro X. Replace the X in the command with the number that represents the desired baro.,R,Float,
+EEPTS,pts_offset_quat,Offset quaternion used when using the orientation based heading method to set which direction is North relative to the sensor's mounting.,R/W,Float Float Float Float,
+EEPTS,pts_default,Resets all of the EEPTS settings to their default value,W,,
+EEPTS,pts_settings,Returns a semicolon separated list of all EEPTS settings and their values.,R,Aggregate,
+EEPTS,pts_preset_hand,"Sets multiple EEPTS settings to optimize speed and accuracy for the given situation:
+0. Hand Disabled - The sensor will not be in the hand
+1. Hand Enabled - The sensor may be in the hand
+2. Hand only - The sensor will only be in the hand",W,U8,
+EEPTS,pts_preset_motion,"Sets multiple EEPTS settings to optimize for speed and accuracy for the given situation:
+0 - Walk/Run enabled
+1 - Walk/Run/Crawl enabled",W,U8,
+EEPTS,pts_preset_heading,"Sets multiple EEPTS settings to configure the optimal settings for different heading methods:
+0 - Orientation Independent Heading
+1 - Orientation Dependent Heading",W,U8,
+EEPTS,pts_debug_level,"Bitfield representing the currently active debug levels for EEPTS.
+0x1: Error
+0x2: Warning
+0x4: Information
+
+Default: 0x0",R/W,U32,
+EEPTS,pts_debug_module,"Bitfield representing the currently enabled debug module. For full list of available module see Eepts Section.
+
+Default: 0x0",R/W,U32,
+EEPTS,pts_heading_mode,"For a full list of heading modes see EEPTS section
+0 - Tilt Compensated
+5 - Orientation Independent
+6 - Orientation Independent Hand
+10 - Orientation (Relative)
+11 - Orientation Hand
+13 - GPS",R/W,U32,
+EEPTS,pts_initial_heading_mode,"A unique heading mode used only when transitioning from idle to in motion.
+0 - None
+1 - Accel
+2 - Velocity
+3 - Orientation",R/W,U32,
+EEPTS,pts_hand_heading_mode,Heading mode used when hand_correction is enabled and the sensor is detected to be in the hand. Identical options as pts_heading_mode.,R/W,U32,
+EEPTS,pts_mag_declination,An offset in degrees that is added to the calculated heading. Should be set to the magnetic declination of your local area.,R/W,Float,
+EEPTS,pts_auto_declination,"If enabled, automatically sets the magnetic declination based on the WMM and the EEPTS systems current GPS location.
+
+Default: 0",R/W,U8,
+EEPTS,pts_discard_slow,"If enabled, discards segments where the step was too slow to properly determine distance travelled. This should stay enabled at all times to avoid data abnormalities.",R/W,U8,
+EEPTS,pts_segment_axis,"The data method to use for detecting steps.
+30 - Bandpass Linear Accel
+46 - Accel_Len
+47 - Linear Accel
+48 - Gyro",R/W,U32,
+EEPTS,pts_seg_noise,Noise value to ignore on the selected segment axis. Units in same units as the selected axis via pts_segment_axis.,R/W,Float,
+EEPTS,pts_classifier_mode,"Sets the initial classifier used to determine the current motion mode the user is doing.
+
+0 - None
+1 - Speed
+5 - Crawl V2
+8 - Walk/Run V3",R/W,U32,
+EEPTS,pts_classifier_mode2,"Sets the classifier used to determine the current motion mode the user is doing. This classifier is used if the intial classifier fails to accurately determine the motion type.
+
+Uses the same modes as pts_classifier_mode",R/W,U32,
+EEPTS,pts_location_classifier_mode,"If pts_hand_correction is enabled, use this classifier mode to determine location of the sensor.
+
+0 - Hand V1
+1 - Hand V2
+2 - Hand V3",R/W,U32,
+EEPTS,pts_hand_classifier_threshold,"Required confidence in range of 0 to 1 that is required by the location classifier to determine it is in the hand position.
+
+Default - 0.9",R/W,Float,
+EEPTS,pts_disabled_truth_motions,"A bitfield to disable certain motions from significantly impacting the estimated heading.
+
+0x01 - Idle
+0x02 - Walking
+0x04 - Jogging
+0x08 - Running
+0x10 - Crawling
+0x20 - Unknown
+0x40 - Other",R/W,U32,
+EEPTS,pts_dynamic_segmenter_enabled,"If enabled, will attempt to use different internal step detectors per motion type.
+
+Default: 1",R/W,U8,
+EEPTS,pts_estimator_scalars,"A list of scalars to apply to corresponding motion types when estimating distance. Used to fine tune distance to individuals.
+Min value: 0.1, Max Value: 5
+Order: Idle, Walking, Jogging, Running, Crawling, Unknown, Other",R/W,Float Float Float Float Float Float Float,
+EEPTS,pts_auto_estimator_scalar_rate,"Automatically update the pts_estimator_scalars at runtime by using the incoming GPS data and predicted distance travelled. This value is between 0-25. 0 is disabled. See the EEPTS section for more information.
+
+Default: 10",R/W,U32,
+EEPTS,pts_running_correction,"Experimental. Some heading methods may require a 180 degree heading flip when running is detected. This setting does that, but is typically not desired.
+
+Default: 0",R/W,U8,
+EEPTS,pts_hand_correction,"If enabled, will attempt to use hand specific settings when detected in the hand.
+
+Default: 1",R/W,U8,
+EEPTS,pts_heading_correction_mode,"A more stable heading calculation to be used when the result of the current heading mode is considered unstable.
+0 - None
+1 - Gyro
+2 - Orient",R/W,U32,
+EEPTS,pts_heading_min_dif,"Angle (degrees) in range 0-360. If the difference between the predicted heading and corrected heading is greater then this, and the predicted heading has been consistently accuracte, update the corrected heading with the predicted.
+
+Default: 5",R/W,Float,
+EEPTS,pts_heading_reset_consistencies,"If enabled, when updating the correct heading via the predicted heading, reset the consistent status.
+
+Default: 0",R/W,U8,
+EEPTS,pts_heading_backtrack_enabled,"If enabled, when updating the corrected heading via the predicted heading, also modify up to 10 steps in the past to also be affected by the modification.
+
+Default: 1",R/W,U8,
+EEPTS,pts_motion_correction_radius,"Value in range 0-5.
+If 0, disabled. 
+Perform extra computing based on nearby steps to modify old steps motion types. This can result in correcting incorrect distance computations to more accurately compute the current location. The larger this value, the more motion averaging is done for accuracy, but the slower motion corrections will occur.",R/W,U32,
+EEPTS,pts_motion_correction_consistency_req,"Value in the range of 1-25.
+
+Backtracking on motion type will only occur after this many consectutive motion estimations are consistent.
+
+Default: 5",R/W,U32,
+EEPTS,pts_orient_ref_y_threshold,"Angle (degrees) in range 5-180.
+
+When using orientation based heading methods, use this as the tilt angle at which the reference orientation may automatically change. Making this value too large can cause innaccurate headings, making it too small can cause inconsistent headings.
+
+Default: 45",R/W,Float,
+EEPTS,pts_version,EEPTS version,R,String,
+EEPTS,pts_date,"The current date used to get information from the WMM. Set to current date for best results.
+
+Format: Day Month Year",R/W,U32 U32 U32,
+EEPTS,pts_wmm_version,The current date version of the WMM,R,String,
+EEPTS,pts_wmm_set,"If the coefficents for the WMM are updated, the WMM.cof file can be sent into the sensor to update the coefficents. For more information see Eepts Section.",W,String,
+EEPTS,pts_force_out_gps,"If enabled, GPS input to the system will be output from the system. Main reason to disable this is to observe peformance of the EEPTS system while still allowing GPS based calibration.
+
+Default: 0x01",R/W,U8,
+EEPTS,pts_initial_heading_tolerance,"Angle in degrees. When transitioning from idle to motion, if the heading from pts_heading_mode is within this many degrees from the computed inital_heading_mode, the base heading will be considered valid.",R/W,Float,
+EEPTS,pts_heading_consistency_req,Number of steps in a row that must be considered consistent before a new/corrected direction is considered valid.,R/W,S32,
+EEPTS,pts_heading_root_err_mul,Multiplier used to set the allowed error range based on the estimated change in heading angle. See EEPTS section for more information. ,R/W,Float,
+EEPTS,pts_heading_consistent_bias,A constant value in degrees added to the allowed error when estimating direction changes. See EEPTS section for more information. ,R/W,Float,
+EEPTS,pts_strict_bias_enabled,"If enabled, the estimated heading is more strictly compared, based on sign, to its potential error.",R/W,U8,
+Embedded,pin_mode0,"Sets the function of pins 5 and 6.
+Mode:
+1 - Uart (default)
+4 - Orientation Level Interrupt (pin 5)
+5 - Orientation Pulse Interrupt (pin 5)
+7 - Button (Pin 5 and 6 become inputs, get status with the Get Button State command)
+8 - Transaction Interrupts (See the ""Transaction Protocol"" ""IRQ Mode"" section for more information)
+",R/W,U8,
+Embedded,pin_mode1,"Sets the function of pins 2 and 3.
+Mode:
+2 - SPI (default)
+3 - I2C
+4 - Orientation Level Interrupt (pin 2)
+5 - Orientation Pulse Interrupt (pin 2)
+7 - Button (Pin 2 and 3 become inputs, get status with the Get Button State command)
+",R/W,U8,
+Embedded,uart_baudrate,"Sets the baudrate of the sensors UART interface. Change will take effect immediately after the response is sent. 
+Valid baudrates:
+4800, 9600, 19200, 38400, 57600, 115200, 230400, 480800, 921600, 2000000, 4000000",R/W,U32,
+Embedded,i2c_addr,Sets the sensors address used for communicating over I2C. Will not be applied until I2C/Sensor is reinitialized. For a list of valid addresses look at the I2C section of the manual.,R/W,U8,
+Data Logger,power_hold_time,Time in seconds that the power button needs to be held for the sensor to turn off. Set to -1 to disable power off via holding the button.,R/W,Float,
+Data Logger,power_hold_state,"If 0, the sensor will power off when not connected to a wired connection. If 1, the sensor will stay powered via battery when not connected to a wired connection.
+This setting is not commitable. If the sensor was powered via the button, will default to 1, else its initial value is determined by power_initial_hold_state.",R/W,U8,
+Data Logger,power_initial_hold_state,The initial value power_hold_state gets set to when the sensor initializes.,R/W,U8,
+Data Logger,fs_cfg_load,Applies the settings contained in the <Root>:/CONFIG/sensor.cfg file.,W,,
+Data Logger,fs_msc_enabled,Enable or disable the mass storage controller.,R/W,U8,
+Data Logger,fs_msc_auto,"View the ""Auto Mass Storage Control"" section for details.",R/W,U8,
+Data Logger,log_slots,Configures data output slots for logging. Accepts a list of up to 16 commands (comma separated U8). Every log iteration each command will be executed in the order they were entered. The output data will be put in the order they were called. Unfilled slots will be filled with 255 (0xFF)  for no command.,R/W,String,
+Data Logger,log_interval,Set the time between data logging packets in microseconds.,R/W,U64,
+Data Logger,log_hz,Set the data logging rate in samples per second (Hz).,R/W,Float,
+Data Logger,log_start_event,"Enum for the logging start event. 
+0- Button
+1- Accel Event Threshold
+2- None/Command Only
+3- On GPS Fix
+4- On Power
+
+Pass in any combination as a comma separated list.",R/W,String,
+Data Logger,log_start_motion_threshold,"Threshold value used for the Accel Event Threshold start event. Logging starts when the change in acceleration (g) magnitude within a 0.1 second window exceeds this value.
+
+In general, smaller values will require less motion to start, and larger values will require more motion to start.",R/W,Float,
+Data Logger,log_stop_event,"Enum for the logging stop event.
+0- Button
+1- Accel Event Threshold
+2- Command Only
+3- Duration
+4- Capture Count
+5- Period Count
+
+Pass in any combination as a comma separated list.",R/W,String,
+Data Logger,log_stop_motion_threshold,"Threshold value used for the Accel Event Threshold stop event. Logging stops when the change in acceleration magnitude within a 0.1 second window is continously beneath this value for the time specified by log_stop_motion_delay.
+
+In general, larger values will stop more easily while experiencing larger motion, and smaller values will require the sensor to be more motionless to stop.",R/W,Float,
+Data Logger,log_stop_motion_delay,Time in seconds the change in acceleration magnitude within a 0.1 second window needs to be below the motion threshold for the stop event to trigger.,R/W,Float,
+Data Logger,log_stop_count,Value used for the Capture Count stop event. Logging stops when this number of samples have been gathered.,R/W,U64,
+Data Logger,log_stop_duration,"Value used for the Duration stop event. Logging stops when this duration, in seconds, has elapsed.",R/W,Float,
+Data Logger,log_stop_period_count,Value used for the Period Count stop event. Logging stops when this number of periods have been logged.,R/W,U32,
+Data Logger,log_style,"Enum for determining the method of data logging.
+0: Continous - Single logging period for each capture session.
+1: Periodic - Multiple logging periods for a capture session. ",R/W,U8,
+Data Logger,log_periodic_capture_time,Amount of time each period will log while in periodic mode.,R/W,Float,
+Data Logger,log_periodic_rest_time,Time to wait between each capture period.,R/W,Float,
+Data Logger,log_base_filename,"Base filename used for each data file. The final filename will be ""{log_base_filename}{N}.[csv|bin]"" where N is an incrementing file count and csv or bin is based on log_data_mode. N starts at 0 during a session for all logging modes, and will increase for each additional file when log_file_mode is set to ""New"" instead of ""Append"".",R/W,String,
+Data Logger,log_file_mode,"Enum for how new data is logged during logging sessions in periodic mode.
+0: Append - Append data from subsequent perioids to a single capture session file.
+1: New - Create a new log file for every period during the logging session.",R/W,U8,
+Data Logger,log_data_mode,"Enum for determining ascii or binary logging.
+1: Ascii 
+2: Binary",R/W,U8,
+Data Logger,log_output_settings,If set to 1 a setting file will be created at the start of a capture session to capture the settings used during that capture session.,R/W,U8,
+Data Logger,log_header_enabled,"If set to 1, the response header will be included in the log results.",R/W,U8,
+Data Logger,log_folder_mode,"0: Session - Name folders based on an auto incrementing session index.
+1: Date Time - Name folders based on current date time read from RTC.",R/W,U8,
+Data Logger,log_immediate_output,"If set to 1, the data being logged will be streamed out at the same time using the file streaming protocol.",R/W,U8,
+Data Logger,log_immediate_output_header_enabled,"If set to 1, the header will be prepended to each file stream packet while log_immediate_output is enabled.",R/W,U8,
+Data Logger,log_immediate_output_header_mode,"Controls what protocol mode the immediate_output_header uses.
+0: Match - uses the mode specified by the log_data_mode setting
+1: Ascii
+2: Binary",R/W,U8,
+Data Logger,rtc_year,The current year of the RTC,R/W,U16,rtc_datetime
+Data Logger,rtc_month,The current month of the RTC (1-12),"R/W
+",U8,"rtc_datetime
+"
+Data Logger,rtc_day,The current day of the RTC (1-31),R/W,U8,rtc_datetime
+Data Logger,rtc_hour,The current hour of the RTC (0-23),"R/W
+",U8,rtc_datetime
+Data Logger,rtc_minute,The current minute of the RTC (0-59),R/W,U8,rtc_datetime
+Data Logger,rtc_second,The current second of the RTC (0-59),R/W,U8,rtc_datetime
+Data Logger,rtc_datetime,Allows retrieving and setting all the current RTC values.,R/W,U16 U8 U8 U8 U8 U8,"rtc_year,
+rtc_month,
+rtc_day,
+rtc_hour,
+rtc_minute,
+rtc_second
+"
+Battery,bat_chg_rate,"Typical charge rate in mA. Note that the set charge rate may differ from the actual charge rate to some degree. If different, a debug message will be generated when this is set.",R/W,U16,
+Battery,bat_cold_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,R/W,Float Float,
+Battery,bat_warm_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,"R/W
+",Float Float,
+Battery,bat_hot_threshold,"The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.
+","R/W
+",Float Float,
+Battery,bat_offset_threshold,"When going from hot to warm or warm to normal battery states, the temperature must fall this far below the threshold for the state change to occur. This is to prevent situations where the sensor flickers between states due to the sensor heating up while charging and then cooling when charging is shut off repeatedly, causing the temperature to border a threshold.",R/W,Float,
+Battery,bat_mah,The onboard batteries max capacity in mAh. Returns 0 if unknown.,R,U16,
+BLE,ble_name,Advertised name of BLE enabled sensors. Max size 19 characters. Requires reboot for name to apply.,R/W,String,
+BLE,ble_connected,"Returns the connection status of the BLE module.
+0: Disconnected
+1: Connected
+-1: Not available",R,S8,
+BLE,ble_disconnect,Disconnects from whatever BLE device is connected to the sensor.,W,,
+GPS,gps_standby,"If set to 1, the GPS will be in standby mode. If set to 0, the GPS will be active. 
+Defaults to 0.",R/W,U8,
+GPS,gps_led,"If set to 1, the led will appear green while the GPS has a fix.",R/W,U8,
+Deprecated_Hidden,sd_cfg_load,Applies the settings contained in the <Root>:/CONFIG/sensor.cfg file.,W,,
+Deprecated_Hidden,sd_msc_enabled,Enable or disable the mass storage controller.,R/W,U8,
+Deprecated_Hidden,sd_msc_auto,"View the ""Auto Mass Storage Control"" section for details.",R/W,U8,
+Deprecated_Hidden,cat,Prints out a cat if set to 1,R/W,String,
+Deprecated_Hidden,running_avg,,R/W,Float,

@@ -10,13 +10,15 @@ from utility import Logger
 
 class StreamingOptionSelectionMenu:
 
-    def __init__(self, sensor: ThreespaceDevice = None, max_options=16, on_modified_callback: Callable[["StreamingOptionSelectionMenu"],None]=None):
+    def __init__(self, sensor: ThreespaceDevice = None, valid_options: list[data_charts.StreamOption] = None, max_options=16, on_modified_callback: Callable[["StreamingOptionSelectionMenu"],None]=None):
         self.device = sensor
         self.max_options = max_options
         self.callback = on_modified_callback
         
         if sensor is not None:
             self.valid_options = data_charts.get_all_options_from_device(sensor)
+        elif valid_options is not None:
+            self.valid_options = valid_options
         else:
             self.valid_options = data_charts.get_all_options()
 
@@ -119,14 +121,20 @@ class StreamingOptionMenu:
         self.options = new_options
 
         self.keys = list(self.options.keys())
-
         self.current_param_selector = None
+
+        try:
+            #This will fail if occurs before first frame. In that case, use default value
+            #+24 for scroll bar, +8 for padding
+            self.max_key_width = max([dpg.get_text_size(k)[0] for k in self.keys]) + 24 + 8
+        except Exception as e:
+            self.max_key_width = 450  # Fallback value
 
         with dpg.group(horizontal=True) as self.group:
             self.index_text = dpg.add_text(f"{self.option_index+1:2}:")
             default_item = "None" if initial_option.cmd is None else self.enum_options[initial_option.cmd].display_name
             self.dropdown = FilteredDropdown(items=self.keys, default_item=default_item, 
-                                width=450, allow_custom_options=False, allow_empty=False,
+                                width=self.max_key_width, allow_custom_options=False, allow_empty=False,
                                 callback=self.__on_item_selected)
             self.dropdown.submit()
             self.param_input = dpg.add_input_text(decimal=True, auto_select_all=True, show=False, default_value=0, width=50)

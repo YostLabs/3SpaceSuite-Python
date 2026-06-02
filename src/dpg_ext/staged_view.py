@@ -12,6 +12,10 @@ class StagedView:
     a stage object assigned to self._stage_id
     """
 
+    def __init__(self):
+        #This is only here for type hinting. This constructor is not necessary to call.
+        self._stage_id = None
+
     def submit(self, parent = None):
         if parent is not None:
             dpg.push_container_stack(parent)
@@ -35,12 +39,13 @@ class StagedView:
 
     def delete(self):
         with dpg_lock():
-            for slot in dpg.get_item_children(self._stage_id):
-                for child in dpg.get_item_children(self._stage_id, slot):
-                    try:
-                        dpg.delete_item(child)
-                    except Exception as e:
-                        pass
+            dpg.delete_item(self._stage_id)
+            # for slot in dpg.get_item_children(self._stage_id):
+            #     for child in dpg.get_item_children(self._stage_id, slot):
+            #         try:
+            #             dpg.delete_item(child)
+            #         except Exception as e:
+            #             pass
 
 class StagedTabManager(StagedView):
 
