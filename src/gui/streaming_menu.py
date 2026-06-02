@@ -128,7 +128,6 @@ class StreamingOptionMenu:
             #+24 for scroll bar, +8 for padding
             self.max_key_width = max([dpg.get_text_size(k)[0] for k in self.keys]) + 24 + 8
         except Exception as e:
-            print(f"Error calculating max_key_width: {e}")
             self.max_key_width = 450  # Fallback value
 
         with dpg.group(horizontal=True) as self.group:

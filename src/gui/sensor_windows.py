@@ -175,7 +175,6 @@ class SensorConnectionWindow(StagedView):
         self.base_scene.model.set_rotation_quat(quaternion.angles_to_quaternion([-45, 45], "YX"))
         base_scale = self.base_scene.model.scale
         new_scale = [1.2 * v for v in base_scale]
-        print(f"{base_scale=}")
         self.base_scene.model.set_scale(new_scale)
 
         self.dpg_scene = DpgScene(self.texture_width, self.texture_height, self.base_scene)

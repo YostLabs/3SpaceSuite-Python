@@ -64,7 +64,6 @@ def register_setting(pattern: str):
     """Decorator to register a custom DpgSetting subclass for a setting key.
     'pattern' is a regex string matched against the full concrete key.
     Use anchors (^ $) when an exact match is required."""
-    print("REGISTERING SETTING", pattern)
     compiled = re.compile(pattern)
     def decorator(cls):
         _SETTING_REGISTRY.append((compiled, cls))
