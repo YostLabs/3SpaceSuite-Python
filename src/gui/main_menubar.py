@@ -41,7 +41,7 @@ class MenuBar:
         with dpg.menu(label="Connection"):
             self.ts_manager_toolbar.submit()
 
-        dpg.add_menu_item(label="About", callback=createAboutWindow)
+        dpg.add_button(label="About", callback=createAboutWindow)
 
         if parent is not None:
             dpg.pop_container_stack()
