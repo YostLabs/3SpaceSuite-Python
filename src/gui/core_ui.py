@@ -145,11 +145,27 @@ class DynamicViewport(StagedView):
             staged_view.notify_opened(self.current_view)
         self.current_view = staged_view
 
+
+# Large enough to cover any practical viewport during live resize without needing
+# a resize callback.
+_SHIELD_SIZE = 10000
+
 #Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
 class DpgWizardViewer:
+    transparent_window_theme = None
 
-    def __init__(self, always_centered=False, modal=True, full_viewport=False, **kwargs):
+    @classmethod
+    def get_transparent_window_theme(cls):
+        if cls.transparent_window_theme is None:
+            with dpg.theme() as cls.transparent_window_theme:
+                with dpg.theme_component(dpg.mvWindowAppItem):
+                    dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [30, 30, 30, 100], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowBorderSize, 0, category=dpg.mvThemeCat_Core)
+        return cls.transparent_window_theme
+
+    def __init__(self, always_centered=False, modal=True, full_viewport=False, pseudo_modal=False, **kwargs):
         self.full_viewport = full_viewport
+        self.pseudo_modal = pseudo_modal
         self.previous_primary_window = None
         if "no_close" not in kwargs:
             kwargs["no_close"] = True
@@ -157,7 +173,29 @@ class DpgWizardViewer:
             kwargs["autosize"] = True
 
         self.cur_window: StagedView = None
-        with dpg.window(modal=modal, no_move=True, no_resize=True, no_collapse=True, **kwargs) as self.modal:
+        self.shield = None
+
+        if self.pseudo_modal:
+            with dpg.window(
+                tag=f"{id(self)}_pseudo_modal_shield",
+                show=True,
+                no_title_bar=True,
+                no_resize=True,
+                no_move=True,
+                no_scrollbar=True,
+                no_bring_to_front_on_focus=False,
+                width=_SHIELD_SIZE,
+                height=_SHIELD_SIZE,
+                pos=(0, 0),
+            ) as self.shield:
+                pass
+            dpg.bind_item_theme(self.shield, self.get_transparent_window_theme())
+            #Allow the window to be created and rendered before setting no_bring_to_front_on_focus
+            #to ensure it is initially brought to the front before being locked in place.
+            dpg.render_dearpygui_frame()
+            dpg.configure_item(self.shield, no_bring_to_front_on_focus=True)
+
+        with dpg.window(modal=modal and not self.pseudo_modal, no_move=True, no_resize=True, no_collapse=True, **kwargs) as self.modal:
             pass
         
         self.page_destination = self.modal
@@ -187,6 +225,8 @@ class DpgWizardViewer:
     def delete(self):
         if self.visible_handler is not None:
             dpg.delete_item(self.visible_handler)
+        if self.shield is not None and dpg.does_item_exist(self.shield):
+            dpg.delete_item(self.shield)
         if self.full_viewport and self.previous_primary_window is not None and dpg.does_item_exist(self.previous_primary_window):
             set_primary_window_cached(self.previous_primary_window)
             self.previous_primary_window = None
@@ -194,8 +234,8 @@ class DpgWizardViewer:
 
 class DpgWizard(DpgWizardViewer):
 
-    def __init__(self, always_centered=True, modal=True, full_viewport=False, **kwargs):
-        super().__init__(always_centered=always_centered, modal=modal, full_viewport=full_viewport, **kwargs)
+    def __init__(self, always_centered=True, modal=True, full_viewport=False, pseudo_modal=False, **kwargs):
+        super().__init__(always_centered=always_centered, modal=modal, full_viewport=full_viewport, pseudo_modal=pseudo_modal, **kwargs)
 
         self.page_index = -1
         self.pages: list[DpgWizardPageEmpty] = []

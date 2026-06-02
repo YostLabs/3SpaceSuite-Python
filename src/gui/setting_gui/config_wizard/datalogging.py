@@ -497,7 +497,7 @@ class DataLoggingConfigWizard(DpgWizard):
         #when there is a modal window present.
         super().__init__(label="Data Logging Setup", 
                          min_size=(550, 525), max_size=(550, 800),
-                         modal=False, no_close=False,
+                         modal=False, pseudo_modal=True, no_close=False,
                          on_close=self.__on_window_closed)
 
         self.sensor = sensor
