@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     from utility import Logger, MainLoopEventQueue
     Logger.init()
-    from gui.core_ui import FontManager
+    from gui.core_ui import FontManager, set_primary_window_cached
     GL_Context.init()
     ObjectLibrary.init()
 
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     general_manager.load_main_window()
 
-    dpg.set_primary_window(primary_window, True)
+    set_primary_window_cached(primary_window)
 
     dpg.set_viewport_min_height(550)
     dpg.set_viewport_min_width(586)

@@ -4,6 +4,23 @@ from dpg_ext.staged_view import StagedView
 from dpg_ext.extension_functions import center_window_handler_callback
 import dearpygui.dearpygui as dpg
 
+PRIMARY_WINDOW = None
+
+
+def set_primary_window_cached(window):
+    global PRIMARY_WINDOW
+    previous = PRIMARY_WINDOW
+    if previous is not None and previous is not window and dpg.does_item_exist(previous):
+        dpg.hide_item(previous)
+    if dpg.does_item_exist(window):
+        dpg.show_item(window)
+    dpg.set_primary_window(window, True)
+    PRIMARY_WINDOW = window
+
+
+def get_primary_window_cached():
+    return PRIMARY_WINDOW
+
 class FontManager:
 
     DEFAULT_FONT = None
@@ -131,7 +148,9 @@ class DynamicViewport(StagedView):
 #Basically the same as a Dynamic Viewport just its a regular window instead of a child window and has some additional options
 class DpgWizardViewer:
 
-    def __init__(self, always_centered=False, modal=True, **kwargs):
+    def __init__(self, always_centered=False, modal=True, full_viewport=False, **kwargs):
+        self.full_viewport = full_viewport
+        self.previous_primary_window = None
         if "no_close" not in kwargs:
             kwargs["no_close"] = True
         if "autosize" not in kwargs:
@@ -142,6 +161,10 @@ class DpgWizardViewer:
             pass
         
         self.page_destination = self.modal
+
+        if self.full_viewport:
+            self.previous_primary_window = get_primary_window_cached()
+            set_primary_window_cached(self.modal)
 
         self.visible_handler = None
         if always_centered:
@@ -164,12 +187,15 @@ class DpgWizardViewer:
     def delete(self):
         if self.visible_handler is not None:
             dpg.delete_item(self.visible_handler)
+        if self.full_viewport and self.previous_primary_window is not None and dpg.does_item_exist(self.previous_primary_window):
+            set_primary_window_cached(self.previous_primary_window)
+            self.previous_primary_window = None
         dpg.delete_item(self.modal)
 
 class DpgWizard(DpgWizardViewer):
 
-    def __init__(self, always_centered=True, modal=True, **kwargs):
-        super().__init__(always_centered=always_centered, modal=modal, **kwargs)
+    def __init__(self, always_centered=True, modal=True, full_viewport=False, **kwargs):
+        super().__init__(always_centered=always_centered, modal=modal, full_viewport=full_viewport, **kwargs)
 
         self.page_index = -1
         self.pages: list[DpgWizardPageEmpty] = []
