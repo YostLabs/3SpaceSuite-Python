@@ -71,7 +71,7 @@ class PopupWindow:
     def add_loading_wheel(self):
         #Because of this bug https://github.com/hoffstadt/DearPyGui/issues/2500#issuecomment-2797531732
         dpg.configure_item(self.window, autosize=False)
-        dpg.push_container_stack(self.window)
+        dpg.push_container_stack(self.loading_group)
         with dpg.table(header_row=False, width=dpg.get_item_width(self.window)):
             dpg.add_table_column()
             dpg.add_table_column(init_width_or_weight=70, width_fixed=True)
