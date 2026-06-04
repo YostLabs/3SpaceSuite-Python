@@ -126,6 +126,11 @@ class PopupWindow:
         self.clear()
         dpg.configure_item(self.window, label=title)
         dpg.configure_item(self.window, autosize=True)
+        if title:
+            # Ensure the window is never narrower than its title bar
+            # (~25px accounts for title bar padding)
+            title_min_width = int(dpg.get_text_size(title)[0]) + 25
+            dpg.configure_item(self.window, min_size=[title_min_width, 10])
         self.add_text(text)
         self.add_buttons([PopupButton(button_text, close_on_select=close_on_press, callback=callback, **button_kwargs)])
 
