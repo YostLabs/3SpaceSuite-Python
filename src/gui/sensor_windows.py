@@ -579,8 +579,6 @@ class SensorOrientationWindow(StagedView):
                                                user_data=[device.offset_with_current_orientation])
                                 dpg.add_button(label="Reset", width=-1, callback=self.generic_device_command,
                                                user_data=[device.set_offset, [0, 0, 0, 1]])
-                        dpg.add_button(label="Auto Calibrate Gyros", width=-1, callback=self.generic_device_command,
-                                       user_data=[device.start_gyro_autocalibration])
                   
                 self.grid.push(self.orientation_viewer.image, 0, 0)#, max_size = (400, 400))
                 self.grid.push(control_window, 1, 0)
@@ -1552,12 +1550,67 @@ class SensorCalibrationWindow(StagedView):
                 dpg.add_spacer(height=12)
                 dpg.add_separator()      
                 dpg.add_spacer(height=12)
-                with dpg.group(horizontal=True):                                               
+                TOOLTIP_SIZE = 500
+                with dpg.group(horizontal=True):
                     dpg.add_button(label="Gradient Descent Calibration", callback=self.start_gradient_descent_wizard)
-                    dpg.add_button(label="Sphere Calibration", callback=self.start_sphere_calib_wizard)                    
+                    dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(parent=dpg.last_item()):
+                        dpg.add_text("Calibrates the Accelerometer and Magnetometers by placing the sensor into 24 known orientations.", wrap=TOOLTIP_SIZE)
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Sphere Calibration", callback=self.start_sphere_calib_wizard)
+                    dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(parent=dpg.last_item()):
+                        dpg.add_text("Calibrates the Magnetometer. Recommended for use when the sensor is mounted to an object and Gradient Descent positioning would be too difficult.", wrap=TOOLTIP_SIZE)
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Auto Gyro Calibration", callback=self.auto_calibrate_gyros)
+                    dpg.add_text("(?)", color=theme_lib.color_tooltip)
+                    with dpg.tooltip(parent=dpg.last_item()):
+                        dpg.add_text("Calibrates the Gyroscope. Recommended for initial setup.", wrap=TOOLTIP_SIZE)
                 # dpg.add_button(label="Start Gyro Calibration")
                 # dpg.add_button(label="Start Mag Ref Calibration")
                 # dpg.add_button(label="Start Mag Bias Calibration")
+
+    def is_gyro_calibration_active(self):
+        try:
+            status = self.device.sensor.getActivePassiveAutoCalibration().data
+            return status & 0x01
+        except Exception as e:
+            self.device.report_error(e)
+            return False
+
+    def auto_calibrate_gyros(self):
+        try:
+            self.device.start_gyro_autocalibration()
+        except Exception as e:
+            self.device.report_error(e)
+            return
+
+        self._gyro_calib_cancelled = False
+        self._gyro_calib_popup = dpg_ext.PopupWindow(title="Auto Calibrate Gyros", no_close=True)
+        self._gyro_calib_popup.add_text("Place sensor at rest on motionless surface...")
+        self._gyro_calib_popup.add_loading_wheel()
+        cancel_button = dpg_ext.PopupButton(label="Cancel", callback=self.__on_gyro_calib_cancel, close_on_select=True)
+        self._gyro_calib_popup.add_buttons([cancel_button])
+
+        with dpg.item_handler_registry() as self._gyro_calib_handler:
+            dpg.add_item_visible_handler(callback=self.__on_gyro_calib_visible)
+        dpg.bind_item_handler_registry(cancel_button.tag, self._gyro_calib_handler)
+
+    def __on_gyro_calib_visible(self, sender, app_data):
+        if self._gyro_calib_cancelled:
+            return
+        if not self.is_gyro_calibration_active():
+            self.__on_gyro_calib_success()
+
+    def __on_gyro_calib_success(self):
+        self._gyro_calib_cancelled = True
+        dpg.delete_item(self._gyro_calib_handler)
+        self.update_gyro_calib()
+        self._gyro_calib_popup.set_message_box("Success!", title="Auto Calibrate Gyros")
+
+    def __on_gyro_calib_cancel(self):
+        self._gyro_calib_cancelled = True
+        dpg.delete_item(self._gyro_calib_handler)
 
     def start_sphere_calib_wizard(self):
         if self.sphere_calib_wizard is not None: return
@@ -1833,12 +1886,12 @@ class GradientDescentCalibrationWizard:
 
         #Control variables
         self.wizard_stage = GradientDescentCalibrationWizard.CONFIGURING
-        self.animating = False        
+        self.animating = False
         self.__cached_accels: dict[int, int] = {}
         self.__cached_mags: dict[int, int] = {}
         self.__cached_axis_order: str = None
         self.__cached_axis_offset_enabled: bool = None
-        self.gathering = False 
+        self.gathering = False
     
     def get_result(self):
         return self.result
