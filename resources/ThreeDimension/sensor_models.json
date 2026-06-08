@@ -7,6 +7,10 @@
 		"BaseDL": {
 			"Path":  "DL-3.obj",
 			"Scale": 1
+		},
+		"BaseUSB": {
+			"Path":  "USB-3-Cased.obj",
+			"Scale": 1
 		}
 	},
 	"Mapping": {
@@ -16,7 +20,10 @@
 		"DL": {
 			"Base": "BaseDL"
 		},
-		
+		"USB": {
+			"Base": "BaseUSB"
+		},
+
 		"Default": "BaseDL"
 	}
 }
