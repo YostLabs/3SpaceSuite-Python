@@ -70,7 +70,7 @@ class OrientationView:
         """
         #Configuration   
         self.orientation_scene.model.set_visible(not hide_sensor)
-        self.orientation_scene.axes.set_visible(not hide_arrows)
+        self.orientation_scene.axes.set_active(not hide_arrows)
         self.orientation_scene.set_axis_order(axis_order)
         self.orientation_scene.set_model_rotation_quat(quat)
 
