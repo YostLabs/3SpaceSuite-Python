@@ -534,8 +534,12 @@ class SensorOrientationWindow(StagedView):
                 self.grid.cols[1].configure(size=command_window_width) #Settings bar is a static size
                 self.grid.offsets = 8, 8, 8, 8 #Compensating for title bar and scrollbar
 
-
-                self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
+                if (device.cached_serial_number is not None and device.cached_serial_number != 0) or device.type_suffix is None:
+                    obj = ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number)
+                else:
+                    obj = ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(device.type_suffix))
+                
+                self.orientation_viewer = OrientationView(obj, self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
                 with dpg.child_window(border=False) as control_window:
                     logo_image = dpg.add_image(texture_lib.logo_texture.texture)
                     with dpg.child_window(label="Components") as components_enabled_window:
