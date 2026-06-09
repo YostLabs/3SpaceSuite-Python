@@ -211,7 +211,7 @@ class TssDataFile:
     def __load_ascii(self):
         command = stream_options_to_command(self.settings.stream_slots) #Get the command object to figure out the data types
         
-        command_out_formats = [cmd.out_format.strip('<') for cmd in command.commands if cmd is not None]
+        command_out_formats = [cmd.out_format.struct_format for cmd in command.commands if cmd is not None]
         ascii_header_format = self.settings.header.format.strip('<')
         total_format = ''.join(command_out_formats) + ascii_header_format
         total_columns = len(struct.unpack(total_format, b'\0' * struct.calcsize(total_format))) #Get num of elements in format by parsing a string that is same length as the formats size
