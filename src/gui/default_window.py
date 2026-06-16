@@ -42,7 +42,7 @@ class DefaultWindow(StagedView):
                     dpg_ext.add_hyperlink("Website", "https://yostlabs.com/")
                     dpg_ext.add_hyperlink("3-Space API", "https://github.com/YostLabs/3SpacePythonPackage")
                     dpg_ext.add_hyperlink("Suite Source", "https://github.com/YostLabs/3SpaceSuite-Python")
-                    #dpg_ext.add_hyperlink("User Manual", "https://yostlabs.com/wp-content/uploads/pdf/3-Space-Sensor-Users-Manual-3.pdf")
+                    dpg_ext.add_hyperlink("User Manual", "https://yostlabs.com/v3usermanual")
 
         with dpg.item_handler_registry() as self.visible_handler:
             dpg.add_item_visible_handler(callback=self.__on_visible)
