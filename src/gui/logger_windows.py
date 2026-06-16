@@ -28,7 +28,7 @@ from gui.streaming_menu import StreamingOptionSelectionMenu
 class LoggerBanner(SelectableButton): ...
 
 from data_log.log_data import DataLogger
-from gui.replay_windows import OrientationReplayWindow, DataChartReplayWindow, ReplayConfigWindow
+from gui.replay_windows import OrientationReplayWindow, DataChartReplayWindow, ReplayConfigWindow, EeptsReplayWindow
 
 class LoggerMasterWindow(StagedTabManager):
 
@@ -47,8 +47,11 @@ class LoggerMasterWindow(StagedTabManager):
                 with dpg.tab(label="Data Charts"):
                     self.data_window = DataChartReplayWindow()
                     self.add_tab(self.data_window.submit())
+                with dpg.tab(label="EEPTS Map"):
+                    self.eepts_window = EeptsReplayWindow()
+                    self.add_tab(self.eepts_window.submit())
                 with dpg.tab(label="Replay Config"):
-                    self.add_tab(ReplayConfigWindow(self.orient_window, self.data_window, log_settings).submit())                                        
+                    self.add_tab(ReplayConfigWindow(self.orient_window, self.data_window, log_settings, self.eepts_window).submit())                                        
         
         self.set_open_tab(self.logging_tab)
 

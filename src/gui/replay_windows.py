@@ -3,6 +3,7 @@ Windows used for the replay tabs
 """
 import dearpygui.dearpygui as dpg
 import dpg_ext.extension_functions as dpg_ext
+from dpg_ext.dpg_path_graphs import PathSeries, PathPoint
 import third_party.dearpygui_grid as dpg_grid
 from third_party.file_dialog.fdialog import FileDialog
 
@@ -19,6 +20,7 @@ import gui.resources.theme_lib as theme_lib
 
 from yostlabs.math.axes import AxisOrder
 from yostlabs.tss3.api import StreamableCommands
+from yostlabs.tss3.eepts import YL_EEPTS_OUTPUT_DATA, Segment
 from utility import MainLoopEventQueue, Logger, Callback
 
 from data_file import TssDataFile, TssDataFileSettings, validate_axis_order, ThreespaceStreamingOption
@@ -32,6 +34,9 @@ import threading
 
 TARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetTaredOrientation, None)
 UNTARED_ORIENTATION_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetUntaredOrientation, None)
+
+EEPTS_OLD_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetEeptsOldestStep, None)
+EEPTS_NEW_SOURCE = ThreespaceStreamingOption(StreamableCommands.GetEeptsNewestStep, None)
 
 GET_TIMESTAMP_OPTION = ThreespaceStreamingOption(StreamableCommands.GetTimestamp, None)
 
@@ -687,6 +692,147 @@ class DataChartReplayWindow(StagedView):
         self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
         return super().delete()
             
+class EeptsReplayWindow(StagedView):
+
+    def __init__(self):
+        self.data_file: TssDataFile = None
+        self.eepts_source = None
+        self.points: list[PathPoint] = []
+
+        with dpg.stage() as self._stage_id:
+            with dpg.child_window(width=-1, height=-1) as self.child_window:
+                self.grid = dpg_grid.Grid(1, 2, dpg.last_container(), rect_getter=dpg_ext.get_global_rect, overlay=False)
+                self.grid.offsets = 8, 8, 8, 8
+                self.grid.rows[1].configure(size=56)
+
+                with dpg.plot(width=-1, height=-1, equal_aspects=True) as self.plot:
+                    self.x_axis = dpg.add_plot_axis(dpg.mvXAxis, label="X")
+                    self.y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Y")
+                self.grid.push(self.plot, 0, 0)
+
+                self.path_series = PathSeries([], self.plot, self.y_axis)
+
+                with dpg.child_window(border=False) as self.timeline_window:
+                    dpg.add_spacer()
+                    self.timeline_ui = TimelineUI()
+                self.grid.push(self.timeline_window, 0, 1)
+            
+        with dpg.item_handler_registry() as self.visible_handler:
+            dpg.add_item_visible_handler(callback=self.__on_visible)
+            dpg.add_item_resize_handler(callback=self.__on_resize)
+        dpg.bind_item_handler_registry(self.plot, self.visible_handler)
+
+        self.timeline = Timeline()
+        self.timeline_shared = False
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
+        self.timeline.configure(True, 0, 0)
+
+    # #Handles updating the slider as well
+    def render_index(self, index: int):
+        """
+        Does NOT update the slider as well if called programatically
+        """
+        if self.data_file is None or self.eepts_source is None: return
+        datapoint = self.data_file.get_value(index, self.eepts_source)
+        output = YL_EEPTS_OUTPUT_DATA(*datapoint)
+
+        end_index = next((i for i, p in enumerate(self.points) if p.sinfo.segment_count == output.segment_count), None)
+        if end_index is None: return
+        self.path_series.set_points(self.points[:end_index+1])
+
+        dpg.fit_axis_data(self.x_axis)
+        dpg.fit_axis_data(self.y_axis)
+
+    def set_timeline(self, timeline: Timeline, shared=False):
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
+        self.timeline = timeline
+        self.timeline.bind_ui(self.timeline_ui, parent=self)
+        self.timeline.on_value_changed.subscribe(self.__timeline_callback)
+        self.timeline_shared = shared
+
+    def set_default(self):
+        """
+        Must be called from main thread
+        """
+        if not self.timeline_shared:
+            self.timeline.stop_autoplay()
+            self.timeline.configure(True, 0, 0)
+            self.timeline.set_timeline_value(0)
+        self.path_series.clear()
+
+    def set_data_file(self, data_file: TssDataFile):
+        """
+        Must be called from main thread
+        """
+        self.data_file = data_file
+        self.set_default()
+        if self.data_file is None or len(data_file) == 0: return
+
+        if EEPTS_OLD_SOURCE in data_file.settings.stream_slots:
+            self.eepts_source = EEPTS_OLD_SOURCE
+        elif EEPTS_NEW_SOURCE in data_file.settings.stream_slots:
+            self.eepts_source = EEPTS_NEW_SOURCE
+        else:
+            self.eepts_source = None
+            return
+
+        #Load in all unique points to avoid having to recompute constantly. Render index will just
+        #show a specific slice.
+        last_segment = None
+        root_point = None
+        for i in range(len(self.data_file)):
+            datapoint = self.data_file.get_value(i, self.eepts_source)
+            segment = Segment.from_only_output_obj(YL_EEPTS_OUTPUT_DATA(*datapoint))
+            if segment == last_segment: continue
+            point = PathPoint(segment, last_segment, root_point)
+            self.points.append(point)
+            last_segment = segment
+            if root_point is None:
+                root_point = point
+        
+        self.points.sort(key=lambda p: p.sinfo.segment_count)
+
+        #Set the time source and load the initial position
+        if not self.timeline_shared:
+            if data_file.has_monotime:
+                self.timeline.configure(True, min_value=0, max_value=data_file.get_monotime(-1))
+                self.timeline.set_timeline_value(0)            
+                self.timeline.set_playback_speed(1)
+            else:
+                self.timeline.configure(False, min_value=1, max_value=len(data_file))
+                self.timeline.set_timeline_value(1)
+                self.timeline.set_playback_speed(data_file.settings.data_hz)
+
+
+    def __timeline_callback(self, timeline: Timeline, value: int|float):
+        if timeline.time_based:
+            if self.data_file is None: return
+            self.render_index(self.data_file.monotime_to_index(value))
+        else:
+            self.render_index(value-1)
+
+    def notify_opened(self, old_view: StagedView):
+        pass
+
+    def notify_closed(self, new_view: StagedView):
+        self.timeline.swapping_window(new_view)
+
+    def __on_visible(self, sender, app_data):
+        self.grid()
+        self.timeline.autoplay_update()
+
+    def __on_resize(self, sender, app_data):
+        pass
+
+    def delete(self):
+        dpg.delete_item(self.visible_handler)
+        self.grid.clear()
+        self.timeline.unbind_ui(self.timeline_ui)
+        self.timeline.on_value_changed.unsubscribe(self.__timeline_callback)
+        return super().delete()
+
 
 def load_data_file_thread(data_file: TssDataFile, return_list: list):
     try:
@@ -704,14 +850,16 @@ class ReplayConfigWindow(StagedView):
 
     VALID_DATA_FILE_EXTENSIONS = (".csv", ".bin")
 
-    def __init__(self, orient_window: OrientationReplayWindow, data_window: DataChartReplayWindow, log_settings: LogSettings):
+    def __init__(self, orient_window: OrientationReplayWindow, data_window: DataChartReplayWindow, log_settings: LogSettings, eepts_window: EeptsReplayWindow):
         self.log_settings = log_settings #Used for the default directory to load when file exploring
         self.orient_window = orient_window
         self.data_window = data_window
+        self.eepts_window = eepts_window
 
         self.shared_timeline = Timeline()
         orient_window.set_timeline(self.shared_timeline, shared=True)
         data_window.set_timeline(self.shared_timeline, shared=True)
+        eepts_window.set_timeline(self.shared_timeline, shared=True)
 
         self.data_file: TssDataFile = None
 
@@ -839,6 +987,7 @@ class ReplayConfigWindow(StagedView):
         self.orient_window.set_data_file(data_file)
         self.orient_window.set_model(ObjectLibrary.getObjFromModelName(dpg.get_value(self.model_combo)))
         self.data_window.set_data_file(data_file)
+        self.eepts_window.set_data_file(data_file)
         
         #Set the shared timelines values
         if data_file.has_monotime:
