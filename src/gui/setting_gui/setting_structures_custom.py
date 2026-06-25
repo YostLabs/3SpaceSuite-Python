@@ -162,7 +162,7 @@ class OrderedItemSelection(DpgSetting):
         
         available_items = []
         for label, value in self._item_map.items():
-            if value not in active_values and label not in self._pinned_items:
+            if value not in active_values and (self._pinned_items is None or label not in self._pinned_items):
                 available_items.append((label, value))
 
         #Update the lists with the correct items
