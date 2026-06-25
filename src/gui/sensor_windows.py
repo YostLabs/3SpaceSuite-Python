@@ -23,6 +23,8 @@ from yostlabs.math import vector
 from yostlabs.math.axes import AxisOrder
 import pathlib
 
+from yostlabs.tss3.errors import UnregisteredKeyError
+
 from managers.resource_manager import *
 from managers.settings_manager import GenericSettingsManager
 from managers.macro_manager import MacroManager, TerminalMacro
@@ -1199,13 +1201,22 @@ class SensorSettingsWindow(StagedView):
                             dpg.add_text("Setting has an invalid value or failed to apply.", wrap=WIDTH - dpg.get_text_size("Red - ")[0])
                         
                 with dpg.group(horizontal=True):
-                    dpg.add_button(label="Apply", callback=self.__on_settings_apply)
-                    dpg.add_button(label="Reload", callback=self.reload_settings)
+                    apply_button = dpg.add_button(label="Apply", callback=self.__on_settings_apply)
+                    reload_button = dpg.add_button(label="Reload", callback=self.reload_settings)
                 dpg.add_spacer(height=4)
+
+                self.settings_menu_available = True
                 with dpg.child_window(height=600, no_scroll_with_mouse=True) as self.setting_config_window:
                     self.settings_menu = DpgSettingMenuGui(device.sensor)
-                    self.settings_menu.create_hierarchy()
-                    self.settings_menu.create_gui()
+                    try:
+                        self.settings_menu.create_hierarchy()
+                        self.settings_menu.create_gui()
+                    except Exception as e:
+                        self.settings_menu_available = False
+                        dpg.disable_item(apply_button)
+                        dpg.disable_item(reload_button)
+                        dpg.add_text("Failed to load settings hierarchy. Send the following error to support.")
+                        dpg.add_input_text(multiline=True, readonly=True, default_value=str(e), height=200)
         
         #Custom scroll handler to allow desired scrolling logic.
         #This is why scroll with mouse is disabled for both windows
@@ -1403,7 +1414,8 @@ class SensorSettingsWindow(StagedView):
             dpg.set_value(self.mag_detected_text, ' '.join(self.device.get_available_mags_str()))
             dpg.set_value(self.filter_mode_text, self.device.get_filter_mode())
 
-            self.settings_menu.reload_values()
+            if self.settings_menu_available:
+                self.settings_menu.reload_values()
         except Exception as e:
             self.device.report_error(e)
         
@@ -1475,7 +1487,8 @@ class SensorSettingsWindow(StagedView):
     def delete(self):
         self.close_firmware_selector()
         dpg.delete_item(self.scroll_handler)
-        self.settings_menu.cleanup()
+        if self.settings_menu_available:
+            self.settings_menu.cleanup()
         super().delete()
 
 class SensorCalibrationWindow(StagedView):
