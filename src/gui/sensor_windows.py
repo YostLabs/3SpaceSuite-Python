@@ -1211,7 +1211,7 @@ class SensorSettingsWindow(StagedView):
                     try:
                         self.settings_menu.create_hierarchy()
                         self.settings_menu.create_gui()
-                    except Exception as e:
+                    except UnregisteredKeyError as e:
                         self.settings_menu_available = False
                         dpg.disable_item(apply_button)
                         dpg.disable_item(reload_button)
