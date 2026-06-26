@@ -5,7 +5,7 @@ from yostlabs.tss3 import ThreespaceSensor
 from yostlabs.tss3.settings import ThreespaceSettingDescriptor, ThreespaceSettingParamDescriptor, ThreespaceSettingParamValidationMode
 
 from managers.documentation_manager import SettingsDocumentationTable
-from utility import Callback
+from utility import Callback, Logger
 
 import re
 
@@ -619,7 +619,8 @@ class DpgSettingMenu:
     def reload_values(self, cache=True, validate=True, current_values: dict[str, Any] | None = None):
         """Re-read all writable settings from the sensor and update the UI values."""
         if current_values is None:
-            current_values = self.sensor.readAllWritableSettings()
+            keys = [s.descriptor.key for s in self.settings]
+            current_values = self.sensor.read_settings(*keys)
         for setting in self.settings:
             key = setting.descriptor.key
             if key in current_values:
@@ -764,9 +765,14 @@ class DpgSettingMenuGui(DpgSettingMenu):
 
     def create_hierarchy(self):
         """Read all writable settings from the sensor and populate the menu."""
-        descriptors = self.sensor.get_all_setting_descriptions()
-        writeable_settings = self.sensor.readAllWritableSettings()
+        descriptors = self.sensor.get_all_setting_descriptions(mode="safe")
+        available_keys = self.sensor.read_available_setting_keys(query="settings") #Writeable settings only
+        registered, unregistered = available_keys["registered"], available_keys["unregistered"]
+        writeable_settings = self.sensor.read_settings(*registered)
         writeable_settings.pop("cat", None)
+
+        if len(unregistered) > 0:
+            Logger.log_error(f"Unregistered settings found on sensor: {unregistered}")
 
         for key, value in writeable_settings.items():
             desc = descriptors[key]
