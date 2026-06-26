@@ -414,6 +414,14 @@ BLE,ble_disconnect,Disconnects from whatever BLE device is connected to the sens
 GPS,gps_standby,"If set to 1, the GPS will be in standby mode. If set to 0, the GPS will be active. 
 Defaults to 0.",R/W,U8,
 GPS,gps_led,"If set to 1, the led will appear green while the GPS has a fix.",R/W,U8,
+Custom,gps_periodic_fix_times,"Configures the periodic mode of the GPS. The GPS will be active for the first amount of time given (seconds), and then sleep for the second amount of time given (seconds), when the GPS has a fix.",R/W,U16 U16,
+Custom,gps_periodic_unfixed_times,"Configures the periodic mode of the GPS. The GPS will be active for the first amount of time given (seconds), and then sleep for the second amount of time given (seconds), when the GPS does not have a fix.
+",R/W,U16 U16,
+Custom,gps_periodic_enabled,"When gps_standby is 0, and this is 1, periodic mode will be enabled. If gps_standby is 1, this setting does nothing.",R/W,U8,
+Custom,rtc_gps_sync_interval,"The time interval, in seconds, that the RTC reading will be re-synced to the GPS reported time. When set, the RTC will sync to the GPS as soon as possible.",R/W,U64,
+Custom,rtc_gps_force_sync,"A value of 0 or 1. If enabled (1), the GPS will remain active, regardless of standby and periodic settings, until a time is obtained for the RTC to sync to. If disabled (0), the GPS will continue to operate as specified by the other settings, and the time will sync as soon as possible.",R/W,U8,
+Custom,usb_timeout,"The time, in seconds, after not being enumerated/communicated with over USB, that the USB interface will disable itself.","R/W
+",Float,
 Deprecated_Hidden,sd_cfg_load,Applies the settings contained in the <Root>:/CONFIG/sensor.cfg file.,W,,
 Deprecated_Hidden,sd_msc_enabled,Enable or disable the mass storage controller.,R/W,U8,
 Deprecated_Hidden,sd_msc_auto,"View the ""Auto Mass Storage Control"" section for details.",R/W,U8,
