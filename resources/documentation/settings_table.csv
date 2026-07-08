@@ -113,6 +113,13 @@ Filter,filter_conf_thresholds,"Returns the thresholds used by motionless confide
 min: Completely motionless until above this
 max: Completely in motion when above this
 cap: Controls how much the noise term can grow. Influences settling time back to motionless. ",R/W,Float Float Float,
+Filter,heading_vector,"The vector in sensor space that represents the ""needle"" on the compass when using the ""Get Heading"" command.",R/W,Float Float Float,
+Filter,heading_vector_axis,"Helper to set heading_vector to one of 6 orthogonal directions. Valid values are x, y, z, -x, -y, -z",W,String,heading_vector
+Filter,heading_offset,"An offset in degrees and mode pair applied to the computed heading. Setting the offset to the magnetic declination will cause the heading to be relative to true north instead of magnetic north.
+
+Valid Mode Values:
+0 - Manual (offset is as specified by the user)
+1 - Declination (offset is automatically set and updated via the WMM and GPS)",R/W,Float U8,
 Components,valid_accels,Returns list of detected Accelerometers.,R,String,
 Components,valid_gyros,Returns list of detected Gyroscopes.,R,String,
 Components,valid_mags,Returns list of detected Magnetometers.,R,String,
@@ -380,22 +387,31 @@ Data Logger,log_immediate_output_header_mode,"Controls what protocol mode the im
 0: Match - uses the mode specified by the log_data_mode setting
 1: Ascii
 2: Binary",R/W,U8,
-Data Logger,rtc_year,The current year of the RTC,R/W,U16,rtc_datetime
-Data Logger,rtc_month,The current month of the RTC (1-12),"R/W
+Date Time,rtc_year,The current year of the RTC,R/W,U16,rtc_datetime
+Date Time,rtc_month,The current month of the RTC (1-12),"R/W
 ",U8,"rtc_datetime
 "
-Data Logger,rtc_day,The current day of the RTC (1-31),R/W,U8,rtc_datetime
-Data Logger,rtc_hour,The current hour of the RTC (0-23),"R/W
+Date Time,rtc_day,The current day of the RTC (1-31),R/W,U8,rtc_datetime
+Date Time,rtc_hour,The current hour of the RTC (0-23),"R/W
 ",U8,rtc_datetime
-Data Logger,rtc_minute,The current minute of the RTC (0-59),R/W,U8,rtc_datetime
-Data Logger,rtc_second,The current second of the RTC (0-59),R/W,U8,rtc_datetime
-Data Logger,rtc_datetime,Allows retrieving and setting all the current RTC values.,R/W,U16 U8 U8 U8 U8 U8,"rtc_year,
+Date Time,rtc_minute,The current minute of the RTC (0-59),R/W,U8,rtc_datetime
+Date Time,rtc_second,The current second of the RTC (0-59),R/W,U8,rtc_datetime
+Date Time,rtc_datetime,Allows retrieving and setting all the current RTC values.,R/W,U16 U8 U8 U8 U8 U8,"rtc_year,
 rtc_month,
 rtc_day,
 rtc_hour,
 rtc_minute,
 rtc_second
 "
+Date Time,rtc_source,"Sets the method the date time is retrieved from.
+
+0 - Auto (RTC is available, otherwise System time)
+1 - Manual (Static set value by user)
+2 - System Time (Increments via system time, must be provided an initial value on startup to be accurate)
+3 - RTC (On board RTC component. Only available if supported by sensor)",R/W,U8,
+Date Time,utc_offset,"Timezone offset in hours in the range of -12 to +14
+
+Changing the offset will modify the current reported time accordingly. Ensure offset is set before providing a time in that timezone for accuracy.",R/W,Float,
 Battery,bat_chg_rate,"Typical charge rate in mA. Note that the set charge rate may differ from the actual charge rate to some degree. If different, a debug message will be generated when this is set.",R/W,U16,
 Battery,bat_cold_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,R/W,Float Float,
 Battery,bat_warm_threshold,The charge rate as a percentage of typical (0.0-1.0) and the temperature it occurs at in degrees celsius.,"R/W

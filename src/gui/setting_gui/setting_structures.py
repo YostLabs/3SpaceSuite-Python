@@ -674,6 +674,7 @@ class DpgSettingMenuGui(DpgSettingMenu):
         "Battery",
         "BLE",
         "GPS",
+        "Date Time",
         "Debug",
         "EEPTS",
     ]
