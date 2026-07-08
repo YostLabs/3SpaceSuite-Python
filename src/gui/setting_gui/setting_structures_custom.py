@@ -319,7 +319,8 @@ class StreamingSelection(DpgSetting):
             try:
                 cmd = StreamableCommands(int(cmd))
             except ValueError:
-                raise ValueError(f"Invalid command value: {cmd}")
+                Logger.log_warning(f"Unknown StreamableCommands value: {int(cmd)}, skipping")
+                continue
 
             if param is not None:
                 try:
