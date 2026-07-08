@@ -18,6 +18,7 @@ import yostlabs.math.quaternion as yl_quat
 from yostlabs.math.axes import AxisOrder
 from utility import Logger, Callback
 import yostlabs.tss3.consts as threespace_consts
+from gui.resources.obj_lib import ObjectLibrary, OBJ
 
 import platform
 from typing import Callable, Any
@@ -283,6 +284,12 @@ class ThreespaceDevice:
         if self.metadata is None:
             self.metadata = {}
         self.metadata[key] = value
+
+    def get_model(self) -> OBJ:
+        if (self.cached_serial_number is not None and self.cached_serial_number != 0) or self.type_suffix is None:
+            return ObjectLibrary.getObjFromSerialNumber(self.cached_serial_number)
+        else:
+            return ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(self.type_suffix))
 
     def get_all_settings(self) -> dict[str,str]:
         return self.__api.read_settings_ascii("settings")

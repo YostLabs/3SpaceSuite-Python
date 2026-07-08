@@ -170,7 +170,7 @@ class SensorConnectionWindow(StagedView):
 
         #render the object
         self.base_scene = OrientationScene(self.texture_width, self.texture_height,
-                                           ModelObject(model=ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(device.type_suffix))))
+                                           ModelObject(model=device.get_model()))
         self.base_scene.set_background_color(0, 0, 0, 0)
         self.base_scene.axes.set_visible(False)
         self.base_scene.orientation_indicator.set_visible(False)
@@ -535,13 +535,8 @@ class SensorOrientationWindow(StagedView):
                 command_window_width = 250
                 self.grid.cols[1].configure(size=command_window_width) #Settings bar is a static size
                 self.grid.offsets = 8, 8, 8, 8 #Compensating for title bar and scrollbar
-
-                if (device.cached_serial_number is not None and device.cached_serial_number != 0) or device.type_suffix is None:
-                    obj = ObjectLibrary.getObjFromSerialNumber(device.cached_serial_number)
-                else:
-                    obj = ObjectLibrary.getObjFromModelName(ObjectLibrary.getModelName(device.type_suffix))
                 
-                self.orientation_viewer = OrientationView(obj, self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
+                self.orientation_viewer = OrientationView(device.get_model(), self.TEXTURE_WIDTH, self.TEXTURE_HEIGHT)
                 with dpg.child_window(border=False) as control_window:
                     logo_image = dpg.add_image(texture_lib.logo_texture.texture)
                     with dpg.child_window(label="Components") as components_enabled_window:
@@ -2005,7 +2000,7 @@ class GradientDescentCalibrationWizard:
         dpg.push_container_stack(self.modal)
         self.texture_width = 400
         self.texture_height = 400
-        self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True)
+        self.orientation_viewer = OrientationView(self.device.get_model(), self.texture_width, self.texture_height, static_size=True)
         self.orientation_viewer.orientation_scene.camera.set_position([0, 0, Z_DIST])
         dpg.add_text("Put the sensor in the depicted orientation and press Next.", wrap=self.texture_width)
         with dpg.group(horizontal=True):
@@ -2247,7 +2242,7 @@ class SphereCalibrationWizard:
         with dpg.window(modal=True, no_move=False, no_resize=True, label="Sphere Calib Window", no_close=True, autosize=True) as self.modal:
             self.texture_width = 400
             self.texture_height = 400
-            self.orientation_viewer = OrientationView(ObjectLibrary.getObjFromSerialNumber(self.device.cached_serial_number), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
+            self.orientation_viewer = OrientationView(self.device.get_model(), self.texture_width, self.texture_height, static_size=True, axis_compass_display=False)
             dpg.add_text("Move the sensor to gather points. Repeatedly rotate the yellow/orange arrows together to optimize results. Aim for >= 400 points and sparsity <= 20. ", wrap=self.texture_width)
             with dpg.group(horizontal=True):
                         dpg.add_text("Samples:")
