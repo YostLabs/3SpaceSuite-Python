@@ -161,6 +161,7 @@ __bounds_dict = {
     StreamableCommands.GetGpsHdop : (0, 2),
     StreamableCommands.GetGpsSatellites : (0, 8),
     StreamableCommands.GetButtonState : (0, 1),
+    StreamableCommands.GetHeading : (0, 360)
 }
 
 def get_min_bounds_for_command(cmd: StreamableCommands):
