@@ -1986,7 +1986,7 @@ class GradientDescentCalibrationWizard:
             return
 
         #Can only get samples at the slowest speed of required components
-        min_hz = max(min(*self.__cached_accels.values(), *self.__cached_mags.values()), 500)
+        min_hz = max(min([*self.__cached_accels.values(), *self.__cached_mags.values()]), 500)
         
         #Only gather data when button is pressed
         #This is to prevent situations where streaming gets backed up due to slow device not being able to parse 500Hz
