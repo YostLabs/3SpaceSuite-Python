@@ -961,15 +961,13 @@ class DataChartPopoutWindowMain:
                         self.unregister_streaming()
                         return
         
-                #Handle Wrapping of timestamp
-                if self.last_timestamp is not None and timestamp < self.last_timestamp:
-                    if self.last_timestamp < 0xFFFFFFFF:
-                        self.timestamp_offset += 0xFFFFFFFF #U32 timestamp wrap
-                    else:
-                        self.timestamp_offset += 0xFFFFFFFFFFFFFFFF #U64 timestamp wrap
-                self.last_timestamp = timestamp
+                #Handle Wrapping or Resetting of timestamp
+                if self.last_timestamp_sensor is not None and timestamp < self.last_timestamp_sensor:
+                    self.timestamp_offset = self.last_timestamp
+                self.last_timestamp_sensor = timestamp
                 timestamp += self.timestamp_offset
                 x = timestamp / 1_000_000
+                self.last_timestamp = timestamp
             else:
                 x = self.cur_index
                 self.cur_index += 1
@@ -1008,6 +1006,7 @@ class DataChartPopoutWindowMain:
             else:
                 self.x_source = self.X_SOURCE_INDEX
             
+            self.last_timestamp_sensor = None
             self.last_timestamp = None
             self.timestamp_offset = 0
             self.cur_index = 0

@@ -530,6 +530,7 @@ class SensorDataWindowAsync(SensorDataWindow):
 
         #For keeping the timestamp from wrapping and controlling its source
         self.x_source = self.X_SOURCE_TIMESTAMP
+        self.last_sensor_timestamp = None
         self.last_timestamp = None
         self.timestamp_offset = 0
 
@@ -569,6 +570,7 @@ class SensorDataWindowAsync(SensorDataWindow):
             self.device.register_streaming_callback(self.streaming_callback, hz=self.streaming_hz)
             self.set_max_points((1_000_000 / self.device.get_streaming_interval()) * 5)
             self.streaming = True
+            self.last_sensor_timestamp = None
             self.last_timestamp = None
             self.timestamp_offset = 0
             self.cur_index = 0
@@ -614,15 +616,13 @@ class SensorDataWindowAsync(SensorDataWindow):
                         self.stop_data_chart()
                         return
         
-                #Handle Wrapping of timestamp
-                if self.last_timestamp is not None and timestamp < self.last_timestamp:
-                    if self.last_timestamp < 0xFFFFFFFF:
-                        self.timestamp_offset += 0xFFFFFFFF #U32 timestamp wrap
-                    else:
-                        self.timestamp_offset += 0xFFFFFFFFFFFFFFFF #U64 timestamp wrap
-                self.last_timestamp = timestamp
+                #Handle Wrapping or resetting of the timestamp.
+                if self.last_sensor_timestamp is not None and timestamp < self.last_sensor_timestamp:
+                    self.timestamp_offset = self.last_timestamp
+                self.last_sensor_timestamp = timestamp
                 timestamp += self.timestamp_offset
                 x = timestamp / 1_000_000
+                self.last_timestamp = timestamp
             else:
                 x = self.cur_index
                 self.cur_index += 1
