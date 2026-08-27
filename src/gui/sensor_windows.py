@@ -681,7 +681,7 @@ class SensorOrientationWindow(StagedView):
                 hertz = self.streaming_hz
                 self.device.register_streaming_callback(self.__on_orientation_updated, hz=hertz, only_newest=True)
         except Exception as e:
-            print("Exception:", e)
+            print("Exception (orientation start_viewer):", e)
             self.device.report_error(e)
 
 
@@ -1206,11 +1206,15 @@ class SensorSettingsWindow(StagedView):
                         self.settings_menu.create_hierarchy()
                         self.settings_menu.create_gui()
                     except UnregisteredKeyError as e:
+                        print("UnregisteredKeyError (settings create_hierarchy):", e)
                         self.settings_menu_available = False
                         dpg.disable_item(apply_button)
                         dpg.disable_item(reload_button)
                         dpg.add_text("Failed to load settings hierarchy. Send the following error to support.")
                         dpg.add_input_text(multiline=True, readonly=True, default_value=str(e), height=200)
+                    except Exception as e:
+                        print("Exception (settings create_hierarchy):", e)
+                        device.report_error(e)
         
         #Custom scroll handler to allow desired scrolling logic.
         #This is why scroll with mouse is disabled for both windows
