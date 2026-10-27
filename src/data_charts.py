@@ -83,6 +83,8 @@ __param_type_dict = {
     StreamableCommands.GetRawMagVec: int,
     StreamableCommands.GetCorrectedMagVec: int,
     StreamableCommands.GetNormalizedMagVec: int,
+    StreamableCommands.GetTemperatureCelsiusById: int,
+    StreamableCommands.GetTemperatureFahrenheitById: int
 }
 
 def get_param_type(streamable_command: StreamableCommands):
@@ -101,6 +103,8 @@ def get_valid_params_from_sensor(streamable_command: StreamableCommands, sensor:
         return sensor.valid_gyros.copy()
     elif streamable_command in (StreamableCommands.GetRawMagVec, StreamableCommands.GetCorrectedMagVec, StreamableCommands.GetNormalizedMagVec):
         return sensor.valid_mags.copy()
+    elif streamable_command in (StreamableCommands.GetTemperatureCelsiusById, StreamableCommands.GetTemperatureFahrenheitById):
+        return [0, 1, 2]
     return None
 
 #--------------------------------------------------Config information specific to data charts-------------------------------------------
@@ -136,6 +140,8 @@ __bounds_dict = {
     StreamableCommands.GetPrimaryLocalLinearAccel : (-2, 2),
     StreamableCommands.GetTemperatureCelsius : (None, None),
     StreamableCommands.GetTemperatureFahrenheit : (None, None),
+    StreamableCommands.GetTemperatureCelsiusById : (None, None),
+    StreamableCommands.GetTemperatureFahrenheitById : (None, None),
     StreamableCommands.GetMotionlessConfidenceFactor : (0, 1),
     StreamableCommands.GetNormalizedGyroRate : (-1, 1),
     StreamableCommands.GetNormalizedAccelVec : (-1, 1),
